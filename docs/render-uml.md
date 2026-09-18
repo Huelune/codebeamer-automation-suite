@@ -77,10 +77,23 @@ docker run --rm -v %cd%:/workspace -w /workspace plantuml/plantuml -tsvg docs/cl
 - `docs/class-diagram.svg`
 - `docs/upload-sequence.svg`
 
-## 현재 환경 메모
+## 스크립트 동작
 
-현재 작업 환경에서는 `plantuml`, `java`, `docker` 명령을 찾을 수 없어서 이 문서 작성 시점에는 이미지를 직접 생성하지 못했습니다.
-스크립트는 추가해두었으니 렌더링 도구가 준비된 뒤 바로 실행할 수 있습니다.
+`scripts/render_uml.ps1`은 다음 순서로 렌더링 도구를 찾습니다.
+
+1. PATH의 `plantuml` 명령
+2. `docker` 명령 (`plantuml/plantuml` 이미지)
+
+둘 다 없으면 설치 방법을 안내하고 종료 코드 1로 끝납니다. 렌더링 결과는 소스와 같은 `docs/`
+디렉터리에 생성됩니다.
+
+PNG만 또는 SVG만 만들려면 `-Format Png` 또는 `-Format Svg`를 사용합니다. 기본값은 둘 다입니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/render_uml.ps1 -Format Svg
+```
+
+현재 저장소에는 렌더링 결과 이미지를 커밋하지 않습니다. 필요할 때 위 명령으로 생성합니다.
 
 ## 관리 팁
 
