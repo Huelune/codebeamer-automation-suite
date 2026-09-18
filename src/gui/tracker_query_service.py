@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
+from functools import partial
 from typing import Any
 
 from src.codebeamer_client import CodebeamerClient
@@ -875,7 +876,7 @@ class TrackerQueryService:
             visited.add(current_id)
             raw_item = self._run(
                 "load_ancestor_path",
-                lambda selected_id=current_id: client.get_item(selected_id),
+                partial(client.get_item, current_id),
             )
             if not isinstance(raw_item, dict):
                 raise TrackerQueryServiceError(

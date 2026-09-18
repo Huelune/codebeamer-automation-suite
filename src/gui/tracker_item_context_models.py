@@ -117,10 +117,12 @@ class ItemHistorySnapshot:
         if isinstance(raw, list):
             candidates = raw
         elif isinstance(raw, dict):
-            candidates = next(
-                (raw.get(key) for key in ("versions", "history", "items", "content") if isinstance(raw.get(key), list)),
-                [],
-            )
+            candidates = []
+            for key in ("versions", "history", "items", "content"):
+                value = raw.get(key)
+                if isinstance(value, list):
+                    candidates = value
+                    break
         else:
             candidates = []
         entries = [ItemHistoryEntry.from_raw(value) for value in candidates if isinstance(value, dict)]

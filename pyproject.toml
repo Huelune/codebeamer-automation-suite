@@ -61,19 +61,15 @@ warn_redundant_casts = true
 no_implicit_optional = true
 
 # mypy 점진 도입: 아래 GUI 모듈은 아직 위반이 남아 검사에서 제외한다.
-# 기준 시점 위반 66건 / 13개 모듈. 모두 `src/gui` 아래다.
+# 기준 시점 위반 53건 / 9개 모듈. 모두 `src/gui` 아래다.
 # 나머지 모듈은 모두 검사 대상이다. 모듈을 정리하면 이 목록에서 지운다.
 [[tool.mypy.overrides]]
 module = [
     "src.gui.api_monitor_window",  # 4건
     "src.gui.batch_validation",  # 5건
     "src.gui.main_window",  # 11건
-    "src.gui.page_execution_mapping",  # 6건
-    "src.gui.page_setup_file",  # 6건
-    "src.gui.service_core",  # 3건
-    "src.gui.tracker_item_context_models",  # 1건
-    "src.gui.tracker_query_models",  # 2건
-    "src.gui.tracker_query_service",  # 1건
+    "src.gui.page_execution_mapping",  # 4건
+    "src.gui.page_setup_file",  # 2건
     "src.gui.tracker_workspace",  # 22건
     "src.gui.upload_service",  # 1건
     "src.gui.window_shell",  # 1건

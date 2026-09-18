@@ -977,18 +977,16 @@ def _initialize_root_item_page(
     regex_pattern.textChanged.connect(lambda _text: _refresh_preview())
     regex_target.currentIndexChanged.connect(lambda _index: _refresh_preview())
     group_by_column.currentIndexChanged.connect(lambda _index: _refresh_preview())
-    enable_root_item.toggled.connect(
-        lambda checked: (
-            _sync_root_enabled_state(bool(checked), bool(enable_group_folder.isChecked())),
-            _refresh_preview(),
-        )
-    )
-    enable_group_folder.toggled.connect(
-        lambda checked: (
-            _sync_root_enabled_state(bool(enable_root_item.isChecked()), bool(checked)),
-            _refresh_preview(),
-        )
-    )
+    def _on_root_item_toggled(checked: bool) -> None:
+        _sync_root_enabled_state(bool(checked), bool(enable_group_folder.isChecked()))
+        _refresh_preview()
+
+    def _on_group_folder_toggled(checked: bool) -> None:
+        _sync_root_enabled_state(bool(enable_root_item.isChecked()), bool(checked))
+        _refresh_preview()
+
+    enable_root_item.toggled.connect(_on_root_item_toggled)
+    enable_group_folder.toggled.connect(_on_group_folder_toggled)
 
     page.get_config = get_config
     page.load_context = load_context

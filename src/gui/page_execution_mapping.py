@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from PySide6.QtWidgets import QWidget as QtWidget
 
 from src.models import TrackerItemResolutionMode
@@ -198,12 +200,17 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
             tracker_item_table.setCellWidget(row_index, 3, regex_edit)
             tracker_item_table.setItem(row_index, 4, QTableWidgetItem(""))
             _refresh_tracker_item_example(row_index, df_column, schema_field, regex_edit)
-            regex_edit.textChanged.connect(
-                lambda _text, row=row_index, column=df_column, field=schema_field, edit=regex_edit: (
-                    _refresh_tracker_item_example(row, column, field, edit),
-                    _mark_dirty(),
-                )
-            )
+            def _on_regex_changed(
+                _text: str,
+                row: int = row_index,
+                column: str = df_column,
+                field: str = schema_field,
+                edit: Any = regex_edit,
+            ) -> None:
+                _refresh_tracker_item_example(row, column, field, edit)
+                _mark_dirty()
+
+            regex_edit.textChanged.connect(_on_regex_changed)
 
         _configure_table_columns(tracker_item_table, [220, 220, 180, 300, 360])
         if candidates:

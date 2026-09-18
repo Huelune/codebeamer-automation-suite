@@ -535,9 +535,7 @@ class TrackerItemDetail:
             raise ValueError("아이템 상세 응답은 객체여야 합니다.")
         tracker_payload = as_mapping(tracker_payload)
         project = (
-            tracker_payload.get("project")
-            if isinstance(tracker_payload.get("project"), dict)
-            else {}
+            as_mapping(tracker_payload.get("project"))
         )
         summary = TrackerItemSummary.from_raw(
             value,
