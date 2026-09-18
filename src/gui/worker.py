@@ -308,6 +308,7 @@ class BulkUpdateWorker:
         progress_changed: SignalInstance
         completed: SignalInstance
         failed: SignalInstance
+        finished: SignalInstance
 
         def request_cancel(self) -> None: ...
         def start(self) -> None: ...

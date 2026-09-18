@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import replace
 from typing import TYPE_CHECKING
+from typing import Any
 
 from PySide6.QtCore import QTimer
 
@@ -447,9 +448,10 @@ class MainWindow(QMainWindow):
         self.application_body_layout.invalidate()
         self.application_body_layout.activate()
         central_widget = self.centralWidget()
-        if central_widget is not None and central_widget.layout() is not None:
-            central_widget.layout().invalidate()
-            central_widget.layout().activate()
+        central_layout = central_widget.layout() if central_widget is not None else None
+        if central_layout is not None:
+            central_layout.invalidate()
+            central_layout.activate()
 
         settings_center = getattr(self, "settings_center_page", None)
         if settings_center is not None:
@@ -568,8 +570,8 @@ class MainWindow(QMainWindow):
 
     def _current_developer_tracker_id(self) -> int | None:
         tracker = getattr(self.tracker_workspace_page, "_current_tracker", None)
-        tracker_id = getattr(tracker, "tracker_id", None)
-        if tracker_id not in (None, ""):
+        tracker_id: Any = getattr(tracker, "tracker_id", None)
+        if tracker_id is not None and tracker_id != "":
             return int(tracker_id)
         fallback = self.batch_window.session_state.settings.default_tracker_id
         try:
