@@ -10,6 +10,7 @@ from src.models import PayloadStatus
 from src.upload_pipeline import run_validation_pipeline
 from src.upload_policy import BLOCKING_OPTION_STATUSES
 from src.upload_policy import USER_LOOKUP_FAILURE_SUFFIXES
+from src.upload_policy import OperationScope
 from src.upload_policy import default_operation_scope
 from src.upload_policy import normalize_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
@@ -65,7 +66,7 @@ class BatchValidationService:
         selected_mapping_modes: dict[str, Any] | None,
         *,
         upload_mode: str | None,
-    ) -> dict[str, dict[str, bool]]:
+    ) -> dict[str, OperationScope]:
         return {
             str(df_column).strip(): normalize_operation_scope(
                 (selected_mapping_modes or {}).get(str(df_column).strip()),

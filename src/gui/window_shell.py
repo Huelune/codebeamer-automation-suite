@@ -166,8 +166,8 @@ class WindowShellMixin(_WindowShellMixinComposition):
         QPushButton = self.qt["QPushButton"]
         QComboBox = self.qt["QComboBox"]
 
-        self.page_scroll_areas = {}
-        self.page_meta = {}
+        self.page_scroll_areas: dict[str, Any] = {}
+        self.page_meta: dict[str, Any] = {}
         self._current_page = None
         self._initial_window_state_applied = False
         self._last_normal_window_width = self.minimumWidth()
@@ -257,7 +257,7 @@ class WindowShellMixin(_WindowShellMixinComposition):
         self.busy_overlay = LoadingOverlay(root)
         self.busy_message_label = self.busy_overlay.message_label
         self.busy_spinner = self.busy_overlay.spinner
-        self._local_busy_token = None
+        self._local_busy_token: int | None = None
         self._external_busy_token = None
 
         self.setCentralWidget(root)

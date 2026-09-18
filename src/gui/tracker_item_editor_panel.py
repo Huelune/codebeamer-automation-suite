@@ -29,6 +29,13 @@ try:
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    # 런타임에는 순환 import 를 피하려고 메서드 안에서 지연 import 한다.
+    from .tracker_table_field_editor_dialog import TrackerTableFieldEditorDialog
+
 from .tracker_item_editor import EditableTrackerField
 from .tracker_item_editor import EditableTrackerSchema
 from .tracker_item_editor import FieldEditorKind
@@ -57,7 +64,7 @@ class TrackerTableFieldInput(QWidget):
             else initial_value
         )
         self._value = deepcopy(current) if isinstance(current, list) else []
-        self._dialog = None
+        self._dialog: TrackerTableFieldEditorDialog | None = None
 
         self.setObjectName("tracker_table_field_input")
         layout = QHBoxLayout(self)

@@ -93,7 +93,7 @@ class SettingsCenterPage(QWidget):
         self.leave_decision_callback = None
         self._dirty = False
         self._updating_controls = False
-        self._validation_task = None
+        self._validation_task: BackgroundTask | None = None
         self._validation_busy_token = None
         self._build_ui()
         self._load_draft_into_controls()

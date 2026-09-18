@@ -167,14 +167,14 @@ class ApiMonitorPanel(QFrame):
         self.search_edit = QLineEdit(filters)
         self.search_edit.setPlaceholderText("요청 종류, API 경로 또는 진단 ID 검색")
         self.method_combo = QComboBox(filters)
-        for label, value in (
+        for option_label, option_value in (
             ("모든 Method", ""),
             ("GET", "GET"),
             ("POST", "POST"),
             ("PUT", "PUT"),
             ("DELETE", "DELETE"),
         ):
-            self.method_combo.addItem(label, value)
+            self.method_combo.addItem(option_label, option_value)
         self.status_combo = QComboBox(filters)
         for label, value in (
             ("모든 Status", ""),
