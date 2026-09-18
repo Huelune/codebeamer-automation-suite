@@ -17,6 +17,7 @@ from src.gui.tracker_item_editor import EditableFieldOption
 from src.gui.tracker_item_editor import EditableTrackerField
 from src.gui.tracker_item_editor import FieldEditorKind
 from src.gui.tracker_table_field_editor_dialog import TrackerTableFieldEditorDialog
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 def _column(

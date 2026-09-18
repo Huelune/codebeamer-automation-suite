@@ -16,6 +16,7 @@ from src.gui.tracker_hierarchy_export import create_tracker_hierarchy_workbook
 from src.gui.tracker_hierarchy_export import export_tracker_hierarchy_xlsx
 from src.gui.tracker_hierarchy_export import hierarchy_export_fields_from_schema
 from src.gui.tracker_query_models import TrackerItemSummary
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 SCHEMA = {

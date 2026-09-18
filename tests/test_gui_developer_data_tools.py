@@ -11,6 +11,7 @@ from src.gui.developer_data_tools import clear_context_caches
 from src.gui.developer_data_tools import diff_schema_frames
 from src.gui.developer_data_tools import inspect_payload_row
 from src.gui.tracker_query_models import TrackerQuery
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class DeveloperDataToolsTest(unittest.TestCase):

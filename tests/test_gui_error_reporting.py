@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QPushButton
 from src.diagnostics import DiagnosticService
 from src.gui.error_reporting import install_global_exception_handler
 from src.gui.error_reporting import safe_exception_message
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class GuiErrorReportingTest(unittest.TestCase):

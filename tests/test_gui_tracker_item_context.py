@@ -7,6 +7,7 @@ from src.gui.tracker_item_context_models import ItemHistorySnapshot
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_context_service import TrackerItemContextService
 from src.gui.tracker_item_detail_session import TrackerItemDetailSession
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 @dataclass

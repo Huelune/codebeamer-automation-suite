@@ -19,6 +19,7 @@ from src.diagnostics import DiagnosticService
 from src.diagnostics import DiagnosticSource
 from src.gui.developer_tools_window import DIAGNOSTIC_TABLE_ROW_LIMIT
 from src.gui.developer_tools_window import DeveloperToolsWindow
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class GuiDeveloperToolsWindowTest(unittest.TestCase):

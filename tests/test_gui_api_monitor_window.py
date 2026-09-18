@@ -11,6 +11,7 @@ from src.api_monitor import API_OUTCOME_FAILED
 from src.api_monitor import API_OUTCOME_SUCCESS
 from src.api_monitor import ApiMonitorService
 from src.gui.api_monitor_window import ApiMonitorWindow
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class _Clock:

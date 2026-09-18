@@ -14,6 +14,7 @@ from src.gui.tracker_query_models import TrackerQueryServiceError
 from src.gui.tracker_query_models import TrackerSearchMode
 from src.gui.tracker_query_service import TrackerQueryService
 from src.gui.tracker_query_service import classify_tracker_query_error
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "gui-offline-sample"

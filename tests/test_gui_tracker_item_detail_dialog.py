@@ -13,6 +13,7 @@ from src.gui.tracker_content_models import AttachmentSummary
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
 from src.gui.tracker_query_models import TrackerItemDetail
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 PNG = base64.b64decode(

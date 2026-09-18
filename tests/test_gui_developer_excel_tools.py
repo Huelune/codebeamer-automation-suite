@@ -17,6 +17,7 @@ from openpyxl import load_workbook
 
 from src.gui.developer_excel_tools import DeveloperExcelToolError
 from src.gui.developer_excel_tools import DeveloperExcelToolService
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class DeveloperExcelToolServiceTest(unittest.TestCase):
