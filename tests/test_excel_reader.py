@@ -88,6 +88,59 @@ class ExcelReaderTest(unittest.TestCase):
             self.assertEqual(headers, ["Summary", "설명"])
             self.assertEqual(rows, [["REQ-001", 101], ["REQ-002", 202]])
 
+    def test_openpyxl_reads_only_through_last_non_blank_header(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "formatted-range.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.append(["Summary", "설명"])
+            sheet.append(["REQ-001", "첫 번째"])
+            sheet.cell(row=20, column=200).number_format = "0"
+            workbook.save(path)
+            workbook.close()
+
+            reader = ExcelReader(header_row=1, summary_col="Summary")
+
+            headers, rows = reader.read_preview_rows(
+                str(path),
+                0,
+                max_rows=1,
+            )
+            raw_df = reader.read_excel(str(path), sheet_name=0)
+
+            self.assertEqual(headers, ["Summary", "설명"])
+            self.assertEqual(rows, [["REQ-001", "첫 번째"]])
+            self.assertEqual(list(raw_df.columns), [
+                "Summary",
+                "설명",
+                "_excel_row",
+                "_summary_indent",
+            ])
+
+    def test_preview_rejects_excessive_blank_used_range(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "excessive-range.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.append(["Summary", "설명"])
+            sheet.append(["REQ-001", "첫 번째"])
+            sheet.cell(row=20, column=2).number_format = "0"
+            workbook.save(path)
+            workbook.close()
+
+            reader = ExcelReader(header_row=1, summary_col="Summary")
+
+            with patch("src.excel_reader.OPENPYXL_PREVIEW_SCAN_ROW_LIMIT", 5):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "사용 범위가 지나치게 큽니다",
+                ):
+                    reader.read_preview_rows(
+                        str(path),
+                        0,
+                        max_rows=10,
+                    )
+
     def test_read_excel_normalizes_integer_like_numbers_without_decimal_suffix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "sample.xlsx"
