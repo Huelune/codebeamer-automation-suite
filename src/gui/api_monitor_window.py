@@ -176,7 +176,7 @@ class ApiMonitorPanel(QFrame):
         ):
             self.method_combo.addItem(option_label, option_value)
         self.status_combo = QComboBox(filters)
-        for label, value in (
+        for option_label, option_value in (
             ("모든 Status", ""),
             ("2xx", "2xx"),
             ("3xx", "3xx"),
@@ -185,15 +185,15 @@ class ApiMonitorPanel(QFrame):
             ("429", "429"),
             ("Status 없음", "none"),
         ):
-            self.status_combo.addItem(label, value)
+            self.status_combo.addItem(option_label, option_value)
         self.outcome_combo = QComboBox(filters)
-        for label, value in (
+        for option_label, option_value in (
             ("모든 결과", ""),
             ("성공", API_OUTCOME_SUCCESS),
             ("실패", API_OUTCOME_FAILED),
             ("재시도", API_OUTCOME_RETRY),
         ):
-            self.outcome_combo.addItem(label, value)
+            self.outcome_combo.addItem(option_label, option_value)
         self.slow_only_checkbox = QCheckBox("느린 요청만", filters)
         filter_layout.addWidget(self.search_edit, 1)
         filter_layout.addWidget(self.method_combo)

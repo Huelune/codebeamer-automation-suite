@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from typing import Any
 
 from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
+from src.upload_policy import OperationScope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 
@@ -287,9 +288,9 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
             )
 
         selected_mapping: dict[str, str] = {}
-        selected_mapping_modes: dict[str, dict[str, bool]] = {}
+        selected_mapping_modes: dict[str, OperationScope] = {}
         selected_default_values: dict[str, str] = {}
-        selected_default_value_modes: dict[str, dict[str, bool]] = {}
+        selected_default_value_modes: dict[str, OperationScope] = {}
         selected_tracker_item_settings: dict[str, dict[str, object]] = {}
         if callable(getattr(self.mapping_page, "get_selected_mapping", None)):
             selected_mapping = dict(self.mapping_page.get_selected_mapping() or {})
@@ -833,9 +834,9 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
     def _validate_mapping(
         self,
         selected_mapping: dict[str, str],
-        selected_mapping_modes: dict[str, dict[str, bool]],
+        selected_mapping_modes: dict[str, OperationScope],
         selected_default_values: dict[str, str],
-        selected_default_value_modes: dict[str, dict[str, bool]],
+        selected_default_value_modes: dict[str, OperationScope],
         selected_tracker_item_settings: dict[str, dict[str, object]],
     ) -> None:
         """`validate_mapping` 입력을 검증한다."""

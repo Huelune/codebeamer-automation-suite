@@ -8,6 +8,7 @@ from src.models import TrackerItemResolutionMode
 from src.upload_policy import DEFAULT_TRACKER_ITEM_ID_REGEX
 from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
 from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
+from src.upload_policy import OperationScope
 from src.upload_policy import default_operation_scope
 from src.upload_policy import normalize_all_or_none_operation_scope
 from src.upload_policy import normalize_operation_scope
@@ -342,10 +343,10 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
         upload_columns: list[str],
         schema_df,
         selected_mapping: dict[str, str],
-        selected_mapping_modes: dict[str, dict[str, bool]],
+        selected_mapping_modes: dict[str, OperationScope],
         default_value_candidates: list,
         selected_default_values: dict[str, str],
-        selected_default_value_modes: dict[str, dict[str, bool]],
+        selected_default_value_modes: dict[str, OperationScope],
         selected_tracker_item_settings: dict[str, dict[str, object]],
         upload_preview_df=None,
     ) -> None:
@@ -476,9 +477,9 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
             mapping[column_name_item.text()] = schema_field
         return mapping
 
-    def get_selected_mapping_modes() -> dict[str, dict[str, bool]]:
+    def get_selected_mapping_modes() -> dict[str, OperationScope]:
         """`get_selected_mapping_modes` 값을 반환한다."""
-        mapping_modes: dict[str, dict[str, bool]] = {}
+        mapping_modes: dict[str, OperationScope] = {}
         for row_index in range(table.rowCount()):
             create_widget = table.cellWidget(row_index, 0)
             update_widget = table.cellWidget(row_index, 1)
@@ -515,9 +516,9 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
             default_values[field_item.text()] = selected_value
         return default_values
 
-    def get_selected_default_value_modes() -> dict[str, dict[str, bool]]:
+    def get_selected_default_value_modes() -> dict[str, OperationScope]:
         """`get_selected_default_value_modes` 값을 반환한다."""
-        default_value_modes: dict[str, dict[str, bool]] = {}
+        default_value_modes: dict[str, OperationScope] = {}
         for row_index in range(default_table.rowCount()):
             field_item = default_table.item(row_index, 1)
             create_widget = default_table.cellWidget(row_index, 0)

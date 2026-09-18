@@ -4,6 +4,8 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 from typing import Any
 
+from src.upload_policy import OperationScope
+
 from .loading_overlay import LoadingOverlay
 from .page_batch_settings import create_batch_settings_page
 from .page_execution_mapping import create_mapping_page
@@ -146,9 +148,9 @@ if TYPE_CHECKING:
         def _validate_mapping(
             self,
             selected_mapping: dict[str, str],
-            selected_mapping_modes: dict[str, dict[str, bool]],
+            selected_mapping_modes: dict[str, OperationScope],
             selected_default_values: dict[str, str],
-            selected_default_value_modes: dict[str, dict[str, bool]],
+            selected_default_value_modes: dict[str, OperationScope],
             selected_tracker_item_settings: dict[str, dict[str, object]],
         ) -> None: ...
 
@@ -432,7 +434,7 @@ class WindowShellMixin(_WindowShellMixinComposition):
 
         task.completed.connect(_on_completed)
         task.failed.connect(_on_failed)
-        self.busy_task = task
+        self.busy_task: BackgroundTask | None = task
         self._set_busy(True, message)
 
         try:

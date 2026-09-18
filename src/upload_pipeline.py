@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from .upload_policy import OperationScope
 from .wizard import CodebeamerUploadWizard
 
 
@@ -103,9 +104,9 @@ def prepare_upload_dataframe(
 def run_validation_pipeline(
     wizard: CodebeamerUploadWizard,
     selected_mapping: dict[str, str],
-    selected_mapping_modes: dict[str, dict[str, bool]] | None = None,
+    selected_mapping_modes: dict[str, OperationScope] | None = None,
     selected_default_values: dict[str, Any] | None = None,
-    selected_default_value_modes: dict[str, dict[str, bool]] | None = None,
+    selected_default_value_modes: dict[str, OperationScope] | None = None,
     selected_tracker_item_settings: dict[str, dict[str, Any]] | None = None,
     *,
     fetch_existing_items: bool = True,

@@ -14,6 +14,7 @@ from src.api_monitor import API_MONITOR_DEFAULT_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MAX_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MIN_SLOW_THRESHOLD_MS
 from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
+from src.upload_policy import OperationScope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 
 from .payload_values import as_mapping
@@ -134,9 +135,9 @@ class GuiWorkflowPreset:
     file_options: dict[str, Any] = field(default_factory=dict)
     root_item_config: dict[str, Any] = field(default_factory=dict)
     selected_mapping: dict[str, str] = field(default_factory=dict)
-    selected_mapping_modes: dict[str, dict[str, bool]] = field(default_factory=dict)
+    selected_mapping_modes: dict[str, OperationScope] = field(default_factory=dict)
     selected_default_values: dict[str, str] = field(default_factory=dict)
-    selected_default_value_modes: dict[str, dict[str, bool]] = field(default_factory=dict)
+    selected_default_value_modes: dict[str, OperationScope] = field(default_factory=dict)
     selected_tracker_item_settings: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 

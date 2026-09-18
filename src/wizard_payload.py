@@ -7,6 +7,7 @@ import pandas as pd
 
 from .models import TableFieldValue
 from .models import TrackerItemBase
+from .upload_policy import OperationScope
 from .wizard_item_builder import WizardItemBuilderService
 from .wizard_option_resolution import WizardOptionResolutionService
 from .wizard_update_payload import WizardUpdatePayloadService
@@ -58,9 +59,9 @@ class WizardPayloadMixin:
         self,
         selected_mapping: dict[str, str],
         selected_option_mapping: dict[str, str] | None = None,
-        selected_mapping_modes: dict[str, dict[str, bool]] | None = None,
+        selected_mapping_modes: dict[str, OperationScope] | None = None,
         selected_default_values: dict[str, Any] | None = None,
-        selected_default_value_modes: dict[str, dict[str, bool]] | None = None,
+        selected_default_value_modes: dict[str, OperationScope] | None = None,
         selected_tracker_item_settings: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[dict[str, str], pd.DataFrame]:
         return self.option_resolution.process_option_mapping(

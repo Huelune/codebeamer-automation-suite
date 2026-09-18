@@ -253,7 +253,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             settings=self.session_state.settings,
             file_state=self.session_state.file_state,
             mapping_context=self.session_state.mapping_context,
-            dry_run=bool(retry_context.dry_run),
+            dry_run=bool(retry_context is not None and retry_context.dry_run),
             continue_on_error=self.upload_page.continue_checkbox.isChecked(),
             output_dir=output_dir,
             retry_context=retry_context,

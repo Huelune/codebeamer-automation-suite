@@ -83,9 +83,9 @@ class BatchValidationService:
         selected_default_value_modes: dict[str, Any] | None,
         *,
         upload_mode: str | None,
-    ) -> dict[str, dict[str, bool]]:
+    ) -> dict[str, OperationScope]:
         default_scope = default_operation_scope(upload_mode)
-        normalized: dict[str, dict[str, bool]] = {}
+        normalized: dict[str, OperationScope] = {}
         for schema_field in selected_default_values:
             field_name = str(schema_field).strip()
             if not field_name:
@@ -576,8 +576,8 @@ class BatchValidationService:
         selected_default_values: dict[str, str] | None = None,
         selected_tracker_item_settings: dict[str, dict[str, Any]] | None = None,
         *,
-        selected_mapping_modes: dict[str, dict[str, bool]] | None = None,
-        selected_default_value_modes: dict[str, dict[str, bool]] | None = None,
+        selected_mapping_modes: dict[str, OperationScope] | None = None,
+        selected_default_value_modes: dict[str, OperationScope] | None = None,
     ) -> ValidationContext:
         """`validate_mapping` 입력을 검증한다."""
         wizard = mapping_context.wizard
