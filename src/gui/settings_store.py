@@ -15,6 +15,7 @@ from src.api_monitor import API_MONITOR_MAX_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MIN_SLOW_THRESHOLD_MS
 from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
 from src.upload_policy import OperationScope
+from src.upload_policy import as_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 
 from .payload_values import as_mapping
@@ -946,12 +947,8 @@ class GuiSettingsStore:
         return dict(value) if isinstance(value, dict) else {}
 
     @staticmethod
-    def _operation_scope_payload(value: Any) -> dict[str, bool]:
-        payload = dict(value) if isinstance(value, dict) else {}
-        return {
-            "create": bool(payload.get("create", False)),
-            "update": bool(payload.get("update", False)),
-        }
+    def _operation_scope_payload(value: Any) -> OperationScope:
+        return as_operation_scope(value)
 
     def _load_legacy_settings(self) -> GuiSettings:
         if not self.settings_path.exists():

@@ -11,6 +11,7 @@ from src.upload_pipeline import run_validation_pipeline
 from src.upload_policy import BLOCKING_OPTION_STATUSES
 from src.upload_policy import USER_LOOKUP_FAILURE_SUFFIXES
 from src.upload_policy import OperationScope
+from src.upload_policy import as_operation_scope
 from src.upload_policy import default_operation_scope
 from src.upload_policy import normalize_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
@@ -92,9 +93,9 @@ class BatchValidationService:
                 continue
             raw_scope = (selected_default_value_modes or {}).get(field_name)
             normalized[field_name] = (
-                dict(default_scope)
+                as_operation_scope(default_scope)
                 if scope_applies_to_upload_mode(raw_scope, upload_mode=upload_mode)
-                else {"create": False, "update": False}
+                else OperationScope(create=False, update=False)
             )
         return normalized
 

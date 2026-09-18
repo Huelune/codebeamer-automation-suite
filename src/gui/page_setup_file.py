@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtWidgets import QWidget as QtWidget
 
@@ -453,7 +454,7 @@ def _initialize_file_selection_page(
     _set_preview_file_items(page._selected_file_paths, initial_settings.last_file_path)
     _update_file_display()
 
-    def _load_state(state: dict[str, object]) -> None:
+    def _load_state(state: dict[str, Any]) -> None:
         loaded_state = dict(state or {})
         loaded_file_paths = [
             str(path).strip()

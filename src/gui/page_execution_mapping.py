@@ -261,7 +261,8 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
             int(base_color.blue() * inverse_ratio + accent_color.blue() * clamped_ratio),
         )
 
-    def _mapping_row_palette() -> dict[str, object]:
+    def _mapping_row_palette() -> dict[str, Any]:
+        # 값은 QColor 다. 이 모듈은 Qt 클래스를 동적으로 받아 이름을 적을 수 없다.
         palette = table.palette()
         base_color = palette.base().color()
         alternate_color = palette.alternateBase().color()
@@ -319,7 +320,7 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
         _populate_tracker_item_table(get_selected_mapping(), get_selected_tracker_item_settings())
         _mark_dirty()
 
-    def _normalize_default_value_scope(raw_scope: dict[str, object] | None, *, upload_mode: str) -> dict[str, bool]:
+    def _normalize_default_value_scope(raw_scope: Any, *, upload_mode: str) -> OperationScope:
         return normalize_all_or_none_operation_scope(raw_scope, upload_mode=upload_mode)
 
     def _sync_mapping_scope_checkboxes(create_widget, update_widget, *, upload_mode: str) -> None:

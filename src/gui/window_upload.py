@@ -388,7 +388,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             return ""
         for value in values or []:
             if isinstance(value, dict):
-                raw_id = (
+                raw_id: Any = (
                     value.get("id")
                     or value.get("projectId")
                     or value.get("trackerId")
@@ -609,9 +609,9 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
         if event_type not in {"row_success", "row_failed"}:
             return
 
-        started_at = self.upload_progress.event_started_at.get(row_key)
-        elapsed: float | None = (
-            None if started_at is None else (time.perf_counter() - started_at)
+        row_started_at = self.upload_progress.event_started_at.get(row_key)
+        row_elapsed: float | None = (
+            None if row_started_at is None else (time.perf_counter() - row_started_at)
         )
         if event_type == "row_success":
             self.upload_progress.success_count += 1
@@ -647,7 +647,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             item_name,
             status=status_text,
             finished_at=self._format_clock(),
-            duration_text=self._format_duration(elapsed),
+            duration_text=self._format_duration(row_elapsed),
             message=message,
         )
         self._update_upload_counter()
