@@ -22,7 +22,8 @@ def run_gui(*, smoke_test: bool = False) -> int:
     from .error_reporting import install_global_exception_handler
     from .main_window import MainWindow
 
-    app = QApplication.instance() or QApplication([])
+    existing_app = QApplication.instance()
+    app = existing_app if isinstance(existing_app, QApplication) else QApplication([])
     DIAGNOSTICS.clear()
     install_global_exception_handler(app, diagnostics=DIAGNOSTICS)
     smoke_settings_dir = (

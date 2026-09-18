@@ -903,7 +903,7 @@ class BatchUploadService:
         phase_totals = {"insert": 0, "update": 0}
         for retry_job in retry_context.jobs:
             payload_df = retry_job.wizard.state.payload_df
-            operation_by_row_id: dict[int, str] = {}
+            operation_by_row_id = {}
             if isinstance(payload_df, pd.DataFrame) and not payload_df.empty:
                 for _, row in payload_df.iterrows():
                     operation_by_row_id[int(row["_row_id"])] = str(
@@ -954,7 +954,7 @@ class BatchUploadService:
             )
 
             payload_df = retry_job.wizard.state.payload_df
-            operation_by_row_id: dict[int, str] = {}
+            operation_by_row_id = {}
             if isinstance(payload_df, pd.DataFrame) and not payload_df.empty:
                 for _, row in payload_df.iterrows():
                     operation_by_row_id[int(row["_row_id"])] = str(

@@ -252,10 +252,11 @@ class GuiExceptionReporter(QObject):
             else:
                 show_error_alert(self.app.activeWindow(), title, message)
         except Exception as exc:
-            # windowed EXE 에서는 sys.__stderr__ 가 None(AttributeError)이거나
-            # 이미 닫혀 있을(ValueError/OSError) 수 있다.
-            with contextlib.suppress(AttributeError, OSError, ValueError):
-                sys.__stderr__.write(f"GUI error alert failed: {exc}\n")
+            # windowed EXE 에서는 sys.__stderr__ 가 없거나 이미 닫혀 있을 수 있다.
+            stderr_stream = sys.__stderr__
+            if stderr_stream is not None:
+                with contextlib.suppress(OSError, ValueError):
+                    stderr_stream.write(f"GUI error alert failed: {exc}\n")
         finally:
             self._reporting = False
 

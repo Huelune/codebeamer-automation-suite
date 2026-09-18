@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
+from typing import Any
 
 from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
@@ -13,7 +15,66 @@ from .window_support import _merge_root_item_page_configs
 from .window_support import _merge_window_preferences
 
 
-class WindowWorkflowMixin:
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QMainWindow
+
+    from .service_core import GuiCodebeamerService
+    from .service_core import GuiExcelService
+    from .settings_store import GuiSettingsStore
+    from .upload_service import GuiUploadPipelineService
+    from .window_support import GuiSessionState
+
+    class _WindowWorkflowMixinComposition(QMainWindow):
+        """WindowWorkflowMixin 이 조립된 뒤에야 쓸 수 있는 이름들의 선언이다.
+
+        `BatchUploadWindow` 가 QMainWindow 와 함께 조립한다.
+        Qt 메서드(statusBar)는 QMainWindow 상속으로 해결한다.
+        런타임에는 object 이므로 실제 상속 관계는 바뀌지 않는다.
+        """
+
+        # 조립 클래스가 설정하는 속성이다.
+        codebeamer_service: GuiCodebeamerService
+        excel_service: GuiExcelService
+        file_page: Any
+        mapping_page: Any
+        pipeline_service: GuiUploadPipelineService
+        project_page: Any
+        qt: dict[str, Any]
+        result_page: Any
+        root_item_field_page: Any
+        root_item_structure_page: Any
+        session_state: GuiSessionState
+        settings_page: Any
+        settings_store: GuiSettingsStore
+        upload_page: Any
+        validation_page: Any
+        workflow_preset_combo: Any
+
+        # 형제 믹스인이 제공하는 메서드다. 시그니처는 정의 위치에서 옮겼다.
+        def _apply_theme(self, theme_name: str | None) -> str:
+            ...
+
+        def _attach_navigation(
+            self, page, previous_page=None, next_page=None, next_handler=None, restart_handler=None
+        ) -> None: ...
+
+        def _run_with_busy(self, message: str, func, *args, **kwargs):
+            ...
+
+        def _show_error_dialog(self, title: str, message: str) -> None:
+            ...
+
+        def _show_info_dialog(self, title: str, message: str) -> None:
+            ...
+
+        def _show_page(self, page) -> None:
+            ...
+
+else:
+    _WindowWorkflowMixinComposition = object
+
+
+class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
     def _on_settings_changed(self, settings: GuiSettings | None) -> GuiSettings:
         if settings is None:
             return self.session_state.settings

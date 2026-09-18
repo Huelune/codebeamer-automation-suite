@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
+from typing import Any
 
 from .loading_overlay import LoadingOverlay
 from .page_batch_settings import create_batch_settings_page
@@ -16,7 +18,145 @@ from .styles import normalize_gui_theme_name
 from .worker import BackgroundTask
 
 
-class WindowShellMixin:
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QMainWindow
+
+    from .settings_store import GuiSettings
+    from .settings_store import GuiSettingsStore
+    from .settings_store import GuiWorkflowPreset
+    from .window_support import GuiSessionState
+
+    class _WindowShellMixinComposition(QMainWindow):
+        """WindowShellMixin 이 조립된 뒤에야 쓸 수 있는 이름들의 선언이다.
+
+        `BatchUploadWindow` 가 QMainWindow 와 함께 조립한다.
+        Qt 메서드(height, isFullScreen, isMaximized, minimumHeight, minimumWidth,
+        screen 등)는 QMainWindow 상속으로 해결한다.
+        런타임에는 object 이므로 실제 상속 관계는 바뀌지 않는다.
+        """
+
+        # 조립 클래스가 설정하는 속성이다.
+        qt: dict[str, Any]
+        session_state: GuiSessionState
+        settings_store: GuiSettingsStore
+
+        # 형제 믹스인이 제공하는 메서드다. 시그니처는 정의 위치에서 옮겼다.
+        def _apply_workflow_preset(self, preset: GuiWorkflowPreset, *, startup: bool=False) -> None:
+            ...
+
+        def _cancel_upload(self) -> None:
+            ...
+
+        def _delete_workflow_preset(self) -> None:
+            ...
+
+        def _enter_result_page(self) -> None:
+            ...
+
+        def _enter_upload_page(self) -> None:
+            ...
+
+        def _enter_validation_page(self) -> None:
+            ...
+
+        def _load_file_metadata(self, file_path: str):
+            ...
+
+        def _load_file_preview(
+            self,
+            file_path: str,
+            *,
+            file_paths: list[str] | None = None,
+            sheet_name: str,
+            header_row: int,
+            summary_column: str,
+        ): ...
+
+        def _load_full_file_data(
+            self,
+            file_path: str,
+            *,
+            file_paths: list[str] | None,
+            sheet_name: str,
+            header_row: int,
+            summary_column: str,
+            sheet_preview=None,
+        ): ...
+
+        def _load_sheet_preview(self, file_path: str, *, sheet_name: str, header_row: int, summary_column: str):
+            ...
+
+        def _load_trackers(self, settings: GuiSettings, project_id: int) -> list[dict[str, object]]:
+            ...
+
+        def _load_workflow_preset(self) -> None:
+            ...
+
+        def _on_confirm_root_item_field_config(self) -> None:
+            ...
+
+        def _on_confirm_root_item_structure_config(self) -> None:
+            ...
+
+        def _on_file_state_changed(self, file_state: dict[str, object]) -> None:
+            ...
+
+        def _on_prepare_root_item_context(self) -> None:
+            ...
+
+        def _on_settings_changed(self, settings: GuiSettings | None) -> GuiSettings:
+            ...
+
+        def _pause_upload(self) -> None:
+            ...
+
+        def _preview_root_item_config(self, root_item_config: dict[str, object]):
+            ...
+
+        def _refresh_workflow_preset_choices(self, selected_id: str | None=None) -> None:
+            ...
+
+        def _rename_workflow_preset(self) -> None:
+            ...
+
+        def _restart_upload_flow(self) -> None:
+            ...
+
+        def _resume_upload(self) -> None:
+            ...
+
+        def _save_workflow_preset(self) -> None:
+            ...
+
+        def _save_workflow_preset_as(self) -> None:
+            ...
+
+        def _set_default_workflow_preset(self) -> None:
+            ...
+
+        def _start_upload(self) -> None:
+            ...
+
+        def _sync_workflow_preset_action_state(self, _index: int | None=None) -> None:
+            ...
+
+        def _test_connection(self, settings: GuiSettings) -> list[dict[str, object]]:
+            ...
+
+        def _validate_mapping(
+            self,
+            selected_mapping: dict[str, str],
+            selected_mapping_modes: dict[str, dict[str, bool]],
+            selected_default_values: dict[str, str],
+            selected_default_value_modes: dict[str, dict[str, bool]],
+            selected_tracker_item_settings: dict[str, dict[str, object]],
+        ) -> None: ...
+
+else:
+    _WindowShellMixinComposition = object
+
+
+class WindowShellMixin(_WindowShellMixinComposition):
     def _build_shell(self) -> None:
         QWidget = self.qt["QWidget"]
         QVBoxLayout = self.qt["QVBoxLayout"]

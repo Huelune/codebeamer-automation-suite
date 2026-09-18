@@ -194,7 +194,7 @@ def _normalized_failures(payload: Any) -> tuple[BulkUpdateFailure, ...]:
     for raw_value in raw_failures:
         if not isinstance(raw_value, dict):
             continue
-        raw_id = raw_value.get("id") or raw_value.get("itemId")
+        raw_id: Any = raw_value.get("id") or raw_value.get("itemId")
         try:
             item_id = int(raw_id)
         except (TypeError, ValueError):

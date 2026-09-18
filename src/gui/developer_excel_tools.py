@@ -676,7 +676,7 @@ class DeveloperExcelToolService:
         try:
             formula_sheet = _select_sheet(formula_workbook, sheet_name)
             value_sheet = value_workbook[formula_sheet.title]
-            rows: list[list[Any]] = []
+            rows = []
             for formula_row, value_row in zip(
                 formula_sheet.iter_rows(),
                 value_sheet.iter_rows(), strict=False,

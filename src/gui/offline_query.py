@@ -59,7 +59,7 @@ def _as_comparable_values(value: Any) -> list[Any]:
     if value is None:
         return []
     if isinstance(value, dict):
-        values: list[Any] = []
+        values = []
         if value.get("id") is not None:
             values.append(value.get("id"))
         if value.get("name") is not None:
@@ -70,7 +70,7 @@ def _as_comparable_values(value: Any) -> list[Any]:
             values.extend(_as_comparable_values(value.get("values")))
         return values
     if isinstance(value, (list, tuple, set)):
-        values: list[Any] = []
+        values = []
         for item in value:
             values.extend(_as_comparable_values(item))
         return values

@@ -69,7 +69,7 @@ def prepare_upload_dataframe(
     header_row: int | None = None,
     summary_col: str,
     selected_mapping: dict[str, str],
-    schema: dict[str, Any] | None = None,
+    schema: dict[str, Any] | list[dict[str, Any]] | None = None,
     schema_df: pd.DataFrame | None = None,
     raw_df: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:

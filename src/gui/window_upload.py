@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
+from typing import Any
 
 from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 
@@ -17,7 +19,49 @@ from .window_support import _format_upload_progress_text
 from .worker import UploadWorker
 
 
-class WindowUploadMixin:
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QMainWindow
+
+    from .upload_service import GuiUploadPipelineService
+    from .window_support import GuiSessionState
+
+    class _WindowUploadMixinComposition(QMainWindow):
+        """WindowUploadMixin 이 조립된 뒤에야 쓸 수 있는 이름들의 선언이다.
+
+        `BatchUploadWindow` 가 QMainWindow 와 함께 조립한다.
+        런타임에는 object 이므로 실제 상속 관계는 바뀌지 않는다.
+        """
+
+        # 조립 클래스가 설정하는 속성이다.
+        pipeline_service: GuiUploadPipelineService
+        upload_worker: UploadWorker | None
+        qt: dict[str, Any]
+        result_page: Any
+        session_state: GuiSessionState
+        upload_page: Any
+        validation_page: Any
+
+        # 형제 믹스인이 제공하는 메서드다. 시그니처는 정의 위치에서 옮겼다.
+        def _record_activity(self, record: ActivityRecord) -> None:
+            ...
+
+        def _run_with_busy(self, message: str, func, *args, **kwargs):
+            ...
+
+        def _show_error_dialog(self, title: str, message: str) -> None:
+            ...
+
+        def _show_info_dialog(self, title: str, message: str) -> None:
+            ...
+
+        def _show_page(self, page) -> None:
+            ...
+
+else:
+    _WindowUploadMixinComposition = object
+
+
+class WindowUploadMixin(_WindowUploadMixinComposition):
     def _connect_upload_workbook_actions(self) -> None:
         """검증/결과 페이지의 Excel 도구와 실패 재시도 동작을 연결한다."""
         self.upload_workbook_service = UploadWorkbookService()

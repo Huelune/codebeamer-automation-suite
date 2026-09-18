@@ -659,7 +659,7 @@ class RootItemService:
 
             invalid_assignments.append(schema_field)
 
-        preview_rows: list[dict[str, str]] = []
+        preview_rows = []
         missing_sources: list[str] = []
         missing_group_values: list[str] = []
         target_kind = "group_root" if group_enabled and group_by_column else "file_root"

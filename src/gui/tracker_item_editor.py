@@ -72,7 +72,9 @@ class EditableFieldOption:
         if not isinstance(value, dict):
             return None
         try:
-            option_id = int(value.get("id"))
+            # 서버 JSON 값이라 타입이 없다. 값이 없으면 아래 TypeError 로 처리한다.
+            raw_option_id: Any = value.get("id")
+            option_id = int(raw_option_id)
         except (TypeError, ValueError):
             return None
         return cls(
