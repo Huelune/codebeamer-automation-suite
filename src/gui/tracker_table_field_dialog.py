@@ -307,7 +307,8 @@ class TrackerTableFieldDialog(QDialog):
                         self.wiki_resource_loader(result, target)
                 self._drain_wiki_queue()
 
-            self.wiki_render_request(text, completed)
+            if self.wiki_render_request is not None:
+                self.wiki_render_request(text, completed)
 
     def _fit_columns_to_contents(self, _checked: bool = False) -> None:
         column_count = self.table.columnCount()

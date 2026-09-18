@@ -18,7 +18,7 @@ class ValidationPreparation:
 
 def load_tracker_schema_df(
     wizard: CodebeamerUploadWizard,
-) -> tuple[dict[str, Any], pd.DataFrame]:
+) -> tuple[dict[str, Any] | list[dict[str, Any]], pd.DataFrame]:
     """현재 선택된 tracker의 schema와 flatten된 schema_df를 함께 만든다."""
     if wizard.state.tracker_id is None:
         raise ValueError("tracker_id must be selected first.")
@@ -69,7 +69,7 @@ def prepare_upload_dataframe(
     header_row: int | None = None,
     summary_col: str,
     selected_mapping: dict[str, str],
-    schema: dict[str, Any] | None = None,
+    schema: dict[str, Any] | list[dict[str, Any]] | None = None,
     schema_df: pd.DataFrame | None = None,
     raw_df: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
@@ -78,7 +78,8 @@ def prepare_upload_dataframe(
         raise ValueError("wizard.reader 가 준비되지 않았습니다.")
 
     if schema is None or schema_df is None:
-        schema, schema_df = load_tracker_schema_df(wizard)
+        loaded_schema, schema_df = load_tracker_schema_df(wizard)
+        schema = loaded_schema if isinstance(loaded_schema, dict) else {"fields": loaded_schema}
 
     list_cols = wizard.mapper.get_list_columns_for_mapping(selected_mapping, schema_df)
     if header_row is not None:

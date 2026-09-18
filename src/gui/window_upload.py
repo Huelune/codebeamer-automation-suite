@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
+from typing import Any
 
 from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 
@@ -17,7 +19,49 @@ from .window_support import _format_upload_progress_text
 from .worker import UploadWorker
 
 
-class WindowUploadMixin:
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QMainWindow
+
+    from .upload_service import GuiUploadPipelineService
+    from .window_support import GuiSessionState
+
+    class _WindowUploadMixinComposition(QMainWindow):
+        """WindowUploadMixin 이 조립된 뒤에야 쓸 수 있는 이름들의 선언이다.
+
+        `BatchUploadWindow` 가 QMainWindow 와 함께 조립한다.
+        런타임에는 object 이므로 실제 상속 관계는 바뀌지 않는다.
+        """
+
+        # 조립 클래스가 설정하는 속성이다.
+        pipeline_service: GuiUploadPipelineService
+        upload_worker: UploadWorker | None
+        qt: dict[str, Any]
+        result_page: Any
+        session_state: GuiSessionState
+        upload_page: Any
+        validation_page: Any
+
+        # 형제 믹스인이 제공하는 메서드다. 시그니처는 정의 위치에서 옮겼다.
+        def _record_activity(self, record: ActivityRecord) -> None:
+            ...
+
+        def _run_with_busy(self, message: str, func, *args, **kwargs):
+            ...
+
+        def _show_error_dialog(self, title: str, message: str) -> None:
+            ...
+
+        def _show_info_dialog(self, title: str, message: str) -> None:
+            ...
+
+        def _show_page(self, page) -> None:
+            ...
+
+else:
+    _WindowUploadMixinComposition = object
+
+
+class WindowUploadMixin(_WindowUploadMixinComposition):
     def _connect_upload_workbook_actions(self) -> None:
         """검증/결과 페이지의 Excel 도구와 실패 재시도 동작을 연결한다."""
         self.upload_workbook_service = UploadWorkbookService()
@@ -673,16 +717,26 @@ class WindowUploadMixin:
         else:
             phase_results = result.get("phase_results") or {}
         self.upload_progress.phase_totals = {
-            "insert": int((phase_results.get("insert") or {}).get("total", self.upload_progress.phase_totals.get("insert", 0)) or 0),
-            "update": int((phase_results.get("update") or {}).get("total", self.upload_progress.phase_totals.get("update", 0)) or 0),
+            "insert": int(
+                (phase_results.get("insert") or {}).get("total", self.upload_progress.phase_totals.get("insert", 0))
+                or 0
+            ),
+            "update": int(
+                (phase_results.get("update") or {}).get("total", self.upload_progress.phase_totals.get("update", 0))
+                or 0
+            ),
         }
         self.upload_progress.phase_counts = {
-            "insert_success": int((phase_results.get("insert") or {}).get("success", self._count_phase_rows(success_df, "insert")) or 0),
+            "insert_success": int(
+                (phase_results.get("insert") or {}).get("success", self._count_phase_rows(success_df, "insert")) or 0
+            ),
             "insert_failed": int(
                 ((phase_results.get("insert") or {}).get("failed", 0) or 0)
                 + self._count_phase_rows(activity_unresolved_df, "insert")
             ),
-            "update_success": int((phase_results.get("update") or {}).get("success", self._count_phase_rows(success_df, "update")) or 0),
+            "update_success": int(
+                (phase_results.get("update") or {}).get("success", self._count_phase_rows(success_df, "update")) or 0
+            ),
             "update_failed": int(
                 ((phase_results.get("update") or {}).get("failed", 0) or 0)
                 + self._count_phase_rows(activity_unresolved_df, "update")
@@ -700,8 +754,14 @@ class WindowUploadMixin:
             self.upload_progress.total = self.upload_progress.total_count
         self._update_upload_progress_widgets()
         self._update_upload_counter()
-        if activity_failed_df is not None and not getattr(activity_failed_df, "empty", True) and "error_response_json" in activity_failed_df.columns:
-            self.upload_page.response_view.setPlainText(str(activity_failed_df.iloc[0].get("error_response_json") or ""))
+        if (
+            activity_failed_df is not None
+            and not getattr(activity_failed_df, "empty", True)
+            and "error_response_json" in activity_failed_df.columns
+        ):
+            self.upload_page.response_view.setPlainText(
+                str(activity_failed_df.iloc[0].get("error_response_json") or "")
+            )
             if hasattr(self.upload_page, "detail_tabs") and hasattr(self.upload_page, "response_tab"):
                 self.upload_page.detail_tabs.setCurrentWidget(self.upload_page.response_tab)
         elif was_retry:

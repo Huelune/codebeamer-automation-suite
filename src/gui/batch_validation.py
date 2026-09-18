@@ -646,7 +646,9 @@ class BatchValidationService:
         ]
         row_context_frames = [
             self._annotate_source_frame(
-                wizard.state.converted_upload_df if wizard.state.converted_upload_df is not None else wizard.state.upload_df,
+                wizard.state.converted_upload_df
+                if wizard.state.converted_upload_df is not None
+                else wizard.state.upload_df,
                 file_label=Path(representative_file_path).name,
                 file_path=representative_file_path,
             )
@@ -682,7 +684,9 @@ class BatchValidationService:
             self._sync_validation_wizard_caches(wizard, batch_wizard)
             option_check_frames.append(
                 self._annotate_source_frame(
-                    batch_validation_result.option_check_df if batch_validation_result.option_check_df is not None else pd.DataFrame(),
+                    batch_validation_result.option_check_df
+                    if batch_validation_result.option_check_df is not None
+                    else pd.DataFrame(),
                     file_label=Path(file_path).name,
                     file_path=file_path,
                 )
@@ -696,7 +700,9 @@ class BatchValidationService:
             )
             row_context_frames.append(
                 self._annotate_source_frame(
-                    batch_wizard.state.converted_upload_df if batch_wizard.state.converted_upload_df is not None else batch_wizard.state.upload_df,
+                    batch_wizard.state.converted_upload_df
+                    if batch_wizard.state.converted_upload_df is not None
+                    else batch_wizard.state.upload_df,
                     file_label=Path(file_path).name,
                     file_path=file_path,
                 )

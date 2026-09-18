@@ -154,6 +154,8 @@ class ExcelReader:
             return [sheet.name for sheet in workbook.sheets]
         finally:
             if workbook is not None:
+                # xlwings 는 데스크톱 Excel 을 COM 으로 다루므로 정리 실패가 pywintypes.com_error,
+                # OSError 등 여러 형태로 올라온다. 읽기 결과를 돌려주는 것이 우선이라 모두 무시한다.
                 with contextlib.suppress(Exception):
                     workbook.close()
             app.quit()
@@ -183,6 +185,8 @@ class ExcelReader:
             return self._normalize_headers(rows[0] if rows else [])
         finally:
             if workbook is not None:
+                # xlwings 는 데스크톱 Excel 을 COM 으로 다루므로 정리 실패가 pywintypes.com_error,
+                # OSError 등 여러 형태로 올라온다. 읽기 결과를 돌려주는 것이 우선이라 모두 무시한다.
                 with contextlib.suppress(Exception):
                     workbook.close()
             app.quit()
@@ -309,7 +313,7 @@ class ExcelReader:
             if last_used_row <= self.header_row:
                 return headers, []
 
-            rows: list[list[Any]] = []
+            rows = []
             next_row = self.header_row + 1
             while next_row <= last_used_row and len(rows) < normalized_max_rows:
                 remaining = normalized_max_rows - len(rows)
@@ -336,6 +340,8 @@ class ExcelReader:
             return headers, rows
         finally:
             if workbook is not None:
+                # xlwings 는 데스크톱 Excel 을 COM 으로 다루므로 정리 실패가 pywintypes.com_error,
+                # OSError 등 여러 형태로 올라온다. 읽기 결과를 돌려주는 것이 우선이라 모두 무시한다.
                 with contextlib.suppress(Exception):
                     workbook.close()
             app.quit()
@@ -386,7 +392,7 @@ class ExcelReader:
         try:
             alignment = getattr(cell, "alignment", None)
             indent = getattr(alignment, "indent", None) if alignment is not None else None
-            if indent not in (None, ""):
+            if indent is not None and indent != "":
                 return int(indent)
         except Exception:
             pass
@@ -507,6 +513,8 @@ class ExcelReader:
             return self._normalize_dataframe_values(pd.DataFrame(records, dtype=object))
         finally:
             if workbook is not None:
+                # xlwings 는 데스크톱 Excel 을 COM 으로 다루므로 정리 실패가 pywintypes.com_error,
+                # OSError 등 여러 형태로 올라온다. 읽기 결과를 돌려주는 것이 우선이라 모두 무시한다.
                 with contextlib.suppress(Exception):
                     workbook.close()
             app.quit()

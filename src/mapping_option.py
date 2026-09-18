@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from typing import Any
 
 import pandas as pd
@@ -13,7 +14,34 @@ from .models import ResolvedFieldKind
 from .models import UserLookupStatus
 
 
-class MappingOptionMixin:
+if TYPE_CHECKING:
+
+    class _MappingOptionMixinSiblings:
+        """조립된 뒤 형제 믹스인이 제공하는 메서드 선언이다.
+
+        런타임에는 존재하지 않는다. 시그니처는 정의 위치에서 그대로 옮겼다.
+        """
+
+        def get_option_field_candidates(self, schema_df: pd.DataFrame) -> pd.DataFrame:
+            ...
+
+        @classmethod
+        def resolve_tracker_item_reference_value(cls, raw_value: Any, *, multiple_values: bool) -> Any:
+            ...
+
+        @classmethod
+        def resolve_tracker_item_reference_value_with_regex(
+            cls, raw_value: Any, *, multiple_values: bool, pattern: str
+        ) -> Any: ...
+
+else:
+    _MappingOptionMixinSiblings = object
+
+
+class MappingOptionMixin(_MappingOptionMixinSiblings):
+    # 실제 값은 MappingService.__init__ 이 설정한다. 여기서는 선언만 둔다.
+    logger: Any
+
     @staticmethod
     def build_option_name_map(options: list[dict]) -> dict:
         """option 이름으로 빠르게 찾을 수 있는 사전을 만든다."""
@@ -95,7 +123,10 @@ class MappingOptionMixin:
                         "source_status": OptionSourceStatus.UNSUPPORTED.value,
                         "resolver_available": False,
                         **metadata,
-                        "unsupported_reason": "schema options에 중복 name이 있어 안전하게 option map을 만들 수 없습니다.",
+                        "unsupported_reason": (
+                            "schema options에 중복 name이 있어 "
+                            "안전하게 option map을 만들 수 없습니다."
+                        ),
                     }
                     continue
 
@@ -483,7 +514,7 @@ class MappingOptionMixin:
                 resolved_col = f"{df_col}__resolved"
                 if resolved_col in work.columns:
                     continue
-                resolved_values = []
+                resolved_values: list[Any] = []
                 multiple_values = option_info.get("multiple_values", False)
                 regex_pattern = str(option_info.get("tracker_item_regex_pattern") or "").strip()
 

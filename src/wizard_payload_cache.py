@@ -61,10 +61,11 @@ class WizardPayloadCacheService:
                 item_id_counts: dict[int, int] = {}
                 for _, row in source_df.iterrows():
                     try:
-                        target_item_id = self._parse_update_item_id(row.get(id_column_name))
+                        # 중복 집계용 지역 변수다. 아래 본 루프의 target_item_id 와 구분한다.
+                        counted_item_id = self._parse_update_item_id(row.get(id_column_name))
                     except ValueError:
                         continue
-                    item_id_counts[target_item_id] = item_id_counts.get(target_item_id, 0) + 1
+                    item_id_counts[counted_item_id] = item_id_counts.get(counted_item_id, 0) + 1
                 duplicate_item_ids = {
                     item_id
                     for item_id, item_count in item_id_counts.items()
@@ -74,7 +75,7 @@ class WizardPayloadCacheService:
         for _, row in source_df.iterrows():
             row_id = int(row["_row_id"])
             operation = "create"
-            target_item_id = None
+            target_item_id: int | None = None
             try:
                 payload_json = None
                 if upload_mode == "update":

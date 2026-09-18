@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from typing import Any
 
 import pandas as pd
@@ -17,7 +18,17 @@ UserLookupCacheEntry = tuple[dict[str, Any] | None, dict[str, Any] | None, str, 
 MemberLookupCacheEntry = tuple[dict[str, Any] | None, dict[str, Any] | None, str, str | None]
 
 
+
+if TYPE_CHECKING:
+    from .codebeamer_client import CodebeamerClient
+    from .models import WizardState
+
 class WizardUserLookupMixin:
+    # 조립된 뒤 사용할 속성의 타입 선언이다. 실제 값은
+    # `CodebeamerUploadWizard.__init__` 이 채우므로 여기서는 선언만 둔다.
+    client: CodebeamerClient
+    state: WizardState
+
     @staticmethod
     def _normalize_lookup_text(value: Any) -> str:
         """lookup에 쓸 값을 공백 없는 문자열로 정리한다."""
@@ -269,7 +280,9 @@ class WizardUserLookupMixin:
         if ref_type == ReferenceType.USER.value:
             return UserInfo(id=int(candidate["id"]), name=candidate.get("name")).to_reference().to_dict()
         if ref_type == ReferenceType.ROLE.value:
-            return RoleReference(id=int(candidate["id"]), name=candidate.get("name"), type=ReferenceType.ROLE.value).to_dict()
+            return RoleReference(
+                id=int(candidate["id"]), name=candidate.get("name"), type=ReferenceType.ROLE.value
+            ).to_dict()
         if ref_type in {ReferenceType.GROUP.value, ReferenceType.USER_GROUP.value}:
             if ref_type == ReferenceType.GROUP.value:
                 return GroupReference(
@@ -305,7 +318,9 @@ class WizardUserLookupMixin:
             if not lookup_text:
                 raise ValueError("member lookup text is empty")
 
-            allowed_types = [str(member_type).strip().upper() for member_type in (member_types or []) if str(member_type).strip()]
+            allowed_types = [
+                str(member_type).strip().upper() for member_type in (member_types or []) if str(member_type).strip()
+            ]
             if not allowed_types:
                 allowed_types = ["USER"]
 
@@ -319,7 +334,12 @@ class WizardUserLookupMixin:
                     UserLookupStatus.USER_NOT_FOUND.value,
                     UserLookupStatus.USER_LOOKUP_NOT_RUN.value,
                 }:
-                    entry = (None, None, UserLookupStatus.MEMBER_LOOKUP_FAILED.value, user_error)
+                    entry: tuple[Any, Any, str, str | None] = (
+                        None,
+                        None,
+                        UserLookupStatus.MEMBER_LOOKUP_FAILED.value,
+                        user_error,
+                    )
                     self.state.member_lookup_cache[cache_key] = entry
                     return entry
 
@@ -403,10 +423,10 @@ class WizardUserLookupMixin:
             if option_info.get("kind") != OptionMapKind.USER_LOOKUP.value:
                 continue
 
-            resolved_values = []
-            user_infos = []
-            statuses = []
-            errors = []
+            resolved_values: list[Any] = []
+            user_infos: list[Any] = []
+            statuses: list[Any] = []
+            errors: list[Any] = []
             multiple_values = option_info.get("multiple_values", False)
 
             for _, row in work.iterrows():
@@ -485,10 +505,10 @@ class WizardUserLookupMixin:
             if option_info.get("kind") != OptionMapKind.MEMBER_LOOKUP.value:
                 continue
 
-            resolved_values = []
-            member_infos = []
-            statuses = []
-            errors = []
+            resolved_values: list[Any] = []
+            member_infos: list[Any] = []
+            statuses: list[Any] = []
+            errors: list[Any] = []
             multiple_values = option_info.get("multiple_values", False)
             field_id = option_info.get("field_id")
             member_types = option_info.get("member_types") or []

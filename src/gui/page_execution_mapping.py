@@ -98,7 +98,9 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
     tracker_tab_layout.addWidget(tracker_item_help_label)
 
     tracker_item_table = QTableWidget(0, 5)
-    tracker_item_table.setHorizontalHeaderLabels(["Excel 컬럼", "Codebeamer 필드", "처리 방식", "ID 추출 정규식", "예시"])
+    tracker_item_table.setHorizontalHeaderLabels(
+        ["Excel 컬럼", "Codebeamer 필드", "처리 방식", "ID 추출 정규식", "예시"]
+    )
     tracker_item_table.setAlternatingRowColors(True)
     _configure_data_table(tracker_item_table, minimum_height=SECONDARY_TABLE_MIN_HEIGHT)
     _configure_table_columns(tracker_item_table, [220, 220, 180, 300, 360])
@@ -169,7 +171,9 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
             _tracker_item_example_text(df_column, schema_field, regex_edit.text().strip())
         )
 
-    def _populate_tracker_item_table(mapping: dict[str, str], tracker_item_settings: dict[str, dict[str, object]]) -> None:
+    def _populate_tracker_item_table(
+        mapping: dict[str, str], tracker_item_settings: dict[str, dict[str, object]]
+    ) -> None:
         page._tracker_item_settings = {
             str(schema_field): dict(setting)
             for schema_field, setting in (tracker_item_settings or {}).items()
@@ -204,7 +208,8 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
         _configure_table_columns(tracker_item_table, [220, 220, 180, 300, 360])
         if candidates:
             tracker_item_help_label.setText(
-                "TrackerItemChoiceField 는 입력값에서 ID를 추출해 사용합니다. 이름이나 summary 조회는 현재 사용할 수 없습니다."
+                "TrackerItemChoiceField 는 입력값에서 ID를 추출해 사용합니다. "
+                "이름이나 summary 조회는 현재 사용할 수 없습니다."
             )
         else:
             tracker_item_help_label.setText("현재 매핑에는 별도 Tracker Item 처리 설정이 필요한 필드가 없습니다.")
@@ -417,7 +422,9 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
             selected_default = str(selected_default_values.get(schema_field, "") or "")
             _configure_default_value_widget(combo, candidate, selected_default)
             _bind_default_value_commit(combo)
-            combo.currentTextChanged.connect(lambda _text, widget=combo: None if bool(widget.isEditable()) else _mark_dirty())
+            combo.currentTextChanged.connect(
+                lambda _text, widget=combo: None if bool(widget.isEditable()) else _mark_dirty()
+            )
             default_table.setCellWidget(row_index, 3, combo)
 
             default_table.setItem(
@@ -431,10 +438,13 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
         _configure_table_columns(default_table, [70, 220, 170, 240, 90])
         _populate_tracker_item_table(get_selected_mapping(), selected_tracker_item_settings)
         info_label.setText(
-            f"매핑 대상 컬럼 {len(upload_columns)}개. id, parent 는 제외되며 생성/수정 체크를 모두 끄면 해당 컬럼은 무시됩니다."
+            f"매핑 대상 컬럼 {len(upload_columns)}개. id, parent 는 제외되며 "
+            "생성/수정 체크를 모두 끄면 해당 컬럼은 무시됩니다."
         )
         if default_value_candidates:
-            default_help_label.setText("행 값이 있으면 행 값이 우선하고, 비어 있으면 아래 기본값을 현재 처리 모드에 맞게 적용합니다.")
+            default_help_label.setText(
+                "행 값이 있으면 행 값이 우선하고, 비어 있으면 아래 기본값을 현재 처리 모드에 맞게 적용합니다."
+            )
         else:
             default_help_label.setText("선택 가능한 공통 기본값 필드가 없습니다.")
         status_label.setText("")

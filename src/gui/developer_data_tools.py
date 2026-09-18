@@ -294,7 +294,7 @@ def clear_context_caches(context: Any, cache_keys: list[str] | tuple[str, ...]) 
     removed = 0
     for key in dict.fromkeys(cache_keys):
         cache = getattr(context, _CACHE_ATTRIBUTES[key], None)
-        if not hasattr(cache, "clear"):
+        if cache is None or not hasattr(cache, "clear"):
             continue
         removed += len(cache)
         cache.clear()

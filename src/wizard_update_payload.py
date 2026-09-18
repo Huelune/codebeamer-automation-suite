@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
+from typing import Literal
+from typing import overload
 
 import pandas as pd
 
@@ -74,6 +76,28 @@ class WizardUpdatePayloadService:
                 return normalized
         raise ValueError(f"invalid: {raw_value!r}")
 
+    @overload
+    def _resolve_update_target_item_id(
+        self,
+        row: pd.Series,
+        row_id: int,
+        *,
+        id_column_name: str,
+        duplicate_item_ids: set[int],
+        allow_missing: Literal[False],
+    ) -> int: ...
+
+    @overload
+    def _resolve_update_target_item_id(
+        self,
+        row: pd.Series,
+        row_id: int,
+        *,
+        id_column_name: str,
+        duplicate_item_ids: set[int],
+        allow_missing: Literal[True],
+    ) -> int | None: ...
+
     def _resolve_update_target_item_id(
         self,
         row: pd.Series,
@@ -83,7 +107,11 @@ class WizardUpdatePayloadService:
         duplicate_item_ids: set[int],
         allow_missing: bool,
     ) -> int | None:
-        """행의 id 셀을 update 대상 item id로 해석한다."""
+        """행의 id 셀을 update 대상 item id로 해석한다.
+
+        `allow_missing=False` 면 값을 찾지 못했을 때 예외를 던지므로 항상 int 를 돌려준다.
+        호출부에서 None 검사를 반복하지 않도록 overload 로 그 계약을 드러낸다.
+        """
         if id_column_name not in row.index:
             if allow_missing:
                 return None

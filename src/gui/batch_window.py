@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from .activity_history import ActivityRecord
 from .service_core import GuiCodebeamerService
@@ -19,7 +20,14 @@ from .window_workflow import WindowWorkflowMixin
 
 
 _QT = _require_qt()
-QMainWindow = _QT["QMainWindow"]
+if TYPE_CHECKING:
+    # 런타임 가드는 아래 else 가 유지한다. 타입 체커에는 실제 클래스를 알려준다.
+    from PySide6.QtWidgets import QMainWindow
+
+    from .worker import BackgroundTask
+    from .worker import UploadWorker
+else:
+    QMainWindow = _QT["QMainWindow"]
 
 
 class BatchUploadWindow(WindowShellMixin, WindowWorkflowMixin, WindowUploadMixin, QMainWindow):
@@ -64,8 +72,8 @@ class BatchUploadWindow(WindowShellMixin, WindowWorkflowMixin, WindowUploadMixin
         self.codebeamer_service = GuiCodebeamerService()
         self.excel_service = GuiExcelService()
         self.pipeline_service = GuiUploadPipelineService()
-        self.upload_worker = None
-        self.background_task = None
+        self.upload_worker: UploadWorker | None = None
+        self.background_task: BackgroundTask | None = None
         self.upload_progress = UploadProgressState()
         self._activity_dry_run = False
         self._build_shell()
@@ -119,6 +127,7 @@ class BatchUploadWindow(WindowShellMixin, WindowWorkflowMixin, WindowUploadMixin
     def _record_activity(self, record: ActivityRecord) -> None:
         if self._activity_recorder is None:
             return
+        # 실행 기록 저장은 부가 기능이다. 기록이 실패해도 업로드 흐름을 끊지 않는다.
         with contextlib.suppress(Exception):
             self._activity_recorder(record)
 

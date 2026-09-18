@@ -230,7 +230,9 @@ class TrackerItemDetailDialog(QDialog):
         toolbar.addWidget(self.relations_retry)
         layout.addLayout(toolbar)
         self.relations_table = QTableWidget(0, 7, tab)
-        self.relations_table.setHorizontalHeaderLabels(["구분", "이름", "아이템 ID", "버전", "유형", "관계 ID", "외부 URL"])
+        self.relations_table.setHorizontalHeaderLabels(
+            ["구분", "이름", "아이템 ID", "버전", "유형", "관계 ID", "외부 URL"]
+        )
         self.relations_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.relations_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.relations_table.verticalHeader().setVisible(False)
@@ -314,9 +316,13 @@ class TrackerItemDetailDialog(QDialog):
             version_text = str(entry.version) if entry.version is not None else "-"
             if entry.version is not None and entry.version == snapshot.current_version:
                 version_text += " (현재)"
-            for column, value in enumerate((version_text, entry.modified_at or "-", entry.modified_by or "-", entry.change_summary or "-")):
+            for column, value in enumerate(
+                (version_text, entry.modified_at or "-", entry.modified_by or "-", entry.change_summary or "-")
+            ):
                 self.history_table.setItem(row, column, QTableWidgetItem(value))
-        self.history_status.setText(f"변경 이력 {len(snapshot.entries)}건" if snapshot.entries else "변경 이력이 없습니다.")
+        self.history_status.setText(
+            f"변경 이력 {len(snapshot.entries)}건" if snapshot.entries else "변경 이력이 없습니다."
+        )
         self.history_retry.hide()
 
     def _open_selected_relation(self, index) -> None:
@@ -387,6 +393,8 @@ class TrackerItemDetailDialog(QDialog):
         self._comments_state = "loaded"
         while self.comments_layout.count() > 1:
             item = self.comments_layout.takeAt(0)
+            if item is None:
+                break
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
@@ -401,7 +409,15 @@ class TrackerItemDetailDialog(QDialog):
             depth = self._comment_depth(comment, by_id)
             frame_layout.setContentsMargins(12 + depth * 24, 10, 12, 10)
             meta = QLabel(
-                " · ".join(value for value in (comment.author or "작성자 없음", comment.created_at or "시각 없음", f"답글 → {comment.reply_to_id}" if comment.reply_to_id else "") if value),
+                " · ".join(
+                    value
+                    for value in (
+                        comment.author or "작성자 없음",
+                        comment.created_at or "시각 없음",
+                        f"답글 → {comment.reply_to_id}" if comment.reply_to_id else "",
+                    )
+                    if value
+                ),
                 frame,
             )
             meta.setObjectName("tracker_comment_meta")
@@ -417,13 +433,16 @@ class TrackerItemDetailDialog(QDialog):
                 if self._comment_attachment_is_image(attachment):
                     resource_key = f"comment-{comment.comment_id}-attachment-{attachment.attachment_id}"
                     image_blocks.append(
-                        f'<p><b>{escape(attachment.name)}</b><br><img src="cb-attachment://{resource_key}" alt="{escape(attachment.name)}"></p>'
+                        f'<p><b>{escape(attachment.name)}</b><br>'
+                        f'<img src="cb-attachment://{resource_key}" alt="{escape(attachment.name)}"></p>'
                     )
                 else:
                     row = QHBoxLayout()
                     row.addWidget(QLabel(f"첨부: {attachment.name}", frame), 1)
                     save = QPushButton("저장", frame)
-                    save.clicked.connect(lambda _checked=False, value=attachment: self.comment_attachment_save_requested.emit(value))
+                    save.clicked.connect(
+                        lambda _checked=False, value=attachment: self.comment_attachment_save_requested.emit(value)
+                    )
                     row.addWidget(save)
                     frame_layout.addLayout(row)
             view.setHtml(source_html + "".join(image_blocks))
@@ -609,7 +628,13 @@ class TrackerItemDetailDialog(QDialog):
                 self.image_combo.addItem(attachment.name, key)
         self.image_combo.blockSignals(False)
         controls_enabled = self.image_combo.count() > 0
-        for widget in (self.image_combo, self.zoom_out_button, self.actual_button, self.fit_button, self.zoom_in_button):
+        for widget in (
+            self.image_combo,
+            self.zoom_out_button,
+            self.actual_button,
+            self.fit_button,
+            self.zoom_in_button,
+        ):
             widget.setEnabled(controls_enabled)
         if controls_enabled:
             self._show_selected_image(0)

@@ -122,7 +122,8 @@ class ExcelToolPanel(QWidget):
         title = QLabel("Excel 검사·안전 변환", self)
         title.setObjectName("application_route_title")
         description = QLabel(
-            "원본을 덮어쓰지 않습니다. .xlsx는 검사·값 변환을 지원하고, .xlsm은 매크로를 보존하지 않는 값 변환만 제공합니다.",
+            "원본을 덮어쓰지 않습니다. .xlsx는 검사·값 변환을 지원하고, "
+            ".xlsm은 매크로를 보존하지 않는 값 변환만 제공합니다.",
             self,
         )
         description.setWordWrap(True)
@@ -600,7 +601,9 @@ class ReadOnlyQueryToolPanel(QWidget):
         form.addRow("페이지 크기", self.page_size_spin)
         layout.addLayout(form)
         self.cbql_edit = QPlainTextEdit(self)
-        self.cbql_edit.setPlaceholderText("예: status = 'Open' ORDER BY item.id ASC\n트래커 범위는 자동으로 추가됩니다.")
+        self.cbql_edit.setPlaceholderText(
+            "예: status = 'Open' ORDER BY item.id ASC\n트래커 범위는 자동으로 추가됩니다."
+        )
         layout.addWidget(self.cbql_edit, 1)
         actions = QHBoxLayout()
         self.use_current_button = _mark_operation_button(QPushButton("현재 트래커 ID 사용", self))

@@ -1054,6 +1054,7 @@ class TrackerWorkspacePage(QWidget):
     def _record_activity(self, record: ActivityRecord) -> None:
         if self.activity_recorder is None:
             return
+        # 실행 기록 저장은 부가 기능이다. 기록이 실패해도 조회 흐름을 끊지 않는다.
         with contextlib.suppress(Exception):
             self.activity_recorder(record)
 
@@ -1202,11 +1203,21 @@ class TrackerWorkspacePage(QWidget):
     def _finish_request_busy(self, token: object | None) -> None:
         if token is None or not callable(self.busy_finished):
             return
-        with contextlib.suppress(Exception):
+        # 이미 삭제된 위젯이면 RuntimeError, 시그니처가 맞지 않으면 TypeError 가 난다.
+        with contextlib.suppress(RuntimeError, TypeError):
             self.busy_finished(token)
 
     def _show_error(self, exc: Exception, *, prefix: str = "") -> None:
-        if isinstance(exc, (TrackerQueryServiceError, TrackerItemWriteError, BaselineExportError, TrackerHierarchyExportError, ValueError)):
+        if isinstance(
+            exc,
+            (
+                TrackerQueryServiceError,
+                TrackerItemWriteError,
+                BaselineExportError,
+                TrackerHierarchyExportError,
+                ValueError,
+            ),
+        ):
             message = str(exc)
         else:
             message = "조회 중 예상하지 못한 오류가 발생했습니다."
@@ -4077,7 +4088,9 @@ class TrackerWorkspacePage(QWidget):
         if is_explicit_wiki_type(detail.description_format):
             self._submit(
                 "detail_dialog_wiki",
-                lambda: self.content_service.render_wiki(settings, self._wiki_context(detail, None), detail.description),
+                lambda: self.content_service.render_wiki(
+                    settings, self._wiki_context(detail, None), detail.description
+                ),
                 lambda result: dialog.set_description_html(result.html) if current() else None,
                 lambda _exc: None,
             )
@@ -4085,7 +4098,11 @@ class TrackerWorkspacePage(QWidget):
         def attachments_loaded(attachments: tuple[AttachmentSummary, ...]) -> None:
             if not current():
                 return
-            images = tuple(value for value in attachments if self._is_attachment_image(value) and (value.size is None or value.size <= MAX_INLINE_IMAGE_BYTES))
+            images = tuple(
+                value
+                for value in attachments
+                if self._is_attachment_image(value) and (value.size is None or value.size <= MAX_INLINE_IMAGE_BYTES)
+            )
             if not images:
                 dialog.set_images(attachments, ())
                 return

@@ -87,7 +87,7 @@ class LoadingOverlay(QWidget):
         self.setCursor(Qt.CursorShape.WaitCursor)
         self._requests: OrderedDict[int, str] = OrderedDict()
         self._next_token = 0
-        self._previous_focus = None
+        self._previous_focus: QWidget | None = None
 
         overlay_layout = QVBoxLayout(self)
         overlay_layout.setContentsMargins(0, 0, 0, 0)

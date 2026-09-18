@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from typing import Any
 
 import pandas as pd
@@ -19,7 +20,38 @@ from .models import SchemaFieldType
 from .models import TrackerItemBase
 
 
-class MappingSchemaMixin:
+if TYPE_CHECKING:
+
+    class _MappingSchemaMixinSiblings:
+        """조립된 뒤 형제 믹스인이 제공하는 메서드 선언이다.
+
+        런타임에는 존재하지 않는다. 시그니처는 정의 위치에서 그대로 옮겼다.
+        """
+
+        @staticmethod
+        def _build_mandatory_metadata(field: dict[str, Any], all_status_option_ids: set[int]) -> dict[str, Any]:
+            ...
+
+        @staticmethod
+        def _extract_status_option_ids(fields: list[dict[str, Any]]) -> set[int]:
+            ...
+
+        @staticmethod
+        def _is_choice_value_model(value_model: Any) -> bool:
+            ...
+
+        @staticmethod
+        def _is_truthy_flag(value: Any) -> bool:
+            ...
+
+        def build_option_maps_from_schema(self, schema_df: pd.DataFrame) -> dict[str, dict]:
+            ...
+
+else:
+    _MappingSchemaMixinSiblings = object
+
+
+class MappingSchemaMixin(_MappingSchemaMixinSiblings):
     @classmethod
     def _resolve_payload_target_kind(cls, field: dict[str, Any]) -> str:
         """이 필드가 builtin field인지 custom field인지 먼저 판정한다."""
@@ -118,7 +150,8 @@ class MappingSchemaMixin:
             result["is_supported"] = False
             if cls._is_choice_value_model(value_model):
                 result["unsupported_reason"] = (
-                    "OptionChoiceField인데 options/referenceType이 없고 valueModel만 choice 계열이라 확정할 수 없습니다."
+                    "OptionChoiceField인데 options/referenceType이 없고 "
+                    "valueModel만 choice 계열이라 확정할 수 없습니다."
                 )
             else:
                 result["unsupported_reason"] = (
@@ -172,7 +205,8 @@ class MappingSchemaMixin:
             result["resolution_strategy"] = ResolutionStrategy.UNKNOWN_TYPE.value
             result["is_supported"] = False
             result["unsupported_reason"] = (
-                "valueModel이 choice 계열이지만 type/options/referenceType 조합이 없어 보조 신호만으로는 해석할 수 없습니다."
+                "valueModel이 choice 계열이지만 type/options/referenceType 조합이 없어 "
+                "보조 신호만으로는 해석할 수 없습니다."
             )
             return result
 

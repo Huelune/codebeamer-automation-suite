@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 from typing import Any
 
 import pandas as pd
@@ -11,7 +12,68 @@ from .models import PayloadStatus
 from .models import UploadStatus
 
 
-class WizardOperationMixin:
+if TYPE_CHECKING:
+    from .codebeamer_client import CodebeamerClient
+    from .models import WizardState
+    from .wizard_payload_cache import WizardPayloadCacheService
+
+
+if TYPE_CHECKING:
+
+    class _WizardOperationMixinSiblings:
+        """조립된 뒤 형제 믹스인이 제공하는 메서드 선언이다.
+
+        런타임에는 존재하지 않는다. 시그니처는 정의 위치에서 그대로 옮겼다.
+        """
+
+        def _build_root_item_payload(
+            self, root_item_name: str, root_field_values: dict[str, Any] | None = None
+        ) -> dict[str, Any]: ...
+
+        @staticmethod
+        def _concat_result_frames(frames: list[pd.DataFrame | None]) -> pd.DataFrame:
+            ...
+
+        @staticmethod
+        def _filter_payload_rows(payload_df: pd.DataFrame, include_row_ids: set[int] | None) -> pd.DataFrame:
+            ...
+
+        @staticmethod
+        def _http_status_code(exc: Exception) -> int | None:
+            ...
+
+        @staticmethod
+        def _normalize_root_item_name(root_item_name: str | None) -> str | None:
+            ...
+
+        @classmethod
+        def _normalize_top_level_parent_specs(
+            cls, top_level_parent_specs: list[dict[str, Any]] | None
+        ) -> tuple[list[dict[str, Any]], dict[int, str]]: ...
+
+        @staticmethod
+        def _response_json(exc: Exception) -> Any:
+            ...
+
+        @staticmethod
+        def _result_count(frame: pd.DataFrame | None) -> int:
+            ...
+
+        @staticmethod
+        def _unresolved_parent_error(parent_row_id: Any, *, root_item_name: str | None=None) -> str:
+            ...
+
+else:
+    _WizardOperationMixinSiblings = object
+
+
+class WizardOperationMixin(_WizardOperationMixinSiblings):
+    # 조립된 뒤 사용할 속성의 타입 선언이다. 실제 값은
+    # `CodebeamerUploadWizard.__init__` 이 채우므로 여기서는 선언만 둔다.
+    client: CodebeamerClient
+    payload_cache: WizardPayloadCacheService
+    state: WizardState
+
     def build_payloads(
         self,
         force: bool = False,
@@ -53,12 +115,16 @@ class WizardOperationMixin:
         payload_df = self.build_payloads()
         filtered_payload_df = self._filter_payload_rows(payload_df, include_row_ids)
         ready_df = filtered_payload_df[filtered_payload_df["payload_status"] == PayloadStatus.READY.value].copy()
-        payload_failed_df = filtered_payload_df[filtered_payload_df["payload_status"] == PayloadStatus.FAILED.value].copy()
-        should_create_root_item = (
-            root_item_name is not None
-            and not ready_df.empty
-            and not normalized_parent_specs
+        payload_failed_df = filtered_payload_df[
+            filtered_payload_df["payload_status"] == PayloadStatus.FAILED.value
+        ].copy()
+        # 이름을 그대로 들고 있어야 아래에서 None 여부를 좁힐 수 있다.
+        create_root_item_name: str | None = (
+            root_item_name
+            if root_item_name is not None and not ready_df.empty and not normalized_parent_specs
+            else None
         )
+        should_create_root_item = create_root_item_name is not None
 
         pending = set(ready_df["_row_id"].tolist())
         created_map = {
@@ -72,13 +138,15 @@ class WizardOperationMixin:
             for key, item_id in dict(existing_parent_item_ids_by_key or {}).items()
             if str(key).strip() and item_id not in (None, "")
         }
+        # dry run 에서는 실제 id 대신 placeholder 문자열이 들어온다.
+        parent_item_id: Any
         for parent_spec in normalized_parent_specs:
             parent_item_id = created_parent_item_ids_by_key.get(parent_spec["key"])
             if parent_item_id is None:
                 continue
             for row_id in parent_spec["row_ids"]:
                 top_level_parent_item_ids[int(row_id)] = parent_item_id
-        success_logs = []
+        success_logs: list[Any] = []
         failed_logs = [
             {
                 "_row_id": int(row["_row_id"]),
@@ -121,7 +189,7 @@ class WizardOperationMixin:
             )
             return unresolved_df
 
-        if should_create_root_item:
+        if create_root_item_name is not None:
             while pause_requested is not None and pause_requested():
                 time.sleep(0.1)
             if cancel_requested is not None and cancel_requested():
@@ -136,7 +204,9 @@ class WizardOperationMixin:
                 })
 
             try:
-                root_payload = self._build_root_item_payload(root_item_name, root_field_values=root_field_values)
+                root_payload = self._build_root_item_payload(
+                    create_root_item_name, root_field_values=root_field_values
+                )
                 if dry_run:
                     result = {"id": "DRYRUN-ROOT"}
                 else:
@@ -213,12 +283,18 @@ class WizardOperationMixin:
                         continue
 
                     parent_attempt_index += 1
-                    parent_item_parent_id = created_parent_item_ids_by_key.get(parent_key)
+                    parent_item_parent_id = (
+                        created_parent_item_ids_by_key.get(parent_key)
+                        if parent_key is not None
+                        else None
+                    )
 
                     while pause_requested is not None and pause_requested():
                         time.sleep(0.1)
                     if cancel_requested is not None and cancel_requested():
-                        return _finalize(_build_unresolved_df(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy()))
+                        return _finalize(
+                            _build_unresolved_df(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy())
+                        )
 
                     parent_name = parent_spec["name"]
                     if event_callback is not None:
@@ -272,29 +348,35 @@ class WizardOperationMixin:
                         error_response_json = self._response_json(exc)
                         error_message = str(error_response_json) if error_response_json is not None else str(exc)
 
-                        failed_logs.append({
-                            "_row_id": None,
-                            "parent_row_id": None,
-                            "upload_name": parent_name,
-                            "phase": phase_name,
-                            "error_status_code": error_status_code,
-                            "error_response_json": error_response_json,
-                            "error": error_message,
-                            "status": UploadStatus.FAILED.value,
-                        })
-                        if event_callback is not None:
-                            event_callback({
-                                "type": "row_failed",
-                                "phase": phase_name,
-                                "row_id": None,
+                        failed_logs.append(
+                            {
+                                "_row_id": None,
+                                "parent_row_id": None,
                                 "upload_name": parent_name,
-                                "message": error_message,
-                                "status_code": error_status_code,
-                                "response_json": error_response_json,
-                            })
+                                "phase": phase_name,
+                                "error_status_code": error_status_code,
+                                "error_response_json": error_response_json,
+                                "error": error_message,
+                                "status": UploadStatus.FAILED.value,
+                            }
+                        )
+                        if event_callback is not None:
+                            event_callback(
+                                {
+                                    "type": "row_failed",
+                                    "phase": phase_name,
+                                    "row_id": None,
+                                    "upload_name": parent_name,
+                                    "message": error_message,
+                                    "status_code": error_status_code,
+                                    "response_json": error_response_json,
+                                }
+                            )
 
                         if not continue_on_error:
-                            return _finalize(_build_unresolved_df(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy()))
+                            return _finalize(
+                                _build_unresolved_df(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy())
+                            )
 
                 if progress:
                     pending_parent_specs = deferred_parent_specs
@@ -458,7 +540,9 @@ class WizardOperationMixin:
         )
         filtered_payload_df = self._filter_payload_rows(payload_df, include_row_ids)
         ready_df = filtered_payload_df[filtered_payload_df["payload_status"] == PayloadStatus.READY.value].copy()
-        payload_failed_df = filtered_payload_df[filtered_payload_df["payload_status"] == PayloadStatus.FAILED.value].copy()
+        payload_failed_df = filtered_payload_df[
+            filtered_payload_df["payload_status"] == PayloadStatus.FAILED.value
+        ].copy()
 
         success_logs: list[dict[str, Any]] = []
         failed_logs = [

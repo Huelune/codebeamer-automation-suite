@@ -20,7 +20,8 @@ class WizardState:
     converted_upload_df: pd.DataFrame | None = None
     payload_df: pd.DataFrame | None = None
 
-    schema: dict | None = None
+    # Codebeamer 는 tracker schema 를 dict 또는 field dict 목록으로 돌려준다.
+    schema: dict[str, Any] | list[dict[str, Any]] | None = None
     schema_df: pd.DataFrame | None = None
     comparison_df: pd.DataFrame | None = None
     option_candidates_df: pd.DataFrame | None = None
@@ -37,7 +38,9 @@ class WizardState:
     table_field_mapping: dict[str, dict[str, Any]] = field(default_factory=dict)
     list_cols: list[str] = field(default_factory=list)
     user_lookup_cache: dict[tuple[int | None, str], tuple[Any, Any, str, str | None]] = field(default_factory=dict)
-    member_lookup_cache: dict[tuple[int | None, int | None, int | None, str], tuple[Any, Any, str, str | None]] = field(default_factory=dict)
+    member_lookup_cache: dict[tuple[int | None, int | None, int | None, str], tuple[Any, Any, str, str | None]] = field(
+        default_factory=dict
+    )
     group_lookup_cache: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     tracker_role_cache: dict[tuple[int, int, int], dict[str, list[dict[str, Any]]]] = field(default_factory=dict)
     tracker_item_lookup_cache: dict[tuple[str, str], tuple[Any, str | None, str | None]] = field(default_factory=dict)

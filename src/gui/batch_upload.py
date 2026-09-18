@@ -521,7 +521,9 @@ class BatchUploadService:
         if gui_upload_mode_supports_update(upload_mode) and bool(getattr(settings, "offline_mode", False)):
             raise ValueError("테스트 모드에서는 기존 수정 또는 혼합 처리 작업을 실행할 수 없습니다.")
         if gui_upload_mode_supports_update(upload_mode) and mapping_context.batch_duplicate_update_item_ids:
-            duplicate_ids = ", ".join(str(item_id) for item_id in sorted(mapping_context.batch_duplicate_update_item_ids))
+            duplicate_ids = ", ".join(
+                str(item_id) for item_id in sorted(mapping_context.batch_duplicate_update_item_ids)
+            )
             raise ValueError(f"배치 전체에서 중복된 업데이트 대상 id가 있습니다: {duplicate_ids}")
         action_label = gui_upload_mode_action_label(upload_mode)
 
@@ -901,7 +903,7 @@ class BatchUploadService:
         phase_totals = {"insert": 0, "update": 0}
         for retry_job in retry_context.jobs:
             payload_df = retry_job.wizard.state.payload_df
-            operation_by_row_id: dict[int, str] = {}
+            operation_by_row_id = {}
             if isinstance(payload_df, pd.DataFrame) and not payload_df.empty:
                 for _, row in payload_df.iterrows():
                     operation_by_row_id[int(row["_row_id"])] = str(
@@ -952,7 +954,7 @@ class BatchUploadService:
             )
 
             payload_df = retry_job.wizard.state.payload_df
-            operation_by_row_id: dict[int, str] = {}
+            operation_by_row_id = {}
             if isinstance(payload_df, pd.DataFrame) and not payload_df.empty:
                 for _, row in payload_df.iterrows():
                     operation_by_row_id[int(row["_row_id"])] = str(

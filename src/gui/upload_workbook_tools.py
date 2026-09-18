@@ -397,7 +397,10 @@ class UploadWorkbookService:
         upload_sheet = workbook.active
         upload_sheet.title = "업로드"
         upload_sheet.append(
-            [_safe_output_value(header, cell=f"업로드!{get_column_letter(index)}1") for index, header in enumerate(headers, start=1)]
+            [
+                _safe_output_value(header, cell=f"업로드!{get_column_letter(index)}1")
+                for index, header in enumerate(headers, start=1)
+            ]
         )
         _style_header(upload_sheet)
         upload_sheet.freeze_panes = "A2"
@@ -433,8 +436,17 @@ class UploadWorkbookService:
                 ]
             )
         guide_sheet.append([])
-        guide_sheet.append(["사용 순서", "", "", "파일 단계에서 이 양식을 선택하고, 데이터 불러오기를 실행한 뒤 매핑을 확인하세요."])
-        guide_sheet.append(["주의", "", "", "헤더 이름을 바꾸면 자동 매핑이 달라질 수 있습니다. TableField 열은 필드명.열이름 형식을 유지하세요."])
+        guide_sheet.append(
+            ["사용 순서", "", "", "파일 단계에서 이 양식을 선택하고, 데이터 불러오기를 실행한 뒤 매핑을 확인하세요."]
+        )
+        guide_sheet.append(
+            [
+                "주의",
+                "",
+                "",
+                "헤더 이름을 바꾸면 자동 매핑이 달라질 수 있습니다. TableField 열은 필드명.열이름 형식을 유지하세요.",
+            ]
+        )
         _style_header(guide_sheet)
         guide_sheet.freeze_panes = "A2"
         for row in guide_sheet.iter_rows(min_row=2):

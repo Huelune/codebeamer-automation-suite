@@ -18,6 +18,7 @@ extend-exclude = [".venv", "build", "dist", "release-artifacts", "templates"]
 # 새 규칙을 추가할 때는 위반을 먼저 0으로 만든 뒤 여기에 등록한다.
 select = [
     "E4",   # import 관련 pycodestyle
+    "E5",   # 줄 길이 pycodestyle
     "E7",   # 비교/구문 pycodestyle
     "E9",   # 구문 오류
     "W",    # 공백·개행 경고
@@ -30,7 +31,6 @@ select = [
     "RET",  # return 흐름
     "RUF",  # ruff 고유 규칙
 ]
-# E501(줄 길이)은 아직 위반이 많아 게이트에 넣지 않는다. 위 line-length는 포매팅 기준으로만 쓴다.
 ignore = [
     # 사용자 문구와 문서가 한글이라 전각 기호를 의도적으로 사용한다.
     "RUF001",
@@ -60,59 +60,27 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
 
-# mypy 점진 도입: 아래 모듈은 아직 위반이 남아 있어 검사에서 제외한다.
-# 기준 시점 위반 909건 / 50개 모듈. 모듈을 정리하면 이 목록에서 지운다.
+# mypy 점진 도입: 아래 GUI 모듈은 아직 위반이 남아 검사에서 제외한다.
+# 기준 시점 위반 152건 / 17개 모듈. 모두 `src/gui` 아래다.
+# 나머지 모듈은 모두 검사 대상이다. 모듈을 정리하면 이 목록에서 지운다.
 [[tool.mypy.overrides]]
 module = [
-    "src.codebeamer_client",  # 8건
-    "src.diagnostics",  # 3건
-    "src.excel_reader",  # 2건
-    "src.gui.api_monitor_window",  # 15건
-    "src.gui.app",  # 2건
-    "src.gui.batch_upload",  # 1건
-    "src.gui.batch_validation",  # 7건
-    "src.gui.batch_window",  # 4건
-    "src.gui.developer_data_tools",  # 2건
-    "src.gui.developer_excel_tools",  # 1건
-    "src.gui.error_reporting",  # 1건
-    "src.gui.loading_overlay",  # 1건
-    "src.gui.main_window",  # 22건
-    "src.gui.offline_query",  # 1건
+    "src.gui.api_monitor_window",  # 6건
+    "src.gui.batch_validation",  # 2건
+    "src.gui.main_window",  # 18건
     "src.gui.page_execution_mapping",  # 6건
     "src.gui.page_setup_file",  # 6건
-    "src.gui.root_item_service",  # 1건
     "src.gui.service_core",  # 5건
     "src.gui.settings_center",  # 5건
-    "src.gui.tracker_bulk_update",  # 1건
-    "src.gui.tracker_comment_models",  # 1건
-    "src.gui.tracker_hierarchy_export",  # 1건
     "src.gui.tracker_item_context_models",  # 5건
-    "src.gui.tracker_item_detail_dialog",  # 1건
-    "src.gui.tracker_item_editor",  # 1건
     "src.gui.tracker_item_editor_panel",  # 20건
     "src.gui.tracker_query_models",  # 12건
     "src.gui.tracker_query_service",  # 6건
-    "src.gui.tracker_table_field_dialog",  # 1건
-    "src.gui.tracker_workspace",  # 34건
-    "src.gui.window_shell",  # 95건
-    "src.gui.window_support",  # 24건
-    "src.gui.window_upload",  # 142건
-    "src.gui.window_workflow",  # 235건
-    "src.gui.worker",  # 7건
-    "src.hierarchy_processor",  # 1건
-    "src.mapping_option",  # 8건
-    "src.mapping_reference",  # 1건
-    "src.mapping_schema",  # 12건
-    "src.models.field_values",  # 3건
-    "src.models.references",  # 4건
-    "src.models.tracker_item",  # 1건
-    "src.upload_pipeline",  # 1건
-    "src.wizard_data",  # 57건
-    "src.wizard_operations",  # 77건
-    "src.wizard_payload",  # 18건
-    "src.wizard_payload_cache",  # 2건
-    "src.wizard_tracker_lookup",  # 5건
-    "src.wizard_update_payload",  # 5건
-    "src.wizard_user_lookup",  # 35건
+    "src.gui.tracker_workspace",  # 27건
+    "src.gui.window_shell",  # 9건
+    "src.gui.window_support",  # 3건
+    "src.gui.window_upload",  # 17건
+    "src.gui.window_workflow",  # 2건
+    "src.gui.worker",  # 3건
 ]
 ignore_errors = true

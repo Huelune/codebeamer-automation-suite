@@ -287,13 +287,13 @@ def sanitize_diagnostic_value(value: Any, *, depth: int = 0) -> Any:
         return sanitized
     if isinstance(value, (list, tuple, set)):
         values = list(value)
-        sanitized = [
+        sanitized_items = [
             sanitize_diagnostic_value(child, depth=depth + 1)
             for child in values[:30]
         ]
         if len(values) > 30:
-            sanitized.append("…")
-        return sanitized
+            sanitized_items.append("…")
+        return sanitized_items
     return sanitize_diagnostic_text(value, limit=500)
 
 
@@ -315,7 +315,7 @@ def _extract_traceback_frames(
     return tuple(
         DiagnosticFrame(
             file=_safe_frame_path(frame.filename),
-            line=max(int(frame.lineno), 0),
+            line=max(int(frame.lineno or 0), 0),
             function=sanitize_diagnostic_text(frame.name, limit=120),
         )
         for frame in traceback_module.extract_tb(traceback)[-30:]

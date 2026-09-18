@@ -23,10 +23,18 @@ class GuiValidationPipelineServiceTest(unittest.TestCase):
             {"df_column": "_row_id", "selected_schema_field": "", "status": MappingStatus.UNMAPPED.value},
             {"df_column": "담당자", "selected_schema_field": "", "status": MappingStatus.UNMAPPED.value},
         ])
-        option_check_df = pd.DataFrame([
-            {"df_column": "담당자", "schema_field": "담당자", "_row_id": 1, "raw_value": "홍길동", "status": "USER_NOT_FOUND"},
-            {"df_column": "상태", "schema_field": "Status", "status": "PRECONSTRUCTION_REQUIRED"},
-        ])
+        option_check_df = pd.DataFrame(
+            [
+                {
+                    "df_column": "담당자",
+                    "schema_field": "담당자",
+                    "_row_id": 1,
+                    "raw_value": "홍길동",
+                    "status": "USER_NOT_FOUND",
+                },
+                {"df_column": "상태", "schema_field": "Status", "status": "PRECONSTRUCTION_REQUIRED"},
+            ]
+        )
         payload_df = pd.DataFrame([
             {
                 "_row_id": 1,
@@ -67,22 +75,29 @@ class GuiValidationPipelineServiceTest(unittest.TestCase):
         issue_df = service._build_user_issue_df(
             pd.DataFrame(),
             pd.DataFrame(),
-            pd.DataFrame([
-                {
-                    "_row_id": 1,
-                    "upload_name": "REQ-001",
-                    "payload_status": PayloadStatus.FAILED.value,
-                    "payload_error": "[LOOKUP_REQUIRED] field='담당자' df_column='담당자' _row_id=1 lookup_target='user'",
-                }
-            ]),
-            row_context_df=pd.DataFrame([
-                {
-                    "_row_id": 1,
-                    "_excel_row": 2,
-                    "upload_name": "REQ-001",
-                    "담당자": "홍길동",
-                }
-            ]),
+            pd.DataFrame(
+                [
+                    {
+                        "_row_id": 1,
+                        "upload_name": "REQ-001",
+                        "payload_status": PayloadStatus.FAILED.value,
+                        "payload_error": (
+                            "[LOOKUP_REQUIRED] field='담당자' df_column='담당자' "
+                            "_row_id=1 lookup_target='user'"
+                        ),
+                    }
+                ]
+            ),
+            row_context_df=pd.DataFrame(
+                [
+                    {
+                        "_row_id": 1,
+                        "_excel_row": 2,
+                        "upload_name": "REQ-001",
+                        "담당자": "홍길동",
+                    }
+                ]
+            ),
         )
 
         self.assertEqual(issue_df.iloc[0]["column"], "담당자")

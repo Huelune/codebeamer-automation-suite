@@ -410,8 +410,8 @@ def _populate_item_sheet(
                 end_column=column + width - 1,
             )
             _style_header(sheet.cell(1, column, field.label), group=True)
-            for offset, table_column in enumerate(field.table_columns):
-                _style_header(sheet.cell(2, column + offset, table_column.label))
+            for offset, header_column in enumerate(field.table_columns):
+                _style_header(sheet.cell(2, column + offset, header_column.label))
         else:
             sheet.merge_cells(start_row=1, start_column=column, end_row=2, end_column=column)
             _style_header(sheet.cell(1, column, field.label), group=True)

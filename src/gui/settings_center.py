@@ -1006,7 +1006,8 @@ class SettingsCenterPage(QWidget):
         busy_token = self._validation_busy_token
         self._validation_busy_token = None
         if busy_token is not None and callable(self.busy_finished):
-            with contextlib.suppress(Exception):
+            # 이미 삭제된 위젯이면 RuntimeError, 시그니처가 맞지 않으면 TypeError 가 난다.
+            with contextlib.suppress(RuntimeError, TypeError):
                 self.busy_finished(busy_token)
         if task is not None:
             task.deleteLater()

@@ -35,7 +35,9 @@ class TrackerCommentService:
         prefix = self._settings_key(settings), int(item_id)
         self._cache = {key: value for key, value in self._cache.items() if key[:2] != prefix}
 
-    def load_comments(self, settings, item_id: int, item_version: int | None, *, baseline_id: int | None = None, force: bool = False) -> ItemCommentsSnapshot:
+    def load_comments(
+        self, settings, item_id: int, item_version: int | None, *, baseline_id: int | None = None, force: bool = False
+    ) -> ItemCommentsSnapshot:
         if baseline_id is not None:
             raise ValueError("Baseline 시점의 댓글 조회는 지원하지 않습니다.")
         key = self._settings_key(settings), int(item_id), item_version
@@ -51,9 +53,16 @@ class TrackerCommentService:
                 TrackerQueryErrorKind.NOT_FOUND: "댓글을 찾을 수 없습니다.",
                 TrackerQueryErrorKind.RATE_LIMITED: "요청이 많아 댓글 조회가 제한되었습니다.",
             }
-            raise TrackerQueryServiceError(kind, messages.get(kind, f"댓글 조회에 실패했습니다: {exc}"), status_code=status_code, operation="load_item_comments") from exc
+            raise TrackerQueryServiceError(
+                kind,
+                messages.get(kind, f"댓글 조회에 실패했습니다: {exc}"),
+                status_code=status_code,
+                operation="load_item_comments",
+            ) from exc
         if not isinstance(raw, (dict, list)):
-            raise TrackerQueryServiceError(TrackerQueryErrorKind.SERVER, "댓글 응답 형식을 해석할 수 없습니다.", operation="load_item_comments")
+            raise TrackerQueryServiceError(
+                TrackerQueryErrorKind.SERVER, "댓글 응답 형식을 해석할 수 없습니다.", operation="load_item_comments"
+            )
         result = ItemCommentsSnapshot.from_raw(raw)
         self._cache[key] = result
         return result

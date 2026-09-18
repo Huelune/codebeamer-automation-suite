@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import NoReturn
 
 import pandas as pd
 
@@ -12,6 +13,12 @@ from .wizard_update_payload import WizardUpdatePayloadService
 
 
 class WizardPayloadMixin:
+    # 조립된 뒤 사용할 속성의 타입 선언이다. 실제 값은
+    # `CodebeamerUploadWizard.__init__` 이 채우므로 여기서는 선언만 둔다.
+    item_builder: WizardItemBuilderService
+    option_resolution: WizardOptionResolutionService
+    update_payloads: WizardUpdatePayloadService
+
     def _option_processing_operation(
         self,
         row: pd.Series,
@@ -94,7 +101,7 @@ class WizardPayloadMixin:
         row_id: int,
         df_col: str,
         detail: str,
-    ) -> None:
+    ) -> NoReturn:
         WizardItemBuilderService._raise_payload_error(
             code,
             schema_field=schema_field,
@@ -252,12 +259,20 @@ class WizardPayloadMixin:
         duplicate_item_ids: set[int],
         allow_missing: bool,
     ) -> int | None:
+        if allow_missing:
+            return self.update_payloads._resolve_update_target_item_id(
+                row,
+                row_id,
+                id_column_name=id_column_name,
+                duplicate_item_ids=duplicate_item_ids,
+                allow_missing=True,
+            )
         return self.update_payloads._resolve_update_target_item_id(
             row,
             row_id,
             id_column_name=id_column_name,
             duplicate_item_ids=duplicate_item_ids,
-            allow_missing=allow_missing,
+            allow_missing=False,
         )
 
     @staticmethod

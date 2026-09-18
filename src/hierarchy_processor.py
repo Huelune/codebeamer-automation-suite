@@ -186,7 +186,7 @@ class HierarchyProcessor:
 
         parent_row_ids = []
         depths = []
-        stack = []
+        stack: list[Any] = []
         prev_indent = None
 
         for index, row in work.iterrows():
@@ -194,7 +194,8 @@ class HierarchyProcessor:
 
             if prev_indent is not None and current_indent > prev_indent + 1:
                 raise ValueError(
-                    f"들여쓰기 단계가 1단계 이상 점프했습니다. row_id={index}, prev={prev_indent}, current={current_indent}"
+                    f"들여쓰기 단계가 1단계 이상 점프했습니다. "
+                    f"row_id={index}, prev={prev_indent}, current={current_indent}"
                 )
 
             while stack and stack[-1]["indent"] >= current_indent:
