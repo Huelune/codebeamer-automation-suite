@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass
 from dataclasses import field
 from typing import Any
@@ -65,7 +66,7 @@ class AbstractFieldValue(DomainModel):
         return cls(**cls._base_kwargs(field_info), type=cls.__name__)
 
     @classmethod
-    def resolve_class(cls, field_info: FieldInfo) -> type[AbstractFieldValue]:
+    def resolve_class(cls, field_info: FieldInfo) -> builtins.type[AbstractFieldValue]:
         """field 정보에 맞는 구체 FieldValue 클래스를 선택한다."""
         for candidate in cls._REGISTRY:
             if candidate.matches(field_info):

@@ -283,7 +283,7 @@ class MappingReferenceMixin:
 
         if multiple_values:
             values = cls.normalize_multi_value_items(raw_value)
-            resolved_values = []
+            resolved_values: list[Any] = []
             for item in values:
                 if item is None or str(item).strip() == "":
                     continue

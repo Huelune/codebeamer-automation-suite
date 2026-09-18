@@ -186,7 +186,7 @@ class HierarchyProcessor:
 
         parent_row_ids = []
         depths = []
-        stack = []
+        stack: list[Any] = []
         prev_indent = None
 
         for index, row in work.iterrows():

@@ -342,8 +342,9 @@ class TrackerItemBase(DomainModel):
         if payload_target_kind == PayloadTargetKind.BUILTIN_FIELD.value:
             if self._set_builtin_field(normalized_field, value, field_info):
                 return
+            field_label = (field_info.get("field_name") if field_info else None) or tracker_field
             raise ValueError(
-                f"Field '{field_info.get('field_name') or tracker_field}' is marked as builtin but could not be set."
+                f"Field '{field_label}' is marked as builtin but could not be set."
             )
 
         if payload_target_kind == PayloadTargetKind.CUSTOM_FIELD.value:

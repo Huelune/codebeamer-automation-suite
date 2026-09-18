@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+from typing import NoReturn
 
 import pandas as pd
 
@@ -111,7 +112,7 @@ class WizardItemBuilderService:
         row_id: int,
         df_col: str,
         detail: str,
-    ) -> None:
+    ) -> NoReturn:
         """payload 생성 중 발생한 구조화된 오류를 같은 형식으로 만든다."""
         raise ValueError(
             f"[{code}] field='{schema_field}' df_column='{df_col}' _row_id={row_id} {detail}"

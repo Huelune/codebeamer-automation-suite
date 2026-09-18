@@ -139,7 +139,7 @@ class CodebeamerClient:
                     status_code = self._response_status_code(response)
                 response.raise_for_status()
                 content_length = response.headers.get("Content-Length")
-                if content_length not in (None, "") and int(content_length) > normalized_limit:
+                if content_length is not None and content_length != "" and int(content_length) > normalized_limit:
                     raise ValueError("첨부 리소스가 허용 크기를 초과합니다.")
                 chunks: list[bytes] = []
                 received = 0
@@ -464,7 +464,8 @@ class CodebeamerClient:
                 total = None
             if total is not None and len(collected) >= max(total, 0):
                 break
-            raw_response_page_size = (
+            # 서버 JSON 값이라 타입이 없다. 아래 try/except 가 실제 방어 장치다.
+            raw_response_page_size: Any = (
                 payload.get("pageSize") if isinstance(payload, dict) else None
             )
             try:
@@ -512,7 +513,9 @@ class CodebeamerClient:
                 total = None
             if total is not None and len(collected) >= max(total, 0):
                 break
-            raw_response_page_size = payload.get("pageSize") if isinstance(payload, dict) else None
+            raw_response_page_size: Any = (
+                payload.get("pageSize") if isinstance(payload, dict) else None
+            )
             try:
                 response_page_size = int(raw_response_page_size)
             except (TypeError, ValueError):
@@ -619,7 +622,7 @@ class CodebeamerClient:
             references = self._extract_baseline_references(data)
             added = 0
             for reference in references:
-                raw_id = reference.get("id")
+                raw_id: Any = reference.get("id")
                 if raw_id in (None, "") or isinstance(raw_id, bool):
                     continue
                 try:
@@ -655,7 +658,7 @@ class CodebeamerClient:
                     )
                 break
 
-            raw_response_page_size = (
+            raw_response_page_size: Any = (
                 data.get("pageSize") if isinstance(data, dict) else None
             )
             try:

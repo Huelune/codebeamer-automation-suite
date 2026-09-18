@@ -20,7 +20,8 @@ class WizardState:
     converted_upload_df: pd.DataFrame | None = None
     payload_df: pd.DataFrame | None = None
 
-    schema: dict | None = None
+    # Codebeamer 는 tracker schema 를 dict 또는 field dict 목록으로 돌려준다.
+    schema: dict[str, Any] | list[dict[str, Any]] | None = None
     schema_df: pd.DataFrame | None = None
     comparison_df: pd.DataFrame | None = None
     option_candidates_df: pd.DataFrame | None = None

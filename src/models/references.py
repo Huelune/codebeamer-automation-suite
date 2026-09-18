@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass
 from dataclasses import fields
 from typing import Any
@@ -55,9 +56,9 @@ class BaseReference(DomainModel):
         return cls(**init_kwargs)
 
     @classmethod
-    def resolve_type(cls, reference_type: str | None) -> type[BaseReference]:
+    def resolve_type(cls, reference_type: str | None) -> builtins.type[BaseReference]:
         """type 문자열에 맞는 reference 클래스를 찾아준다."""
-        if reference_type in {None, ReferenceType.ABSTRACT.value}:
+        if reference_type is None or reference_type == ReferenceType.ABSTRACT.value:
             return AbstractReference
         return cls._TYPE_REGISTRY.get(reference_type, BaseReference)
 

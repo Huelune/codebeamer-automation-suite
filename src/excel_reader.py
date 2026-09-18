@@ -313,7 +313,7 @@ class ExcelReader:
             if last_used_row <= self.header_row:
                 return headers, []
 
-            rows: list[list[Any]] = []
+            rows = []
             next_row = self.header_row + 1
             while next_row <= last_used_row and len(rows) < normalized_max_rows:
                 remaining = normalized_max_rows - len(rows)
@@ -392,7 +392,7 @@ class ExcelReader:
         try:
             alignment = getattr(cell, "alignment", None)
             indent = getattr(alignment, "indent", None) if alignment is not None else None
-            if indent not in (None, ""):
+            if indent is not None and indent != "":
                 return int(indent)
         except Exception:
             pass

@@ -1,9 +1,27 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+from typing import Any
+
 import pandas as pd
 
 
+if TYPE_CHECKING:
+    from .codebeamer_client import CodebeamerClient
+    from .excel_reader import ExcelReader
+    from .hierarchy_processor import HierarchyProcessor
+    from .mapping_service import MappingService
+    from .models import WizardState
+
 class WizardDataPreparationMixin:
+    # 조립된 뒤 사용할 속성의 타입 선언이다. 실제 값은
+    # `CodebeamerUploadWizard.__init__` 이 채우므로 여기서는 선언만 둔다.
+    client: CodebeamerClient
+    mapper: MappingService
+    processor: HierarchyProcessor | None
+    reader: ExcelReader | None
+    state: WizardState
+
     def load_projects(self) -> list[dict]:
         """사용자가 선택할 프로젝트 목록을 가져온다."""
         return self.client.get_projects()
@@ -111,7 +129,7 @@ class WizardDataPreparationMixin:
         if table_fields.empty:
             return
 
-        table_field_info = {}
+        table_field_info: dict[str, Any] = {}
         for _, tf_row in table_fields.iterrows():
             tf_name = tf_row["field_name"]
             tf_columns = tf_row.get("table_columns", [])

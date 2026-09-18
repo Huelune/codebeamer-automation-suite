@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from typing import Any
 
 import pandas as pd
@@ -13,7 +14,17 @@ from .upload_policy import DEFAULT_TRACKER_ITEM_ID_REGEX
 TrackerItemLookupCacheEntry = tuple[Any, str | None, str | None]
 
 
+
+if TYPE_CHECKING:
+    from .mapping_service import MappingService
+    from .models import WizardState
+
 class WizardTrackerItemLookupMixin:
+    # 조립된 뒤 사용할 속성의 타입 선언이다. 실제 값은
+    # `CodebeamerUploadWizard.__init__` 이 채우므로 여기서는 선언만 둔다.
+    mapper: MappingService
+    state: WizardState
+
     def _tracker_item_setting(
         self,
         schema_field: str,
@@ -91,9 +102,9 @@ class WizardTrackerItemLookupMixin:
             if option_info.get("kind") != OptionMapKind.TRACKER_ITEM_DIRECT.value:
                 continue
 
-            resolved_values = []
-            statuses = []
-            errors = []
+            resolved_values: list[Any] = []
+            statuses: list[Any] = []
+            errors: list[Any] = []
 
             for _, row in work.iterrows():
                 raw_value = row[df_col]
