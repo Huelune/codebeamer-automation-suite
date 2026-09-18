@@ -7,6 +7,9 @@ import pandas as pd
 from openpyxl import load_workbook
 
 
+OPENPYXL_PREVIEW_SCAN_ROW_LIMIT = 10_000
+
+
 class ExcelReader:
     """Excel 파일에서 raw DataFrame만 읽어오는 입력 전용 reader다."""
 
@@ -31,6 +34,21 @@ class ExcelReader:
             str(header).strip() if header is not None else f"Unnamed_{index}"
             for index, header in enumerate(headers)
         ]
+
+    @classmethod
+    def _trim_trailing_blank_headers(cls, headers: list[Any]) -> list[Any]:
+        """서식만 남은 오른쪽 열을 실제 헤더 범위에서 제외한다."""
+        last_value_index = next(
+            (
+                index
+                for index in range(len(headers) - 1, -1, -1)
+                if not cls.is_blank(headers[index])
+            ),
+            None,
+        )
+        if last_value_index is None:
+            return headers
+        return headers[: last_value_index + 1]
 
     @staticmethod
     def _supports_openpyxl(file_path: str) -> bool:
@@ -100,7 +118,10 @@ class ExcelReader:
                 ),
                 (),
             )
-            return self._normalize_headers([cell.value for cell in row])
+            raw_headers = self._trim_trailing_blank_headers(
+                [cell.value for cell in row]
+            )
+            return self._normalize_headers(raw_headers)
         finally:
             workbook.close()
 
@@ -231,17 +252,37 @@ class ExcelReader:
                     ),
                     (),
                 )
-                headers = self._normalize_headers([cell.value for cell in header_cells])
+                raw_headers = self._trim_trailing_blank_headers(
+                    [cell.value for cell in header_cells]
+                )
+                headers = self._normalize_headers(raw_headers)
                 rows: list[list[Any]] = []
                 if normalized_max_rows <= 0:
                     return headers, rows
-                for row in worksheet.iter_rows(min_row=self.header_row + 1):
+                scan_end_row = min(
+                    int(worksheet.max_row or self.header_row),
+                    self.header_row + OPENPYXL_PREVIEW_SCAN_ROW_LIMIT,
+                )
+                for row in worksheet.iter_rows(
+                    min_row=self.header_row + 1,
+                    max_row=scan_end_row,
+                    max_col=len(headers),
+                ):
                     normalized = self._normalize_row([cell.value for cell in row], len(headers))
                     if all(self.is_blank(value) for value in normalized):
                         continue
                     rows.append([self._normalize_cell_value(value) for value in normalized])
                     if len(rows) >= normalized_max_rows:
                         break
+                if (
+                    len(rows) < normalized_max_rows
+                    and scan_end_row < int(worksheet.max_row or scan_end_row)
+                ):
+                    raise ValueError(
+                        "Excel 시트의 사용 범위가 지나치게 큽니다. "
+                        f"미리보기는 헤더 다음 {OPENPYXL_PREVIEW_SCAN_ROW_LIMIT:,}행까지만 확인했습니다. "
+                        "실제 데이터 아래의 불필요한 행과 오른쪽의 불필요한 열을 삭제한 사본으로 다시 시도하세요."
+                    )
                 return headers, rows
             finally:
                 workbook.close()
@@ -319,12 +360,18 @@ class ExcelReader:
                     ),
                     (),
                 )
-                headers = self._normalize_headers([cell.value for cell in header_row])
+                raw_headers = self._trim_trailing_blank_headers(
+                    [cell.value for cell in header_row]
+                )
+                headers = self._normalize_headers(raw_headers)
                 if self.summary_col not in headers:
                     raise ValueError(f"'{self.summary_col}' 컬럼을 찾을 수 없습니다.")
                 summary_index = headers.index(self.summary_col)
                 upload_row_count = 0
-                for row in worksheet.iter_rows(min_row=self.header_row + 1):
+                for row in worksheet.iter_rows(
+                    min_row=self.header_row + 1,
+                    max_col=len(headers),
+                ):
                     normalized_row = self._normalize_row([cell.value for cell in row], len(headers))
 
                     if all(self.is_blank(value) for value in normalized_row):
@@ -372,14 +419,20 @@ class ExcelReader:
                     ),
                     (),
                 )
-                headers = self._normalize_headers([cell.value for cell in header_cells])
+                raw_headers = self._trim_trailing_blank_headers(
+                    [cell.value for cell in header_cells]
+                )
+                headers = self._normalize_headers(raw_headers)
                 if self.summary_col not in headers:
                     raise ValueError(f"'{self.summary_col}' 컬럼을 찾을 수 없습니다.")
 
                 summary_col_index = headers.index(self.summary_col)
                 records = []
                 for excel_row, row in enumerate(
-                    worksheet.iter_rows(min_row=self.header_row + 1),
+                    worksheet.iter_rows(
+                        min_row=self.header_row + 1,
+                        max_col=len(headers),
+                    ),
                     start=self.header_row + 1,
                 ):
                     normalized_row = self._normalize_row([cell.value for cell in row], len(headers))
