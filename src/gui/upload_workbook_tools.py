@@ -22,6 +22,7 @@ from src.diagnostics import sanitize_diagnostic_value
 from .developer_excel_tools import DeveloperExcelToolError
 from .developer_excel_tools import _atomic_workbook_save
 from .developer_excel_tools import _safe_output_value
+from .excel_export_style import fit_column_widths
 
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
@@ -91,16 +92,6 @@ def _style_header(sheet, row: int = 1) -> None:
         cell.fill = _HEADER_FILL
         cell.font = _HEADER_FONT
         cell.alignment = Alignment(horizontal="center", vertical="center")
-
-
-def _fit_columns(sheet, *, maximum: int = 60) -> None:
-    for column_index in range(1, sheet.max_column + 1):
-        values = [
-            str(sheet.cell(row=row_index, column=column_index).value or "")
-            for row_index in range(1, min(sheet.max_row, 200) + 1)
-        ]
-        width = max((len(value) for value in values), default=8) + 2
-        sheet.column_dimensions[get_column_letter(column_index)].width = min(max(width, 10), maximum)
 
 
 def _option_label(value: Any) -> str:
@@ -246,7 +237,7 @@ class UploadWorkbookService:
         summary_sheet.append(["문제 목록 수", len(issues.index)])
         _style_header(summary_sheet)
         summary_sheet.freeze_panes = "A2"
-        _fit_columns(summary_sheet)
+        fit_column_widths(summary_sheet)
 
         issue_sheet = workbook.create_sheet("문제 목록")
         visible_columns = [column for column in _REPORT_COLUMN_LABELS if column in issues.columns]
@@ -279,7 +270,7 @@ class UploadWorkbookService:
                 data_range,
                 FormulaRule(formula=[f'${severity_column}2="경고"'], fill=_WARNING_FILL),
             )
-        _fit_columns(issue_sheet)
+        fit_column_widths(issue_sheet)
 
         try:
             _atomic_workbook_save(workbook, target)
@@ -449,7 +440,7 @@ class UploadWorkbookService:
         for row in guide_sheet.iter_rows(min_row=2):
             for cell in row:
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
-        _fit_columns(guide_sheet)
+        fit_column_widths(guide_sheet)
 
         if option_lists:
             option_sheet = workbook.create_sheet("선택값")
@@ -532,7 +523,7 @@ class UploadWorkbookService:
         ])
         _style_header(summary_sheet)
         summary_sheet.freeze_panes = "A2"
-        _fit_columns(summary_sheet)
+        fit_column_widths(summary_sheet)
 
         maximum_column_count = 0
         for sheet_name, frame in (("실패", failed), ("미해결", unresolved)):
@@ -566,7 +557,7 @@ class UploadWorkbookService:
             for row in sheet.iter_rows(min_row=2):
                 for cell in row:
                     cell.alignment = Alignment(vertical="top", wrap_text=True)
-            _fit_columns(sheet)
+            fit_column_widths(sheet)
 
         try:
             _atomic_workbook_save(workbook, target)

@@ -31,17 +31,17 @@
 
 템플릿 디렉터리:
 
-- [templates/codebeamer-upload-starter/README.md](/Users/hunyoon/Desktop/Github/codebeamer-automation-suite/templates/codebeamer-upload-starter/README.md)
-- [templates/codebeamer-upload-starter/project-context.template.json](/Users/hunyoon/Desktop/Github/codebeamer-automation-suite/templates/codebeamer-upload-starter/project-context.template.json)
-- [templates/codebeamer-upload-starter/input-contract.template.json](/Users/hunyoon/Desktop/Github/codebeamer-automation-suite/templates/codebeamer-upload-starter/input-contract.template.json)
-- [templates/codebeamer-upload-starter/mapping.template.json](/Users/hunyoon/Desktop/Github/codebeamer-automation-suite/templates/codebeamer-upload-starter/mapping.template.json)
-- [templates/codebeamer-upload-starter/lookup-policy.template.json](/Users/hunyoon/Desktop/Github/codebeamer-automation-suite/templates/codebeamer-upload-starter/lookup-policy.template.json)
-- [templates/codebeamer-upload-starter/notes.template.md](/Users/hunyoon/Desktop/Github/codebeamer-automation-suite/templates/codebeamer-upload-starter/notes.template.md)
-- [templates/codebeamer-upload-starter/payload-preview.sample.jsonl](/Users/hunyoon/Desktop/Github/codebeamer-automation-suite/templates/codebeamer-upload-starter/payload-preview.sample.jsonl)
+- [templates/codebeamer-upload-starter/README.md](../templates/codebeamer-upload-starter/README.md)
+- [templates/codebeamer-upload-starter/project-context.template.json](../templates/codebeamer-upload-starter/project-context.template.json)
+- [templates/codebeamer-upload-starter/input-contract.template.json](../templates/codebeamer-upload-starter/input-contract.template.json)
+- [templates/codebeamer-upload-starter/mapping.template.json](../templates/codebeamer-upload-starter/mapping.template.json)
+- [templates/codebeamer-upload-starter/lookup-policy.template.json](../templates/codebeamer-upload-starter/lookup-policy.template.json)
+- [templates/codebeamer-upload-starter/notes.template.md](../templates/codebeamer-upload-starter/notes.template.md)
+- [templates/codebeamer-upload-starter/payload-preview.sample.jsonl](../templates/codebeamer-upload-starter/payload-preview.sample.jsonl)
 
 live tracker export 도구:
 
-- [export_tracker_contract.py](/Users/hunyoon/Desktop/Github/codebeamer-automation-suite/export_tracker_contract.py)
+- [export_tracker_contract.py](../export_tracker_contract.py)
 
 ## export 결과물
 

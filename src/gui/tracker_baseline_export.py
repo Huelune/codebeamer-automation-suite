@@ -8,14 +8,24 @@ from typing import Any
 
 from openpyxl import Workbook
 from openpyxl.cell import Cell
-from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
-from openpyxl.styles import Alignment
-from openpyxl.styles import Border
 from openpyxl.styles import Font
 from openpyxl.styles import PatternFill
-from openpyxl.styles import Side
 from openpyxl.utils import get_column_letter
 
+from .excel_export_style import BODY_FONT
+from .excel_export_style import CENTER_WRAP
+from .excel_export_style import EXCEL_MAX_CELL_LINE_FEEDS
+from .excel_export_style import EXCEL_MAX_CELL_TEXT
+from .excel_export_style import EXPORT_FONT_NAME
+from .excel_export_style import GROUP_FILL
+from .excel_export_style import HEADER_FILL
+from .excel_export_style import HEADER_FONT
+from .excel_export_style import LINK_FONT
+from .excel_export_style import THIN_BORDER
+from .excel_export_style import TOP_WRAP
+from .excel_export_style import WHITE_FONT
+from .excel_export_style import excel_text_units
+from .excel_export_style import normalize_excel_text
 from .tracker_baseline_compare import BaselineComparisonKind
 from .tracker_baseline_compare import BaselineComparisonResult
 from .tracker_baseline_compare import TrackerFieldDifference
@@ -25,8 +35,6 @@ from .tracker_baseline_compare import comparison_value_key
 from .tracker_baseline_compare import table_field_rows
 
 
-EXCEL_MAX_CELL_TEXT = 32767
-EXCEL_MAX_CELL_LINE_FEEDS = 253
 EXCEL_MAX_COLUMNS = 16384
 EXCEL_MAX_ROWS = 1048576
 LONG_VALUE_CELL_TEXT = 30000
@@ -116,8 +124,8 @@ class _LongValueCollector:
         table_row: int | None = None,
         table_column: str = "",
     ) -> _LongValueTarget | None:
-        normalized_reference = _normalize_excel_text(reference_text)
-        normalized_comparison = _normalize_excel_text(comparison_text)
+        normalized_reference = normalize_excel_text(reference_text)
+        normalized_comparison = normalize_excel_text(comparison_text)
         reference_is_long = _requires_long_value_sheet(normalized_reference)
         comparison_is_long = _requires_long_value_sheet(normalized_comparison)
         if not reference_is_long and not comparison_is_long:
@@ -164,25 +172,10 @@ _KIND_LABELS = {
     BaselineComparisonKind.UNCHANGED: "변경 없음",
 }
 
-_FONT_NAME = "Arial Unicode MS"
-_GROUP_FILL = PatternFill("solid", fgColor="1F4E78")
-_HEADER_FILL = PatternFill("solid", fgColor="D9EAF7")
 _ADDED_FILL = PatternFill("solid", fgColor="DCFCE7")
 _REMOVED_FILL = PatternFill("solid", fgColor="FEE2E2")
 _CHANGED_FILL = PatternFill("solid", fgColor="FEF3C7")
 _UNCHANGED_FILL = PatternFill("solid", fgColor="ECFDF5")
-_WHITE_FONT = Font(name=_FONT_NAME, color="FFFFFF", bold=True)
-_HEADER_FONT = Font(name=_FONT_NAME, color="1F2937", bold=True)
-_BODY_FONT = Font(name=_FONT_NAME, color="1F2937")
-_THIN_SIDE = Side(style="thin", color="CBD5E1")
-_BORDER = Border(
-    left=_THIN_SIDE,
-    right=_THIN_SIDE,
-    top=_THIN_SIDE,
-    bottom=_THIN_SIDE,
-)
-_TOP_WRAP = Alignment(vertical="top", wrap_text=True)
-_CENTER_WRAP = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
 def baseline_export_fields(
@@ -391,12 +384,12 @@ def _populate_summary_sheet(
 ) -> None:
     sheet["A1"] = "Baseline 비교 내보내기"
     sheet["A1"].font = Font(
-        name=_FONT_NAME,
+        name=EXPORT_FONT_NAME,
         size=16,
         bold=True,
         color="FFFFFF",
     )
-    sheet["A1"].fill = _GROUP_FILL
+    sheet["A1"].fill = GROUP_FILL
     sheet.merge_cells("A1:B1")
     rows = (
         ("트래커", tracker_name),
@@ -435,11 +428,11 @@ def _populate_summary_sheet(
                 LONG_VALUE_SHEET_TITLE,
                 "A1",
             )
-        sheet.cell(row_index, 1).font = _HEADER_FONT
-        sheet.cell(row_index, 1).fill = _HEADER_FILL
+        sheet.cell(row_index, 1).font = HEADER_FONT
+        sheet.cell(row_index, 1).fill = HEADER_FILL
         for column in (1, 2):
-            sheet.cell(row_index, column).border = _BORDER
-            sheet.cell(row_index, column).alignment = _TOP_WRAP
+            sheet.cell(row_index, column).border = THIN_BORDER
+            sheet.cell(row_index, column).alignment = TOP_WRAP
     sheet.column_dimensions["A"].width = 18
     sheet.column_dimensions["B"].width = 48
     sheet.freeze_panes = "A3"
@@ -500,10 +493,10 @@ def _populate_comparison_sheet(
     for offset, (_field, _column, label) in enumerate(headers):
         for start in (reference_start, comparison_start):
             cell = sheet.cell(2, start + offset, label)
-            cell.fill = _HEADER_FILL
-            cell.font = _HEADER_FONT
-            cell.alignment = _CENTER_WRAP
-            cell.border = _BORDER
+            cell.fill = HEADER_FILL
+            cell.font = HEADER_FONT
+            cell.alignment = CENTER_WRAP
+            cell.border = THIN_BORDER
 
     selected_keys = {field.field_key for field in selected_fields}
     row_index = 3
@@ -556,7 +549,7 @@ def _populate_comparison_sheet(
                 item_name_link_column,
             )
         sheet.cell(start_row, 1).fill = _kind_fill(kind)
-        sheet.cell(start_row, 1).font = Font(name=_FONT_NAME, bold=True)
+        sheet.cell(start_row, 1).font = Font(name=EXPORT_FONT_NAME, bold=True)
 
         for offset, (export_field, table_column, _label) in enumerate(headers):
             difference = difference_by_key.get(export_field.field_key)
@@ -650,8 +643,8 @@ def _populate_comparison_sheet(
                 cell = sheet.cell(row, column)
                 if not isinstance(cell, Cell):
                     continue
-                cell.border = _BORDER
-                cell.alignment = _TOP_WRAP
+                cell.border = THIN_BORDER
+                cell.alignment = TOP_WRAP
         row_index = end_row + 1
 
     sheet.freeze_panes = "D3"
@@ -673,10 +666,10 @@ def _populate_comparison_sheet(
 
 
 def _style_group_header(cell: Cell) -> None:
-    cell.fill = _GROUP_FILL
-    cell.font = _WHITE_FONT
-    cell.alignment = _CENTER_WRAP
-    cell.border = _BORDER
+    cell.fill = GROUP_FILL
+    cell.font = WHITE_FONT
+    cell.alignment = CENTER_WRAP
+    cell.border = THIN_BORDER
 
 
 def _item_row_count(
@@ -716,8 +709,8 @@ def _merge_item_value(
         )
     cell = sheet.cell(start_row, column)
     _set_safe_value(cell, value, context=context)
-    cell.alignment = _TOP_WRAP
-    cell.border = _BORDER
+    cell.alignment = TOP_WRAP
+    cell.border = THIN_BORDER
 
 
 def _write_table_column(
@@ -814,8 +807,8 @@ def _write_table_column(
                 long_target.start_row,
                 9,
             )
-        reference_cell.alignment = _TOP_WRAP
-        comparison_cell.alignment = _TOP_WRAP
+        reference_cell.alignment = TOP_WRAP
+        comparison_cell.alignment = TOP_WRAP
         if reference_value is missing and comparison_value is missing:
             continue
         if comparison_value is missing:
@@ -902,10 +895,10 @@ def _populate_long_value_sheet(
     )
     for column, label in enumerate(headers, start=1):
         cell = sheet.cell(2, column, label)
-        cell.fill = _HEADER_FILL
-        cell.font = _HEADER_FONT
-        cell.alignment = _CENTER_WRAP
-        cell.border = _BORDER
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = CENTER_WRAP
+        cell.border = THIN_BORDER
 
     for record in records:
         for offset in range(record.row_count):
@@ -954,10 +947,10 @@ def _populate_long_value_sheet(
                     value,
                     context=f"#{record.item_id} 긴 값 {offset + 1}/{record.row_count}",
                 )
-                cell.alignment = _TOP_WRAP
-                cell.border = _BORDER
+                cell.alignment = TOP_WRAP
+                cell.border = THIN_BORDER
             sheet.cell(row, 1).fill = _kind_fill(record.kind)
-            sheet.cell(row, 1).font = Font(name=_FONT_NAME, bold=True)
+            sheet.cell(row, 1).font = Font(name=EXPORT_FONT_NAME, bold=True)
             _style_long_value_pair(
                 sheet.cell(row, 8),
                 sheet.cell(row, 9),
@@ -999,12 +992,6 @@ def _populate_long_value_sheet(
     sheet.print_title_rows = "1:2"
 
 
-def _normalize_excel_text(value: Any) -> str:
-    return ILLEGAL_CHARACTERS_RE.sub("", str(value or ""))
-
-
-def _excel_text_units(value: str) -> int:
-    return len(value.encode("utf-16-le")) // 2
 
 
 def _exceeds_text_limits(
@@ -1014,7 +1001,7 @@ def _exceeds_text_limits(
     max_line_feeds: int,
 ) -> bool:
     return (
-        _excel_text_units(value) > max_text_units
+        excel_text_units(value) > max_text_units
         or value.count("\n") > max_line_feeds
     )
 
@@ -1041,7 +1028,7 @@ def _split_excel_text(
     max_text_units: int,
     max_line_feeds: int,
 ) -> tuple[str, ...]:
-    normalized = _normalize_excel_text(value)
+    normalized = normalize_excel_text(value)
     if not normalized:
         return ("",)
     parts: list[str] = []
@@ -1093,15 +1080,15 @@ def _cell_preview(
     max_line_feeds: int,
     suffix: str,
 ) -> str:
-    normalized = _normalize_excel_text(value)
+    normalized = normalize_excel_text(value)
     if not _exceeds_text_limits(
         normalized,
         max_text_units=max_text_units,
         max_line_feeds=max_line_feeds,
     ):
         return normalized
-    normalized_suffix = _normalize_excel_text(suffix)
-    text_budget = max(max_text_units - _excel_text_units(normalized_suffix), 1)
+    normalized_suffix = normalize_excel_text(suffix)
+    text_budget = max(max_text_units - excel_text_units(normalized_suffix), 1)
     line_feed_budget = max(max_line_feeds - normalized_suffix.count("\n"), 0)
     prefix = _split_excel_text(
         normalized,
@@ -1134,7 +1121,7 @@ def _set_internal_link(
         coordinate = row_or_coordinate
     escaped_title = sheet_title.replace("'", "''")
     cell.hyperlink = f"#'{escaped_title}'!{coordinate}"
-    cell.font = Font(name=_FONT_NAME, color="0563C1", underline="single")
+    cell.font = LINK_FONT
 
 
 def _style_long_value_pair(
@@ -1183,10 +1170,10 @@ def _kind_fill(kind: BaselineComparisonKind) -> PatternFill:
 
 
 def _set_safe_value(cell: Cell, value: Any, *, context: str) -> None:
-    cell.font = _BODY_FONT
+    cell.font = BODY_FONT
     if isinstance(value, str):
-        normalized = _normalize_excel_text(value)
-        text_units = _excel_text_units(normalized)
+        normalized = normalize_excel_text(value)
+        text_units = excel_text_units(normalized)
         if text_units > EXCEL_MAX_CELL_TEXT:
             raise BaselineExportError(
                 f"{context} 내용이 Excel 셀 길이 한도({EXCEL_MAX_CELL_TEXT:,}자)를 "

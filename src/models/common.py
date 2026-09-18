@@ -92,13 +92,13 @@ Swagger V3 상속/추상 모델 문서 기준으로 AbstractFieldValue 구현체
 """
 
 
-TODO_FIELD_TYPE_VALUE_MODEL_MAP: dict[str, str | tuple[str, ...] | None] = {
-    # TODO: 아래 field 들은 공식 문서에서 AbstractFieldValue 구현체가 확인되므로
-    # single-value 형태는 우선 연결했다. multi-value 또는 세부 coercion 규칙은 추가 확인이 필요하다.
+PENDING_FIELD_TYPE_VALUE_MODEL_MAP: dict[str, str | tuple[str, ...] | None] = {
+    # 아래 field 들은 공식 문서에서 AbstractFieldValue 구현체가 확인되므로
+    # single-value 형태는 우선 연결했다. multi-value 또는 세부 coercion 규칙은 확인이 남았다.
     "CountryField": ("CountryFieldValue", "CountryFieldMultiValue"),
     "LanguageField": ("LanguageFieldValue", "LanguageFieldMultiValue"),
     "LayoutField": None,
-    # TODO: 아래 choice/reference 계열은 OptionChoiceField와 UserChoiceField를 제외하고
+    # 아래 choice/reference 계열은 OptionChoiceField와 UserChoiceField를 제외하고
     # schema 예시를 더 확인한 뒤 referenceType, multipleValues, valueModel 조합으로 연결한다.
     "ProjectChoiceField": None,
     "RepositoryChoiceField": None,
@@ -108,10 +108,12 @@ TODO_FIELD_TYPE_VALUE_MODEL_MAP: dict[str, str | tuple[str, ...] | None] = {
     "TrackerItemField": None,
     "UpdateTrackerItemField": None,
     "UpdateTrackerItemTableField": None,
-    # TODO: UrlField / WikiTextField 는 single-value 구현만 우선 반영했다.
+    # UrlField / WikiTextField 는 single-value 구현만 우선 반영했다.
     "WikiTextField": ("WikiTextFieldValue", "WikiTextFieldMultiValue"),
 }
-"""다음 단계에서 구현할 field/value 연결 후보 목록이다.
+"""아직 payload 규칙을 확정하지 못해 연결하지 않은 field/value 후보 목록이다.
+
+이 상수는 런타임 로직에서 읽지 않는다. 지원 범위를 넓힐 때 참고하는 설계 기록이다.
 
 - 값이 문자열이면 예상되는 FieldValue 이름이다.
 - 값이 tuple이면 single/multi value 분기가 필요하다.
