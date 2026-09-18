@@ -18,6 +18,7 @@ from src.gui.tracker_baseline_export import baseline_export_fields
 from src.gui.tracker_baseline_export import create_baseline_comparison_workbook
 from src.gui.tracker_baseline_export import export_baseline_comparison_xlsx
 from src.gui.tracker_query_models import TrackerItemSummary
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 def _item(

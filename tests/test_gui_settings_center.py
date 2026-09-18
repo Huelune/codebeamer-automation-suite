@@ -19,6 +19,7 @@ from src.gui.settings_center import SettingsCenterPage
 from src.gui.settings_store import CREDENTIAL_STORAGE_NONE
 from src.gui.settings_store import CREDENTIAL_STORAGE_OS
 from src.gui.settings_store import GuiSettingsStore
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class _UnavailableCredentialStore:

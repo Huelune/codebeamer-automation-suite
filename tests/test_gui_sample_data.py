@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from src.gui.service_core import GuiExcelService
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "gui-offline-sample"

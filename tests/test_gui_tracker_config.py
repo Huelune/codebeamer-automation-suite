@@ -8,6 +8,7 @@ from src.gui.tracker_config import TRACKER_ITEM_QUERY_STATUS_SUPPORTED
 from src.gui.tracker_config import TRACKER_ITEM_QUERY_STATUS_UNSUPPORTED
 from src.gui.tracker_config import TrackerConfigurationService
 from src.models import TrackerItemResolutionMode
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class TrackerConfigurationServiceTest(unittest.TestCase):

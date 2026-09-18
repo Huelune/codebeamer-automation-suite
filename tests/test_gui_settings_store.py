@@ -19,6 +19,7 @@ from src.gui.settings_store import test_mode_validation_signature
 from src.gui.styles import DEFAULT_GUI_THEME
 from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
 from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 try:

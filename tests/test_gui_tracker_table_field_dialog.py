@@ -14,6 +14,7 @@ from src.gui.tracker_query_models import TrackerFieldValue
 from src.gui.tracker_table_field_dialog import TrackerTableFieldDialog
 from src.gui.tracker_table_field_dialog import table_field_dimensions
 from src.gui.tracker_table_field_dialog import table_field_summary
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class TrackerTableFieldDialogTest(unittest.TestCase):

@@ -13,6 +13,7 @@ from src.gui.tracker_bulk_update import TrackerBulkUpdateService
 from src.gui.tracker_bulk_update import build_bulk_field_values
 from src.gui.tracker_bulk_update_dialog import TrackerBulkUpdateDialog
 from src.gui.tracker_item_editor import build_create_tracker_schema
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 SCHEMA = {

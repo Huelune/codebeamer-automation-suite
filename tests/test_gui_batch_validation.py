@@ -8,6 +8,7 @@ import pandas as pd
 
 from src.gui.batch_validation import BatchValidationService
 from src.upload_policy import UPLOAD_MODE_UPDATE
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class BatchValidationServiceTest(unittest.TestCase):

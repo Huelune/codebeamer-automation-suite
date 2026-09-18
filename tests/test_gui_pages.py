@@ -33,6 +33,7 @@ from src.gui.service_core import SheetPreviewData
 from src.gui.service_core import WorkbookMetadata
 from src.gui.settings_store import GuiSettings
 from src.gui.styles import build_gui_stylesheet
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

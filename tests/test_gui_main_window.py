@@ -35,6 +35,7 @@ from src.gui.settings_store import test_mode_validation_signature
 from src.gui.tracker_workspace import TrackerWorkspacePage
 from src.gui.window_support import GuiSessionState
 from src.gui.window_support import UploadProgressState
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class GuiMainWindowProgressTest(unittest.TestCase):

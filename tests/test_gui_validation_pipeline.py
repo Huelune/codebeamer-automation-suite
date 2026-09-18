@@ -14,6 +14,7 @@ from src.models import MappingStatus
 from src.models import PayloadStatus
 from tests.gui_service_fixtures import FakeClient
 from tests.gui_service_fixtures import FakeExcelReader
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class GuiValidationPipelineServiceTest(unittest.TestCase):

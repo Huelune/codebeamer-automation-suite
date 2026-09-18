@@ -16,6 +16,7 @@ from src.gui.tracker_item_editor import TrackerItemWriteErrorKind
 from src.gui.tracker_item_editor import build_create_item_payload
 from src.gui.tracker_item_editor import build_create_tracker_schema
 from src.gui.tracker_query_models import TrackerItemDetail
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 CREATE_SCHEMA = {
