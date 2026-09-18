@@ -242,7 +242,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
 
         output_dir = str(Path(self.session_state.settings.output_dir))
         self.upload_page.reset(retry_target_count)
-        self._activity_dry_run = bool(retry_context.dry_run)
+        self._activity_dry_run = bool(retry_context is not None and retry_context.dry_run)
         self._retry_in_progress = True
         self.upload_progress = UploadProgressState(
             retry_count=retry_target_count,
@@ -610,7 +610,9 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             return
 
         started_at = self.upload_progress.event_started_at.get(row_key)
-        elapsed = None if started_at is None else (time.perf_counter() - started_at)
+        elapsed: float | None = (
+            None if started_at is None else (time.perf_counter() - started_at)
+        )
         if event_type == "row_success":
             self.upload_progress.success_count += 1
             phase_key = self._normalize_phase_key(event.get("phase"))

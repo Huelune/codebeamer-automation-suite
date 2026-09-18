@@ -151,9 +151,9 @@ def create_tracker_field_input_widget(
             initial_value=initial_value,
         )
     if kind == FieldEditorKind.MULTILINE_TEXT:
-        widget = QPlainTextEdit(parent)
-        widget.setPlainText(str(current or ""))
-        return widget
+        text_edit = QPlainTextEdit(parent)
+        text_edit.setPlainText(str(current or ""))
+        return text_edit
     if kind in {
         FieldEditorKind.TEXT,
         FieldEditorKind.INTEGER,
@@ -161,27 +161,27 @@ def create_tracker_field_input_widget(
         FieldEditorKind.DATE,
         FieldEditorKind.DATETIME,
     }:
-        widget = QLineEdit(parent)
-        widget.setText("" if current is None else str(current))
+        line_edit = QLineEdit(parent)
+        line_edit.setText("" if current is None else str(current))
         if kind == FieldEditorKind.INTEGER:
-            widget.setValidator(QIntValidator(widget))
+            line_edit.setValidator(QIntValidator(line_edit))
         elif kind == FieldEditorKind.DECIMAL:
-            widget.setValidator(QDoubleValidator(widget))
+            line_edit.setValidator(QDoubleValidator(line_edit))
         elif kind == FieldEditorKind.DATE:
-            widget.setPlaceholderText("YYYY-MM-DD")
+            line_edit.setPlaceholderText("YYYY-MM-DD")
         elif kind == FieldEditorKind.DATETIME:
-            widget.setPlaceholderText("YYYY-MM-DDThh:mm:ss")
-        return widget
+            line_edit.setPlaceholderText("YYYY-MM-DDThh:mm:ss")
+        return line_edit
     if kind == FieldEditorKind.BOOLEAN:
-        widget = QComboBox(parent)
-        widget.addItem("예", True)
-        widget.addItem("아니요", False)
-        widget.setCurrentIndex(0 if tracker_field_boolean_value(current) else 1)
-        return widget
+        boolean_combo = QComboBox(parent)
+        boolean_combo.addItem("예", True)
+        boolean_combo.addItem("아니요", False)
+        boolean_combo.setCurrentIndex(0 if tracker_field_boolean_value(current) else 1)
+        return boolean_combo
     if kind == FieldEditorKind.CHOICE:
         current_ids = set(tracker_field_reference_ids(current))
         if field_value.multiple_values:
-            widget = QListWidget(parent)
+            choice_list = QListWidget(parent)
             for option in field_value.options:
                 item = QListWidgetItem(option.name)
                 item.setData(Qt.ItemDataRole.UserRole, option.option_id)
@@ -191,29 +191,29 @@ def create_tracker_field_input_widget(
                     if option.option_id in current_ids
                     else Qt.CheckState.Unchecked
                 )
-                widget.addItem(item)
-            return widget
-        widget = QComboBox(parent)
-        widget.addItem("(값 비우기)", None)
+                choice_list.addItem(item)
+            return choice_list
+        choice_combo = QComboBox(parent)
+        choice_combo.addItem("(값 비우기)", None)
         for option in field_value.options:
-            widget.addItem(option.name, option.option_id)
+            choice_combo.addItem(option.name, option.option_id)
         current_id = next(iter(current_ids), None)
-        index = widget.findData(current_id)
-        widget.setCurrentIndex(index if index >= 0 else 0)
-        return widget
+        index = choice_combo.findData(current_id)
+        choice_combo.setCurrentIndex(index if index >= 0 else 0)
+        return choice_combo
     if kind == FieldEditorKind.REFERENCE:
-        current_ids = tracker_field_reference_ids(current)
-        input_text = "\n".join(str(value) for value in current_ids)
+        reference_ids = tracker_field_reference_ids(current)
+        input_text = "\n".join(str(value) for value in reference_ids)
         if field_value.multiple_values:
-            widget = QPlainTextEdit(parent)
-            widget.setPlaceholderText("한 줄에 참조 ID 하나")
-            widget.setPlainText(input_text)
-            return widget
-        widget = QLineEdit(parent)
-        widget.setPlaceholderText("참조 ID")
-        widget.setText(input_text)
-        widget.setValidator(QIntValidator(1, 2_147_483_647, widget))
-        return widget
+            reference_edit = QPlainTextEdit(parent)
+            reference_edit.setPlaceholderText("한 줄에 참조 ID 하나")
+            reference_edit.setPlainText(input_text)
+            return reference_edit
+        reference_input = QLineEdit(parent)
+        reference_input.setPlaceholderText("참조 ID")
+        reference_input.setText(input_text)
+        reference_input.setValidator(QIntValidator(1, 2_147_483_647, reference_input))
+        return reference_input
     return None
 
 

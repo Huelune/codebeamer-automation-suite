@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
+from .payload_values import as_mapping
 from .settings_store import GuiSettings
 from .settings_store import GuiWorkflowPreset
 from .upload_context import MappingContext
@@ -172,6 +173,8 @@ def _format_upload_eta_text(
 
 
 def _clamp_window_dimension(value: object, *, fallback: int, minimum: int) -> int:
+    if not isinstance(value, (int, float, str)):
+        return fallback
     try:
         normalized = int(value)
     except (TypeError, ValueError):
@@ -218,6 +221,7 @@ def _merge_root_item_page_configs(
     if structure_config:
         merged.update(dict(structure_config))
     if field_config:
-        merged["field_assignments"] = dict(field_config.get("field_assignments") or {})
-        merged["field_sources"] = dict(field_config.get("field_sources") or {})
+        fields = as_mapping(field_config)
+        merged["field_assignments"] = as_mapping(fields.get("field_assignments"))
+        merged["field_sources"] = as_mapping(fields.get("field_sources"))
     return merged

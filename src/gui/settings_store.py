@@ -16,6 +16,7 @@ from src.api_monitor import API_MONITOR_MIN_SLOW_THRESHOLD_MS
 from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 
+from .payload_values import as_mapping
 from .styles import DEFAULT_GUI_THEME
 from .styles import normalize_gui_theme_name
 
@@ -593,7 +594,7 @@ class GuiSettingsStore:
         payload: dict[str, Any],
     ) -> GuiWorkflowPreset:
         raw_settings = payload.get("settings")
-        settings_payload = raw_settings if isinstance(raw_settings, dict) else {}
+        settings_payload = as_mapping(raw_settings)
         return GuiWorkflowPreset(
             version=int(payload.get("version") or 1),
             preset_id=str(payload.get("preset_id") or uuid4().hex),
@@ -1208,7 +1209,7 @@ class GuiSettingsStore:
         if not path.exists():
             return {}
         payload = json.loads(path.read_text(encoding="utf-8"))
-        return payload if isinstance(payload, dict) else {}
+        return as_mapping(payload)
 
     def _write_json_atomic(self, path: Path, payload: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

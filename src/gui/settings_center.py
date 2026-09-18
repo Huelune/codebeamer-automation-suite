@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import QCheckBox
 from PySide6.QtWidgets import QComboBox
 from PySide6.QtWidgets import QDoubleSpinBox
@@ -286,7 +287,12 @@ class SettingsCenterPage(QWidget):
         )
         self.credential_storage_combo.addItem(os_label, CREDENTIAL_STORAGE_OS)
         if not self.settings_store.os_credential_available:
-            model_item = self.credential_storage_combo.model().item(1)
+            combo_model = self.credential_storage_combo.model()
+            model_item = (
+                combo_model.item(1)
+                if isinstance(combo_model, QStandardItemModel)
+                else None
+            )
             if model_item is not None:
                 model_item.setEnabled(False)
         self.credential_storage_combo.addItem("저장하지 않음", CREDENTIAL_STORAGE_NONE)

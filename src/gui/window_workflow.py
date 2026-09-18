@@ -8,6 +8,7 @@ from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 
+from .payload_values import as_mapping
 from .settings_store import GuiSettings
 from .settings_store import GuiWorkflowPreset
 from .window_support import UploadProgressState
@@ -215,7 +216,7 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
         file_state = self._current_file_state_snapshot()
         file_paths = [
             str(path).strip()
-            for path in file_state.get("file_paths") or []
+            for path in as_mapping(file_state).get("file_paths") or []
             if str(path).strip()
         ]
         if file_paths:
@@ -253,7 +254,9 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
         file_state = self._current_file_state_snapshot()
         file_options = {
             "sheet_name": str(file_state.get("sheet_name") or settings.excel_sheet_name or "0"),
-            "header_row": int(file_state.get("header_row") or settings.excel_header_row or 1),
+            "header_row": int(
+                as_mapping(file_state).get("header_row") or settings.excel_header_row or 1
+            ),
             "summary_column": str(file_state.get("summary_column") or settings.summary_column or "Summary"),
         }
 

@@ -12,6 +12,7 @@ from typing import Any
 from src.codebeamer_client import CodebeamerClient
 from src.models.common import CONNECTED_FIELD_TYPE_VALUE_MODEL_MAP
 
+from .payload_values import optional_int
 from .service_core import _build_gui_client
 from .tracker_query_models import TrackerItemDetail
 from .tracker_query_service import TrackerQueryService
@@ -144,15 +145,6 @@ class TrackerItemFieldChange:
 
 
 _REFERENCE_MODEL_PATTERN = re.compile(r"<\s*([^>]+?)\s*>")
-
-
-def _optional_int(value: Any) -> int | None:
-    if value in (None, "") or isinstance(value, bool):
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _display_value(value: Any) -> str:
@@ -321,7 +313,7 @@ def _table_column_fields(raw_field: dict[str, Any]) -> tuple[EditableTrackerFiel
     for raw_column in raw_columns:
         if not isinstance(raw_column, dict) or bool(raw_column.get("hidden", False)):
             continue
-        field_id = _optional_int(raw_column.get("id") or raw_column.get("fieldId"))
+        field_id = optional_int(raw_column.get("id") or raw_column.get("fieldId"))
         if field_id is None or field_id <= 0:
             continue
         name = str(raw_column.get("name") or raw_column.get("label") or field_id)
@@ -384,7 +376,7 @@ def _build_tracker_schema(
     normalized_fields: list[EditableTrackerField] = []
     status_field: EditableTrackerField | None = None
     for raw_field in _schema_field_payloads(schema):
-        field_id = _optional_int(raw_field.get("id") or raw_field.get("fieldId"))
+        field_id = optional_int(raw_field.get("id") or raw_field.get("fieldId"))
         if field_id is None or field_id <= 0:
             continue
         if bool(raw_field.get("hidden", False)):
@@ -501,7 +493,7 @@ def build_create_tracker_schema(
     schema: dict[str, Any],
     tracker_id: int,
 ) -> EditableTrackerSchema:
-    normalized_tracker_id = _optional_int(tracker_id)
+    normalized_tracker_id = optional_int(tracker_id)
     if normalized_tracker_id is None or normalized_tracker_id <= 0:
         raise ValueError("생성 대상 트래커 ID가 올바르지 않습니다.")
     normalized_schema = _build_tracker_schema(
@@ -548,7 +540,7 @@ def _choice_references(
     by_id = {option.option_id: option for option in field_value.options}
     references: list[dict[str, Any]] = []
     for value in values:
-        option_id = _optional_int(value.get("id")) if isinstance(value, dict) else _optional_int(value)
+        option_id = optional_int(value.get("id")) if isinstance(value, dict) else optional_int(value)
         if option_id is None or option_id not in by_id:
             raise ValueError(f"'{field_value.label}'에서 알 수 없는 선택값을 받았습니다.")
         option = by_id[option_id]
@@ -579,7 +571,7 @@ def _reference_ids(raw_value: Any) -> list[int]:
             value = value.get("id")
         if value in (None, ""):
             continue
-        item_id = _optional_int(str(value).strip())
+        item_id = optional_int(str(value).strip())
         if item_id is None or item_id <= 0:
             raise ValueError("참조 ID는 양의 정수여야 합니다.")
         if item_id not in normalized:
@@ -612,7 +604,7 @@ def _table_rows(
                 raise ValueError(
                     f"'{field_value.label}' {row_index}행의 셀 값이 객체가 아닙니다."
                 )
-            field_id = _optional_int(
+            field_id = optional_int(
                 raw_cell.get("fieldId") or raw_cell.get("id")
             )
             type_name = str(raw_cell.get("type") or "").strip()
@@ -885,7 +877,7 @@ class TrackerItemEditorService:
         if expected_version is None:
             return
         raw_item = client.get_item(int(item_id))
-        current_version = _optional_int(
+        current_version = optional_int(
             raw_item.get("version") if isinstance(raw_item, dict) else None
         )
         if current_version != int(expected_version):
@@ -930,7 +922,7 @@ class TrackerItemEditorService:
         parent_item_id: int | None = None,
     ) -> TrackerItemDetail:
         self._ensure_write_enabled(settings)
-        normalized_tracker_id = _optional_int(tracker_id)
+        normalized_tracker_id = optional_int(tracker_id)
         if normalized_tracker_id is None or normalized_tracker_id <= 0:
             raise TrackerItemWriteError(
                 TrackerItemWriteErrorKind.INVALID_VALUE,
@@ -952,7 +944,7 @@ class TrackerItemEditorService:
                 operation="build_create_payload",
             ) from exc
 
-        normalized_parent_id = _optional_int(parent_item_id)
+        normalized_parent_id = optional_int(parent_item_id)
         if parent_item_id is not None and (
             normalized_parent_id is None or normalized_parent_id <= 0
         ):
@@ -982,7 +974,7 @@ class TrackerItemEditorService:
                 parent_item_id=normalized_parent_id,
             ),
         )
-        item_id = _optional_int(response.get("id") if isinstance(response, dict) else None)
+        item_id = optional_int(response.get("id") if isinstance(response, dict) else None)
         if item_id is None or item_id <= 0:
             raise TrackerItemWriteError(
                 TrackerItemWriteErrorKind.UNKNOWN,

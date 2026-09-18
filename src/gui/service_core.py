@@ -15,6 +15,7 @@ from src.codebeamer_client import CodebeamerClient
 from src.excel_reader import ExcelReader
 
 from .offline_query import build_offline_cbql_predicate
+from .payload_values import as_mapping
 
 
 @dataclass
@@ -261,7 +262,7 @@ class OfflineGuiClient:
             if not isinstance(raw_tracker, dict):
                 raise ValueError("테스트 조회 데이터의 트래커 형식이 올바르지 않습니다.")
             tracker_id = int(raw_tracker.get("id") or 0)
-            project = raw_tracker.get("project") if isinstance(raw_tracker.get("project"), dict) else {}
+            project = as_mapping(raw_tracker.get("project"))
             project_id = int(raw_tracker.get("projectId") or project.get("id") or 0)
             if tracker_id <= 0 or tracker_id in self._offline_trackers:
                 raise ValueError("테스트 조회 데이터의 트래커 ID가 없거나 중복됩니다.")
@@ -281,9 +282,9 @@ class OfflineGuiClient:
             if not isinstance(raw_item, dict):
                 raise ValueError("테스트 조회 데이터의 아이템 형식이 올바르지 않습니다.")
             item_id = int(raw_item.get("id") or 0)
-            tracker = raw_item.get("tracker") if isinstance(raw_item.get("tracker"), dict) else {}
+            tracker = as_mapping(raw_item.get("tracker"))
             tracker_id = int(raw_item.get("trackerId") or tracker.get("id") or 0)
-            parent = raw_item.get("parent") if isinstance(raw_item.get("parent"), dict) else {}
+            parent = as_mapping(raw_item.get("parent"))
             parent_id_value = raw_item.get("parentId") or parent.get("id")
             parent_id = int(parent_id_value) if parent_id_value not in (None, "") else None
             if item_id <= 0 or item_id in self._offline_items:
