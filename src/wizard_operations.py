@@ -53,7 +53,9 @@ class WizardOperationMixin:
         payload_df = self.build_payloads()
         filtered_payload_df = self._filter_payload_rows(payload_df, include_row_ids)
         ready_df = filtered_payload_df[filtered_payload_df["payload_status"] == PayloadStatus.READY.value].copy()
-        payload_failed_df = filtered_payload_df[filtered_payload_df["payload_status"] == PayloadStatus.FAILED.value].copy()
+        payload_failed_df = filtered_payload_df[
+            filtered_payload_df["payload_status"] == PayloadStatus.FAILED.value
+        ].copy()
         should_create_root_item = (
             root_item_name is not None
             and not ready_df.empty
@@ -218,7 +220,9 @@ class WizardOperationMixin:
                     while pause_requested is not None and pause_requested():
                         time.sleep(0.1)
                     if cancel_requested is not None and cancel_requested():
-                        return _finalize(_build_unresolved_df(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy()))
+                        return _finalize(
+                            _build_unresolved_df(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy())
+                        )
 
                     parent_name = parent_spec["name"]
                     if event_callback is not None:
@@ -272,29 +276,35 @@ class WizardOperationMixin:
                         error_response_json = self._response_json(exc)
                         error_message = str(error_response_json) if error_response_json is not None else str(exc)
 
-                        failed_logs.append({
-                            "_row_id": None,
-                            "parent_row_id": None,
-                            "upload_name": parent_name,
-                            "phase": phase_name,
-                            "error_status_code": error_status_code,
-                            "error_response_json": error_response_json,
-                            "error": error_message,
-                            "status": UploadStatus.FAILED.value,
-                        })
-                        if event_callback is not None:
-                            event_callback({
-                                "type": "row_failed",
-                                "phase": phase_name,
-                                "row_id": None,
+                        failed_logs.append(
+                            {
+                                "_row_id": None,
+                                "parent_row_id": None,
                                 "upload_name": parent_name,
-                                "message": error_message,
-                                "status_code": error_status_code,
-                                "response_json": error_response_json,
-                            })
+                                "phase": phase_name,
+                                "error_status_code": error_status_code,
+                                "error_response_json": error_response_json,
+                                "error": error_message,
+                                "status": UploadStatus.FAILED.value,
+                            }
+                        )
+                        if event_callback is not None:
+                            event_callback(
+                                {
+                                    "type": "row_failed",
+                                    "phase": phase_name,
+                                    "row_id": None,
+                                    "upload_name": parent_name,
+                                    "message": error_message,
+                                    "status_code": error_status_code,
+                                    "response_json": error_response_json,
+                                }
+                            )
 
                         if not continue_on_error:
-                            return _finalize(_build_unresolved_df(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy()))
+                            return _finalize(
+                                _build_unresolved_df(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy())
+                            )
 
                 if progress:
                     pending_parent_specs = deferred_parent_specs
@@ -458,7 +468,9 @@ class WizardOperationMixin:
         )
         filtered_payload_df = self._filter_payload_rows(payload_df, include_row_ids)
         ready_df = filtered_payload_df[filtered_payload_df["payload_status"] == PayloadStatus.READY.value].copy()
-        payload_failed_df = filtered_payload_df[filtered_payload_df["payload_status"] == PayloadStatus.FAILED.value].copy()
+        payload_failed_df = filtered_payload_df[
+            filtered_payload_df["payload_status"] == PayloadStatus.FAILED.value
+        ].copy()
 
         success_logs: list[dict[str, Any]] = []
         failed_logs = [

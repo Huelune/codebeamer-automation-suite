@@ -558,7 +558,9 @@ class OfflineGuiClient:
     def get_item_children(self, item_id: int) -> list[dict[str, Any]]:
         return self.get_item_children_page(item_id)["itemRefs"]
 
-    def create_item(self, tracker_id: int, payload: dict[str, Any], parent_item_id: int | None = None) -> dict[str, Any]:
+    def create_item(
+        self, tracker_id: int, payload: dict[str, Any], parent_item_id: int | None = None
+    ) -> dict[str, Any]:
         del tracker_id, payload, parent_item_id
         raise RuntimeError("테스트 모드에서는 실제 업로드를 실행할 수 없습니다. Dry Run만 사용해야 합니다.")
 

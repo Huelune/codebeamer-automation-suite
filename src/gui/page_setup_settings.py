@@ -334,7 +334,9 @@ def create_settings_page(
 
     def _choose_snapshot_path(target_widget, *, title: str) -> None:
         """`choose_snapshot_path` 선택 동작을 처리한다."""
-        start_path = target_widget.text().strip() or str(getattr(page, "_current_settings", initial_settings).last_file_path or "")
+        start_path = target_widget.text().strip() or str(
+            getattr(page, "_current_settings", initial_settings).last_file_path or ""
+        )
         selected, _ = QFileDialog.getOpenFileName(
             page,
             title,
@@ -370,7 +372,10 @@ def create_settings_page(
             if not Path(current.offline_schema_path).is_file():
                 _set_status("선택한 schema snapshot JSON 파일을 찾을 수 없습니다.")
                 return
-            if current.offline_tracker_configuration_path and not Path(current.offline_tracker_configuration_path).is_file():
+            if (
+                current.offline_tracker_configuration_path
+                and not Path(current.offline_tracker_configuration_path).is_file()
+            ):
                 _set_status("선택한 tracker configuration snapshot JSON 파일을 찾을 수 없습니다.")
                 return
         elif not current.base_url or not current.username or not current.password:

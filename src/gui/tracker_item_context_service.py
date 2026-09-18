@@ -54,9 +54,16 @@ class TrackerItemContextService:
             TrackerQueryErrorKind.NOT_FOUND: "아이템 문맥을 찾을 수 없습니다.",
             TrackerQueryErrorKind.RATE_LIMITED: "요청이 많아 아이템 문맥 조회가 제한되었습니다.",
         }
-        return TrackerQueryServiceError(kind, messages.get(kind, f"아이템 문맥 조회에 실패했습니다: {exc}"), status_code=status_code, operation=operation)
+        return TrackerQueryServiceError(
+            kind,
+            messages.get(kind, f"아이템 문맥 조회에 실패했습니다: {exc}"),
+            status_code=status_code,
+            operation=operation,
+        )
 
-    def load_relations(self, settings, item_id: int, item_version: int | None, *, baseline_id: int | None = None, force: bool = False) -> ItemRelationsSnapshot:
+    def load_relations(
+        self, settings, item_id: int, item_version: int | None, *, baseline_id: int | None = None, force: bool = False
+    ) -> ItemRelationsSnapshot:
         if baseline_id is not None:
             raise ValueError("Baseline 시점의 관계 조회는 지원하지 않습니다.")
         key = self._key(settings, item_id, item_version)
@@ -67,12 +74,18 @@ class TrackerItemContextService:
         except Exception as exc:
             raise self._error("load_item_relations", exc) from exc
         if not isinstance(raw, dict):
-            raise TrackerQueryServiceError(TrackerQueryErrorKind.SERVER, "아이템 관계 응답 형식을 해석할 수 없습니다.", operation="load_item_relations")
+            raise TrackerQueryServiceError(
+                TrackerQueryErrorKind.SERVER,
+                "아이템 관계 응답 형식을 해석할 수 없습니다.",
+                operation="load_item_relations",
+            )
         result = ItemRelationsSnapshot.from_raw(raw)
         self._relations_cache[key] = result
         return result
 
-    def load_history(self, settings, item_id: int, item_version: int | None, *, baseline_id: int | None = None, force: bool = False) -> ItemHistorySnapshot:
+    def load_history(
+        self, settings, item_id: int, item_version: int | None, *, baseline_id: int | None = None, force: bool = False
+    ) -> ItemHistorySnapshot:
         if baseline_id is not None:
             raise ValueError("Baseline 시점의 변경 이력 조회는 지원하지 않습니다.")
         key = self._key(settings, item_id, item_version)
@@ -83,7 +96,11 @@ class TrackerItemContextService:
         except Exception as exc:
             raise self._error("load_item_history", exc) from exc
         if not isinstance(raw, (dict, list)):
-            raise TrackerQueryServiceError(TrackerQueryErrorKind.SERVER, "아이템 이력 응답 형식을 해석할 수 없습니다.", operation="load_item_history")
+            raise TrackerQueryServiceError(
+                TrackerQueryErrorKind.SERVER,
+                "아이템 이력 응답 형식을 해석할 수 없습니다.",
+                operation="load_item_history",
+            )
         result = ItemHistorySnapshot.from_raw(raw, current_version=item_version)
         self._history_cache[key] = result
         return result

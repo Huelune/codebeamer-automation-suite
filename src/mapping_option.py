@@ -95,7 +95,10 @@ class MappingOptionMixin:
                         "source_status": OptionSourceStatus.UNSUPPORTED.value,
                         "resolver_available": False,
                         **metadata,
-                        "unsupported_reason": "schema options에 중복 name이 있어 안전하게 option map을 만들 수 없습니다.",
+                        "unsupported_reason": (
+                            "schema options에 중복 name이 있어 "
+                            "안전하게 option map을 만들 수 없습니다."
+                        ),
                     }
                     continue
 

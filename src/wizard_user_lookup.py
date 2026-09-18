@@ -269,7 +269,9 @@ class WizardUserLookupMixin:
         if ref_type == ReferenceType.USER.value:
             return UserInfo(id=int(candidate["id"]), name=candidate.get("name")).to_reference().to_dict()
         if ref_type == ReferenceType.ROLE.value:
-            return RoleReference(id=int(candidate["id"]), name=candidate.get("name"), type=ReferenceType.ROLE.value).to_dict()
+            return RoleReference(
+                id=int(candidate["id"]), name=candidate.get("name"), type=ReferenceType.ROLE.value
+            ).to_dict()
         if ref_type in {ReferenceType.GROUP.value, ReferenceType.USER_GROUP.value}:
             if ref_type == ReferenceType.GROUP.value:
                 return GroupReference(
@@ -305,7 +307,9 @@ class WizardUserLookupMixin:
             if not lookup_text:
                 raise ValueError("member lookup text is empty")
 
-            allowed_types = [str(member_type).strip().upper() for member_type in (member_types or []) if str(member_type).strip()]
+            allowed_types = [
+                str(member_type).strip().upper() for member_type in (member_types or []) if str(member_type).strip()
+            ]
             if not allowed_types:
                 allowed_types = ["USER"]
 

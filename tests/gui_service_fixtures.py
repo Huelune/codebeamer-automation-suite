@@ -72,7 +72,10 @@ class FakeExcelReader:
                 normalized = list(values)
                 if all(value is None or str(value).strip() == "" for value in normalized[:len(headers)]):
                     continue
-                record = {header: normalized[index] if index < len(normalized) else None for index, header in enumerate(headers)}
+                record = {
+                    header: normalized[index] if index < len(normalized) else None
+                    for index, header in enumerate(headers)
+                }
                 record["_excel_row"] = excel_row
                 record["_summary_indent"] = 0
                 records.append(record)

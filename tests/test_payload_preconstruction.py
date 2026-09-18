@@ -369,17 +369,32 @@ class WizardPayloadResolutionTest(unittest.TestCase):
             "Test Steps.Action": {
                 "table_field_name": "Test Steps",
                 "column_name": "Action",
-                "column_info": {"id": 1000001, "name": "Action", "type": "WikiTextField", "valueModel": "WikiTextFieldValue"},
+                "column_info": {
+                    "id": 1000001,
+                    "name": "Action",
+                    "type": "WikiTextField",
+                    "valueModel": "WikiTextFieldValue",
+                },
             },
             "Test Steps.Expected result": {
                 "table_field_name": "Test Steps",
                 "column_name": "Expected result",
-                "column_info": {"id": 1000002, "name": "Expected result", "type": "WikiTextField", "valueModel": "WikiTextFieldValue"},
+                "column_info": {
+                    "id": 1000002,
+                    "name": "Expected result",
+                    "type": "WikiTextField",
+                    "valueModel": "WikiTextFieldValue",
+                },
             },
             "Test Steps.Critical?": {
                 "table_field_name": "Test Steps",
                 "column_name": "Critical?",
-                "column_info": {"id": 1000003, "name": "Critical?", "type": "BoolField", "valueModel": "BoolFieldValue"},
+                "column_info": {
+                    "id": 1000003,
+                    "name": "Critical?",
+                    "type": "BoolField",
+                    "valueModel": "BoolFieldValue",
+                },
             },
         }
         self.wizard.state.upload_df = pd.DataFrame([

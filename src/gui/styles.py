@@ -598,7 +598,8 @@ QLabel#step_badge[complete="true"] {
     border: 1px solid #B6DAEE;
 }
 
-QPushButton, QToolButton, QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox, QTableWidget, QPlainTextEdit, QTextBrowser, QTabBar::tab {
+QPushButton, QToolButton, QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox,
+QTableWidget, QPlainTextEdit, QTextBrowser, QTabBar::tab {
     outline: none;
 }
 

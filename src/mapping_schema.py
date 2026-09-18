@@ -118,7 +118,8 @@ class MappingSchemaMixin:
             result["is_supported"] = False
             if cls._is_choice_value_model(value_model):
                 result["unsupported_reason"] = (
-                    "OptionChoiceField인데 options/referenceType이 없고 valueModel만 choice 계열이라 확정할 수 없습니다."
+                    "OptionChoiceField인데 options/referenceType이 없고 "
+                    "valueModel만 choice 계열이라 확정할 수 없습니다."
                 )
             else:
                 result["unsupported_reason"] = (
@@ -172,7 +173,8 @@ class MappingSchemaMixin:
             result["resolution_strategy"] = ResolutionStrategy.UNKNOWN_TYPE.value
             result["is_supported"] = False
             result["unsupported_reason"] = (
-                "valueModel이 choice 계열이지만 type/options/referenceType 조합이 없어 보조 신호만으로는 해석할 수 없습니다."
+                "valueModel이 choice 계열이지만 type/options/referenceType 조합이 없어 "
+                "보조 신호만으로는 해석할 수 없습니다."
             )
             return result
 

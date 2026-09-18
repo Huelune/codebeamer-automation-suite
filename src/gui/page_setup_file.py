@@ -733,7 +733,9 @@ def _initialize_root_item_page(
         if not field_assignments and page._current_preview_context is not None:
             field_assignments = {
                 str(schema_field): dict(assignment)
-                for schema_field, assignment in dict(getattr(page._current_preview_context, "field_assignments", {}) or {}).items()
+                for schema_field, assignment in dict(
+                    getattr(page._current_preview_context, "field_assignments", {}) or {}
+                ).items()
                 if str(schema_field).strip() and isinstance(assignment, dict)
             }
         group_enabled = bool(enable_group_folder.isChecked())
@@ -929,7 +931,14 @@ def _initialize_root_item_page(
                 candidate=candidate,
             )
 
-            def _on_enabled_toggled(_checked, *, checkbox=enabled_widget, mode_widget=mode_combo, value_widget=value_combo, row_candidate=candidate):
+            def _on_enabled_toggled(
+                _checked,
+                *,
+                checkbox=enabled_widget,
+                mode_widget=mode_combo,
+                value_widget=value_combo,
+                row_candidate=candidate,
+            ):
                 _sync_row_enabled_state(
                     checkbox,
                     mode_widget,

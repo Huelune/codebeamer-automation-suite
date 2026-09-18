@@ -385,7 +385,9 @@ class RootItemService:
         explicit_name_assignment = False
         if name_schema_field:
             raw_explicit_assignments = explicit_root_config.get("field_assignments")
-            if (isinstance(raw_explicit_assignments, dict) and name_schema_field in raw_explicit_assignments) or (isinstance(explicit_field_sources, dict) and name_schema_field in explicit_field_sources):
+            if (isinstance(raw_explicit_assignments, dict) and name_schema_field in raw_explicit_assignments) or (
+                isinstance(explicit_field_sources, dict) and name_schema_field in explicit_field_sources
+            ):
                 explicit_name_assignment = True
 
         if (
@@ -576,7 +578,9 @@ class RootItemService:
                 RootSourceOption(ROOT_SOURCE_GROUP_VALUE, self._root_group_source_label(group_by_column))
             )
         if compiled_pattern is not None:
-            source_options.append(RootSourceOption(ROOT_SOURCE_REGEX_FULL, self._root_source_label(ROOT_SOURCE_REGEX_FULL)))
+            source_options.append(
+                RootSourceOption(ROOT_SOURCE_REGEX_FULL, self._root_source_label(ROOT_SOURCE_REGEX_FULL))
+            )
             for group_key in self._root_regex_group_keys(compiled_pattern):
                 source_options.append(RootSourceOption(group_key, self._root_source_label(group_key)))
 

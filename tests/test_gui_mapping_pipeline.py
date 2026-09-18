@@ -236,11 +236,19 @@ class GuiMappingPipelineServiceTest(unittest.TestCase):
             self.assertEqual(UpdateModeFakeClient.all_update_calls[0][1]["description"], "기존 설명")
             self.assertEqual(UpdateModeFakeClient.all_update_calls[0][1]["status"]["name"], "Review")
             self.assertEqual(
-                next(field["value"] for field in UpdateModeFakeClient.all_update_calls[0][1]["customFields"] if field["fieldId"] == 3),
+                next(
+                    field["value"]
+                    for field in UpdateModeFakeClient.all_update_calls[0][1]["customFields"]
+                    if field["fieldId"] == 3
+                ),
                 "홍길동",
             )
             self.assertEqual(
-                next(field["value"] for field in UpdateModeFakeClient.all_update_calls[0][1]["customFields"] if field["fieldId"] == 999),
+                next(
+                    field["value"]
+                    for field in UpdateModeFakeClient.all_update_calls[0][1]["customFields"]
+                    if field["fieldId"] == 999
+                ),
                 "보존",
             )
             self.assertEqual(mapping_context.representative_file_path, str(path))
@@ -377,7 +385,9 @@ class GuiMappingPipelineServiceTest(unittest.TestCase):
             self.assertTrue(validation_context.has_blocking_issues)
             self.assertEqual(mapping_context.batch_duplicate_update_item_ids, {101})
             self.assertTrue(
-                validation_context.issue_df["message"].str.contains("여러 파일에서 같은 item id가 중복", regex=False).any()
+                validation_context.issue_df["message"]
+                .str.contains("여러 파일에서 같은 item id가 중복", regex=False)
+                .any()
             )
 
     def test_prepare_mapping_context_uses_file_selection_header_and_summary(self) -> None:

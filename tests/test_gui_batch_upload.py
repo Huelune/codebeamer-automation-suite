@@ -201,7 +201,9 @@ class BatchUploadServiceTest(unittest.TestCase):
                 operations = (
                     ["", "", ""]
                     if operation_mode == ""
-                    else (["update", "update", "update"] if operation_mode == "update" else ["create", "create", "update"])
+                    else (
+                        ["update", "update", "update"] if operation_mode == "update" else ["create", "create", "update"]
+                    )
                 )
                 payload_df = pd.DataFrame(
                     [
@@ -259,7 +261,9 @@ class BatchUploadServiceTest(unittest.TestCase):
                                 "source_file_path": "/tmp/sample.xlsx",
                                 "_row_id": 2,
                                 "upload_name": "REQ-2",
-                                "phase": "update" if upload_mode in {UPLOAD_MODE_UPDATE, UPLOAD_MODE_UPSERT} else "insert",
+                                "phase": "update"
+                                if upload_mode in {UPLOAD_MODE_UPDATE, UPLOAD_MODE_UPSERT}
+                                else "insert",
                                 "status": "unresolved_parent",
                             }
                         ]

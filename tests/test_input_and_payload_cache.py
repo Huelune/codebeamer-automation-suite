@@ -197,8 +197,20 @@ class HierarchyProcessorSplitTest(unittest.TestCase):
         processor = HierarchyProcessor(summary_col="요약")
         raw_df = pd.DataFrame(
             [
-                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "Requirement", "Priority": "High", "_excel_row": 2, "_summary_indent": 0},
-                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "Requirement", "Priority": "Low", "_excel_row": 3, "_summary_indent": 0},
+                {
+                    UPLOAD_RECORD_KEY_COLUMN: "REQ-1",
+                    "요약": "Requirement",
+                    "Priority": "High",
+                    "_excel_row": 2,
+                    "_summary_indent": 0,
+                },
+                {
+                    UPLOAD_RECORD_KEY_COLUMN: "REQ-1",
+                    "요약": "Requirement",
+                    "Priority": "Low",
+                    "_excel_row": 3,
+                    "_summary_indent": 0,
+                },
             ],
             dtype=object,
         )
@@ -208,8 +220,20 @@ class HierarchyProcessorSplitTest(unittest.TestCase):
 
         blank_then_value = pd.DataFrame(
             [
-                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "Requirement", "Priority": None, "_excel_row": 2, "_summary_indent": 0},
-                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "Requirement", "Priority": "High", "_excel_row": 3, "_summary_indent": 0},
+                {
+                    UPLOAD_RECORD_KEY_COLUMN: "REQ-1",
+                    "요약": "Requirement",
+                    "Priority": None,
+                    "_excel_row": 2,
+                    "_summary_indent": 0,
+                },
+                {
+                    UPLOAD_RECORD_KEY_COLUMN: "REQ-1",
+                    "요약": "Requirement",
+                    "Priority": "High",
+                    "_excel_row": 3,
+                    "_summary_indent": 0,
+                },
             ],
             dtype=object,
         )
@@ -680,10 +704,27 @@ class PayloadCacheWizardTest(unittest.TestCase):
         wizard.select_project(1)
         wizard.select_tracker(2)
         wizard.state.upload_mode = "upsert"
-        raw_df = pd.DataFrame([
-            {"id": None, "요약": "Create Row", "생성설명": "생성 설명", "수정비고": "생성 비고", "_excel_row": 2, "_summary_indent": 0},
-            {"id": 101, "요약": "Update Row", "생성설명": "수정 설명", "수정비고": "수정 비고", "_excel_row": 3, "_summary_indent": 0},
-        ], dtype=object)
+        raw_df = pd.DataFrame(
+            [
+                {
+                    "id": None,
+                    "요약": "Create Row",
+                    "생성설명": "생성 설명",
+                    "수정비고": "생성 비고",
+                    "_excel_row": 2,
+                    "_summary_indent": 0,
+                },
+                {
+                    "id": 101,
+                    "요약": "Update Row",
+                    "생성설명": "수정 설명",
+                    "수정비고": "수정 비고",
+                    "_excel_row": 3,
+                    "_summary_indent": 0,
+                },
+            ],
+            dtype=object,
+        )
         wizard.load_raw_dataframe(raw_df, list_cols=[])
         wizard.load_schema_and_compare({
             "요약": "Summary",

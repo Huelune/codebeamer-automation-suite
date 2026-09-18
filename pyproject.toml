@@ -18,6 +18,7 @@ extend-exclude = [".venv", "build", "dist", "release-artifacts", "templates"]
 # 새 규칙을 추가할 때는 위반을 먼저 0으로 만든 뒤 여기에 등록한다.
 select = [
     "E4",   # import 관련 pycodestyle
+    "E5",   # 줄 길이 pycodestyle
     "E7",   # 비교/구문 pycodestyle
     "E9",   # 구문 오류
     "W",    # 공백·개행 경고
@@ -30,7 +31,6 @@ select = [
     "RET",  # return 흐름
     "RUF",  # ruff 고유 규칙
 ]
-# E501(줄 길이)은 아직 위반이 많아 게이트에 넣지 않는다. 위 line-length는 포매팅 기준으로만 쓴다.
 ignore = [
     # 사용자 문구와 문서가 한글이라 전각 기호를 의도적으로 사용한다.
     "RUF001",

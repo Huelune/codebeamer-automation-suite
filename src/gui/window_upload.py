@@ -673,16 +673,26 @@ class WindowUploadMixin:
         else:
             phase_results = result.get("phase_results") or {}
         self.upload_progress.phase_totals = {
-            "insert": int((phase_results.get("insert") or {}).get("total", self.upload_progress.phase_totals.get("insert", 0)) or 0),
-            "update": int((phase_results.get("update") or {}).get("total", self.upload_progress.phase_totals.get("update", 0)) or 0),
+            "insert": int(
+                (phase_results.get("insert") or {}).get("total", self.upload_progress.phase_totals.get("insert", 0))
+                or 0
+            ),
+            "update": int(
+                (phase_results.get("update") or {}).get("total", self.upload_progress.phase_totals.get("update", 0))
+                or 0
+            ),
         }
         self.upload_progress.phase_counts = {
-            "insert_success": int((phase_results.get("insert") or {}).get("success", self._count_phase_rows(success_df, "insert")) or 0),
+            "insert_success": int(
+                (phase_results.get("insert") or {}).get("success", self._count_phase_rows(success_df, "insert")) or 0
+            ),
             "insert_failed": int(
                 ((phase_results.get("insert") or {}).get("failed", 0) or 0)
                 + self._count_phase_rows(activity_unresolved_df, "insert")
             ),
-            "update_success": int((phase_results.get("update") or {}).get("success", self._count_phase_rows(success_df, "update")) or 0),
+            "update_success": int(
+                (phase_results.get("update") or {}).get("success", self._count_phase_rows(success_df, "update")) or 0
+            ),
             "update_failed": int(
                 ((phase_results.get("update") or {}).get("failed", 0) or 0)
                 + self._count_phase_rows(activity_unresolved_df, "update")
@@ -700,8 +710,14 @@ class WindowUploadMixin:
             self.upload_progress.total = self.upload_progress.total_count
         self._update_upload_progress_widgets()
         self._update_upload_counter()
-        if activity_failed_df is not None and not getattr(activity_failed_df, "empty", True) and "error_response_json" in activity_failed_df.columns:
-            self.upload_page.response_view.setPlainText(str(activity_failed_df.iloc[0].get("error_response_json") or ""))
+        if (
+            activity_failed_df is not None
+            and not getattr(activity_failed_df, "empty", True)
+            and "error_response_json" in activity_failed_df.columns
+        ):
+            self.upload_page.response_view.setPlainText(
+                str(activity_failed_df.iloc[0].get("error_response_json") or "")
+            )
             if hasattr(self.upload_page, "detail_tabs") and hasattr(self.upload_page, "response_tab"):
                 self.upload_page.detail_tabs.setCurrentWidget(self.upload_page.response_tab)
         elif was_retry:

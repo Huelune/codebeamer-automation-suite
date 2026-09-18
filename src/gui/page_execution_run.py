@@ -514,7 +514,11 @@ def create_result_page():
             _configure_table_columns(table, [140] * max(len(visible_columns), 1))
 
         failed_df = upload_result.get("failed_df")
-        if failed_df is not None and not getattr(failed_df, "empty", True) and "error_response_json" in failed_df.columns:
+        if (
+            failed_df is not None
+            and not getattr(failed_df, "empty", True)
+            and "error_response_json" in failed_df.columns
+        ):
             page.response_view.setPlainText(str(failed_df.iloc[0].get("error_response_json") or ""))
         else:
             page.response_view.clear()

@@ -201,7 +201,11 @@ class WindowWorkflowMixin:
         if mapping_context is not None:
             root_item_config = dict(getattr(mapping_context, "root_item_config", {}) or {})
         current_page = getattr(self, "_current_page", None)
-        if current_page in {getattr(self, "root_item_structure_page", None), getattr(self, "root_item_field_page", None)} and mapping_context is not None:
+        if (
+            current_page
+            in {getattr(self, "root_item_structure_page", None), getattr(self, "root_item_field_page", None)}
+            and mapping_context is not None
+        ):
             structure_config = (
                 self.root_item_structure_page.get_config()
                 if callable(getattr(self.root_item_structure_page, "get_config", None))
@@ -397,7 +401,9 @@ class WindowWorkflowMixin:
 
         load_selection = getattr(self.project_page, "load_selection", None)
         if callable(load_selection):
-            load_selection(self.session_state.settings.default_project_id, self.session_state.settings.default_tracker_id)
+            load_selection(
+                self.session_state.settings.default_project_id, self.session_state.settings.default_tracker_id
+            )
 
         load_file_state = getattr(self.file_page, "load_state", None)
         if callable(load_file_state):
