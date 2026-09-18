@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
-from typing import Callable
+
 
 try:
     from PySide6.QtCore import Qt
@@ -19,8 +20,8 @@ try:
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
-from .tracker_query_models import TrackerFieldValue
 from .tracker_content_models import WikiRenderResult
+from .tracker_query_models import TrackerFieldValue
 from .wiki_content_view import WikiContentView
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import payload_uses_wiki

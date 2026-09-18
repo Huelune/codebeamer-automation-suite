@@ -7,8 +7,8 @@ import sys
 from collections.abc import Sequence
 from typing import TextIO
 
-from src.app_metadata import APPLICATION_NAME
 from src.app_metadata import APP_VERSION
+from src.app_metadata import APPLICATION_NAME
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
@@ -36,7 +36,8 @@ def _version_output_stream() -> TextIO | None:
     try:
         if not ctypes.windll.kernel32.AttachConsole(-1):
             return None
-        stream = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+        # sys.stdout 으로 넘겨 프로세스가 끝날 때까지 유지하므로 context manager 를 쓰지 않는다.
+        stream = open("CONOUT$", "w", encoding="utf-8", buffering=1)  # noqa: SIM115
     except (AttributeError, OSError):
         return None
 

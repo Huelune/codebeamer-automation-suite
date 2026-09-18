@@ -6,7 +6,6 @@ import pandas as pd
 
 from .models import TableFieldValue
 from .models import TrackerItemBase
-from .wizard_item_builder import DEFAULT_VALUE_COLUMN_LABEL
 from .wizard_item_builder import WizardItemBuilderService
 from .wizard_option_resolution import WizardOptionResolutionService
 from .wizard_update_payload import WizardUpdatePayloadService

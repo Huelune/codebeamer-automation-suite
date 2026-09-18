@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import replace
 from html import escape
-import json
 from typing import Any
-from typing import Callable
+
 
 try:
     from PySide6.QtCore import Qt
@@ -25,9 +26,9 @@ try:
     from PySide6.QtWidgets import QPlainTextEdit
     from PySide6.QtWidgets import QPushButton
     from PySide6.QtWidgets import QSplitter
-    from PySide6.QtWidgets import QTabWidget
     from PySide6.QtWidgets import QTableWidget
     from PySide6.QtWidgets import QTableWidgetItem
+    from PySide6.QtWidgets import QTabWidget
     from PySide6.QtWidgets import QTreeWidget
     from PySide6.QtWidgets import QTreeWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
@@ -35,51 +36,14 @@ try:
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
+import contextlib
+
 from src.diagnostics import DiagnosticSource
 
-from .settings_store import GuiSettings
 from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
-from .tracker_item_editor import EditableTrackerField
-from .tracker_item_editor import EditableTrackerSchema
-from .tracker_item_editor import TrackerItemEditorService
-from .tracker_item_editor import TrackerItemFieldChange
-from .tracker_item_editor import TrackerItemWriteError
-from .tracker_item_editor_dialog import TrackerItemEditorDialog
-from .tracker_item_detail_dialog import TrackerItemDetailDialog
-from .tracker_item_detail_session import TrackerItemDetailSession
-from .tracker_item_context_service import TrackerItemContextService
-from .tracker_comment_models import ItemCommentsSnapshot
-from .tracker_comment_service import TrackerCommentService
-from .tracker_item_editor_panel import ConfirmItemDeleteDialog
-from .tracker_item_editor_panel import TrackerItemEditorPanel
-from .tracker_item_create_dialog import TrackerItemCreateDialog
-from .tracker_item_create_dialog import TrackerItemCreateRequest
-from .tracker_bulk_update import BulkUpdateRunStore
-from .tracker_bulk_update import TrackerBulkUpdateService
-from .tracker_bulk_update_dialog import BulkUpdateProgressDialog
-from .tracker_bulk_update_dialog import BulkUpdateRequest
-from .tracker_bulk_update_dialog import TrackerBulkUpdateDialog
-from .tracker_condition_builder import TrackerConditionDialog
-from .tracker_query_models import PageResult
-from .tracker_query_models import ProjectSummary
-from .tracker_query_models import TrackerFieldValue
-from .tracker_query_models import TrackerItemContext
-from .tracker_query_models import TrackerItemDetail
-from .tracker_query_models import TrackerItemSummary
-from .tracker_query_models import TrackerQuery
-from .tracker_query_models import TrackerSearchMode
-from .tracker_query_models import TrackerQueryServiceError
-from .tracker_query_models import TrackerSummary
-from .tracker_query_service import TrackerQueryService
-from .tracker_content_models import AttachmentResource
-from .tracker_content_models import AttachmentSummary
-from .tracker_content_models import WikiRenderContext
-from .tracker_content_models import WikiRenderResult
-from .tracker_content_service import MAX_ITEM_INLINE_IMAGE_BYTES
-from .tracker_content_service import MAX_INLINE_IMAGE_BYTES
-from .tracker_content_service import TrackerContentService
+from .settings_store import GuiSettings
 from .tracker_baseline_compare import BaselineComparisonKind
 from .tracker_baseline_compare import BaselineComparisonResult
 from .tracker_baseline_compare import BaselineComparisonSource
@@ -88,22 +52,61 @@ from .tracker_baseline_export import BaselineExportError
 from .tracker_baseline_export import baseline_export_fields
 from .tracker_baseline_export import export_baseline_comparison_xlsx
 from .tracker_baseline_export_dialog import BaselineExportFieldDialog
+from .tracker_bulk_update import BulkUpdateRunStore
+from .tracker_bulk_update import TrackerBulkUpdateService
+from .tracker_bulk_update_dialog import BulkUpdateProgressDialog
+from .tracker_bulk_update_dialog import BulkUpdateRequest
+from .tracker_bulk_update_dialog import TrackerBulkUpdateDialog
+from .tracker_comment_models import ItemCommentsSnapshot
+from .tracker_comment_service import TrackerCommentService
+from .tracker_condition_builder import TrackerConditionDialog
+from .tracker_content_models import AttachmentResource
+from .tracker_content_models import AttachmentSummary
+from .tracker_content_models import WikiRenderContext
+from .tracker_content_models import WikiRenderResult
+from .tracker_content_service import MAX_INLINE_IMAGE_BYTES
+from .tracker_content_service import MAX_ITEM_INLINE_IMAGE_BYTES
+from .tracker_content_service import TrackerContentService
+from .tracker_hierarchy import TrackerHierarchySnapshot
 from .tracker_hierarchy_export import TrackerHierarchyExportError
 from .tracker_hierarchy_export import build_tracker_hierarchy_export_snapshot
 from .tracker_hierarchy_export import export_tracker_hierarchy_xlsx
 from .tracker_hierarchy_export import hierarchy_export_fields_from_schema
 from .tracker_hierarchy_export_dialog import TrackerHierarchyExportFieldDialog
-from .tracker_hierarchy import TrackerHierarchySnapshot
+from .tracker_item_context_service import TrackerItemContextService
+from .tracker_item_create_dialog import TrackerItemCreateDialog
+from .tracker_item_create_dialog import TrackerItemCreateRequest
+from .tracker_item_detail_dialog import TrackerItemDetailDialog
+from .tracker_item_detail_session import TrackerItemDetailSession
+from .tracker_item_editor import EditableTrackerField
+from .tracker_item_editor import EditableTrackerSchema
+from .tracker_item_editor import TrackerItemEditorService
+from .tracker_item_editor import TrackerItemFieldChange
+from .tracker_item_editor import TrackerItemWriteError
+from .tracker_item_editor_dialog import TrackerItemEditorDialog
+from .tracker_item_editor_panel import ConfirmItemDeleteDialog
+from .tracker_item_editor_panel import TrackerItemEditorPanel
+from .tracker_query_models import PageResult
+from .tracker_query_models import ProjectSummary
+from .tracker_query_models import TrackerFieldValue
+from .tracker_query_models import TrackerItemContext
+from .tracker_query_models import TrackerItemDetail
+from .tracker_query_models import TrackerItemSummary
+from .tracker_query_models import TrackerQuery
+from .tracker_query_models import TrackerQueryServiceError
+from .tracker_query_models import TrackerSearchMode
+from .tracker_query_models import TrackerSummary
+from .tracker_query_service import TrackerQueryService
 from .tracker_table_field_dialog import TrackerTableFieldDialog
 from .tracker_table_field_dialog import is_table_field
 from .tracker_table_field_dialog import table_field_summary
-from .worker import BackgroundTask
-from .worker import BulkUpdateWorker
+from .wiki_content_view import WikiContentDialog
+from .wiki_content_view import WikiContentView
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
 from .wiki_renderer import payload_uses_wiki
-from .wiki_content_view import WikiContentDialog
-from .wiki_content_view import WikiContentView
+from .worker import BackgroundTask
+from .worker import BulkUpdateWorker
 
 
 ITEM_SUMMARY_ROLE = int(Qt.ItemDataRole.UserRole) + 1
@@ -1392,10 +1395,8 @@ class TrackerWorkspacePage(QWidget):
     def _record_activity(self, record: ActivityRecord) -> None:
         if self.activity_recorder is None:
             return
-        try:
+        with contextlib.suppress(Exception):
             self.activity_recorder(record)
-        except Exception:
-            pass
 
     def _record_item_activity(
         self,
@@ -1542,23 +1543,11 @@ class TrackerWorkspacePage(QWidget):
     def _finish_request_busy(self, token: object | None) -> None:
         if token is None or not callable(self.busy_finished):
             return
-        try:
+        with contextlib.suppress(Exception):
             self.busy_finished(token)
-        except Exception:
-            pass
 
     def _show_error(self, exc: Exception, *, prefix: str = "") -> None:
-        if isinstance(
-            exc,
-            (
-                TrackerQueryServiceError,
-                TrackerItemWriteError,
-                BaselineExportError,
-                TrackerHierarchyExportError,
-            ),
-        ):
-            message = str(exc)
-        elif isinstance(exc, ValueError):
+        if isinstance(exc, (TrackerQueryServiceError, TrackerItemWriteError, BaselineExportError, TrackerHierarchyExportError, ValueError)):
             message = str(exc)
         else:
             message = "조회 중 예상하지 못한 오류가 발생했습니다."
@@ -4298,20 +4287,20 @@ class TrackerWorkspacePage(QWidget):
             if current():
                 dialog.set_context_error(kind, str(exc))
 
-        if kind == "relations":
-            operation = lambda: self.context_service.load_relations(
+        load_context = (
+            self.context_service.load_relations
+            if kind == "relations"
+            else self.context_service.load_history
+        )
+
+        def operation():
+            return load_context(
                 settings,
                 detail.item_id,
                 detail.version,
                 force=force,
             )
-        else:
-            operation = lambda: self.context_service.load_history(
-                settings,
-                detail.item_id,
-                detail.version,
-                force=force,
-            )
+
         self._submit(f"detail_dialog_{kind}", operation, loaded, failed)
 
     def _navigate_detail_dialog(
@@ -4898,10 +4887,8 @@ class TrackerWorkspacePage(QWidget):
         dialog = self._editor_dialog
         if dialog is None:
             return
-        try:
+        with contextlib.suppress(RuntimeError, TypeError):
             dialog.finished.disconnect(self._restore_editor_panel)
-        except (RuntimeError, TypeError):
-            pass
         panel = dialog.take_panel()
         if panel is not None:
             panel.setParent(self.editor_host)

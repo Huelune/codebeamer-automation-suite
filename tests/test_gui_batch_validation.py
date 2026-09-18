@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pandas as pd

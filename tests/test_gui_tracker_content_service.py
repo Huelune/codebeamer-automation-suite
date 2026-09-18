@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-import unittest
 
 from src.gui.tracker_content_models import AttachmentSummary
 from src.gui.tracker_content_models import WikiRenderContext
@@ -11,7 +11,7 @@ from src.gui.tracker_content_service import TrackerContentService
 
 
 class FakeContentClient:
-    instances: list["FakeContentClient"] = []
+    instances: list[FakeContentClient] = []
 
     def __init__(self, *args, **kwargs) -> None:
         del args, kwargs

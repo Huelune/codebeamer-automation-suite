@@ -73,7 +73,7 @@ class MappingSchemaMixin:
         reference_type = field.get("referenceType")
         has_options = bool(field.get("options"))
         value_model = field.get("valueModel")
-        tracker_item_field = field.get("trackerItemField", field.get("name", None))
+        tracker_item_field = field.get("trackerItemField", field.get("name"))
         payload_target_kind = cls._resolve_payload_target_kind(field)
 
         result = {

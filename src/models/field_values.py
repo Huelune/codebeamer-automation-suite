@@ -6,8 +6,8 @@ from typing import Any
 from typing import ClassVar
 
 from .common import DomainModel
-from .common import FieldValueType
 from .common import FieldInfo
+from .common import FieldValueType
 from .common import SchemaFieldType
 from .common import _as_list
 from .common import _coerce_bool
@@ -19,7 +19,7 @@ from .references import _build_reference
 
 @dataclass
 class AbstractFieldValue(DomainModel):
-    _REGISTRY: ClassVar[list[type["AbstractFieldValue"]]] = []
+    _REGISTRY: ClassVar[list[type[AbstractFieldValue]]] = []
     VALUE_MODEL_ALIASES: ClassVar[tuple[str, ...]] = ()
     FIELD_TYPE_ALIASES: ClassVar[tuple[str, ...]] = ()
 
@@ -60,12 +60,12 @@ class AbstractFieldValue(DomainModel):
         )
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "AbstractFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> AbstractFieldValue:
         """입력값을 현재 FieldValue 클래스 인스턴스로 바꾼다."""
         return cls(**cls._base_kwargs(field_info), type=cls.__name__)
 
     @classmethod
-    def resolve_class(cls, field_info: FieldInfo) -> type["AbstractFieldValue"]:
+    def resolve_class(cls, field_info: FieldInfo) -> type[AbstractFieldValue]:
         """field 정보에 맞는 구체 FieldValue 클래스를 선택한다."""
         for candidate in cls._REGISTRY:
             if candidate.matches(field_info):
@@ -104,7 +104,7 @@ class ChoiceFieldValue(AbstractFieldValue):
         return isinstance(value_model, str) and FieldValueType.CHOICE.value in value_model
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "ChoiceFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> ChoiceFieldValue:
         """입력값을 reference 목록으로 바꿔 선택형 필드 값 객체를 만든다."""
         reference_type = field_info.get("reference_type")
         values = [] if value is None else _as_list(value)
@@ -130,7 +130,7 @@ class TextFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "TextFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> TextFieldValue:
         """입력값을 문자열로 바꿔 텍스트 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -154,7 +154,7 @@ class ColorFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "ColorFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> ColorFieldValue:
         """입력값을 문자열로 보존해 색상 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -178,7 +178,7 @@ class CountryFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "CountryFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> CountryFieldValue:
         """입력값을 문자열로 보존해 국가 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -202,7 +202,7 @@ class LanguageFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "LanguageFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> LanguageFieldValue:
         """입력값을 문자열로 보존해 언어 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -226,7 +226,7 @@ class WikiTextFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "WikiTextFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> WikiTextFieldValue:
         """입력값을 문자열로 바꿔 위키 텍스트 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -250,15 +250,12 @@ class TableFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "TableFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> TableFieldValue:
         """입력값을 테이블 형태로 감싸 `TableFieldValue`로 만든다."""
         if isinstance(value, TableFieldValue):
             return value
 
-        if isinstance(value, list):
-            table_values = value
-        else:
-            table_values = [[value]]
+        table_values = value if isinstance(value, list) else [[value]]
 
         return cls(
             **cls._base_kwargs(field_info),
@@ -281,7 +278,7 @@ class BoolFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "BoolFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> BoolFieldValue:
         """입력값을 True/False로 바꿔 불린 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -305,7 +302,7 @@ class IntegerFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "IntegerFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> IntegerFieldValue:
         """입력값을 정수로 바꿔 정수 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -329,7 +326,7 @@ class DecimalFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "DecimalFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> DecimalFieldValue:
         """입력값을 소수로 바꿔 소수 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -353,7 +350,7 @@ class DurationFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "DurationFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> DurationFieldValue:
         """입력값을 정수 기간값으로 바꿔 기간 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -377,7 +374,7 @@ class DateFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "DateFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> DateFieldValue:
         """입력값을 문자열로 보존해 날짜 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -401,7 +398,7 @@ class UrlFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "UrlFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> UrlFieldValue:
         """입력값을 문자열로 바꿔 URL 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
@@ -422,7 +419,7 @@ class ScalarFieldValue(AbstractFieldValue):
         return data
 
     @classmethod
-    def from_value(cls, field_info: FieldInfo, value: Any) -> "ScalarFieldValue":
+    def from_value(cls, field_info: FieldInfo, value: Any) -> ScalarFieldValue:
         """입력값을 그대로 담는 일반용 필드 값 객체를 만든다."""
         value_model = field_info.get("value_model") or FieldValueType.TEXT.value
         return cls(

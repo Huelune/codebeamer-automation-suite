@@ -12,7 +12,6 @@ from src.models import OptionMapKind
 from src.models import OptionSourceStatus
 from src.models import PayloadTargetKind
 from src.models import PreconstructionKind
-from src.models import ReferenceType
 from src.models import ResolvedFieldKind
 from src.models import UserLookupStatus
 

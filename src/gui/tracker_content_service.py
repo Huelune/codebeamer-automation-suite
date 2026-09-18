@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from hashlib import sha256
+import contextlib
 import os
-from pathlib import Path
 import tempfile
+from hashlib import sha256
+from pathlib import Path
 from typing import Any
+
+from src.codebeamer_client import CodebeamerClient
 
 from .service_core import _build_gui_client
 from .tracker_content_models import AttachmentResource
@@ -13,7 +16,6 @@ from .tracker_content_models import WikiRenderContext
 from .tracker_content_models import WikiRenderResult
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import sanitize_server_wiki_html
-from src.codebeamer_client import CodebeamerClient
 
 
 MAX_INLINE_IMAGE_BYTES = 10 * 1024 * 1024
@@ -279,10 +281,8 @@ class TrackerContentService:
             return len(resource.data)
         finally:
             if temporary_path:
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(temporary_path)
-                except OSError:
-                    pass
 
 
 __all__ = [

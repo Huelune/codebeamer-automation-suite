@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace
 
+
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QAbstractItemView

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -12,11 +13,11 @@ import pandas as pd
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QWidget
 
-from src.gui.developer_tool_panels import PayloadToolPanel
+from src.gui.developer_tool_panels import PAYLOAD_TABLE_ROW_LIMIT
 from src.gui.developer_tool_panels import ExcelToolPanel
+from src.gui.developer_tool_panels import PayloadToolPanel
 from src.gui.developer_tool_panels import ReadOnlyQueryToolPanel
 from src.gui.developer_tool_panels import SchemaCacheToolPanel
-from src.gui.developer_tool_panels import PAYLOAD_TABLE_ROW_LIMIT
 
 
 class DeveloperToolPanelsTest(unittest.TestCase):

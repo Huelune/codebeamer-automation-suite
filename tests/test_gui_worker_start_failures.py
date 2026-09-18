@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -90,9 +90,11 @@ class GuiWorkerStartFailureTest(unittest.TestCase):
         harness = _BusyHarness()
         task = _FailingTask()
 
-        with patch("src.gui.window_shell.BackgroundTask", return_value=task):
-            with self.assertRaisesRegex(RuntimeError, "thread start failed"):
-                harness._run_with_busy("조회 중", lambda: None)
+        with (
+            patch("src.gui.window_shell.BackgroundTask", return_value=task),
+            self.assertRaisesRegex(RuntimeError, "thread start failed"),
+        ):
+            harness._run_with_busy("조회 중", lambda: None)
 
         self.assertEqual(harness.busy_events, [(True, "조회 중"), (False, "")])
         self.assertTrue(task.waited)

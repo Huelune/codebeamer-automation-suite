@@ -1,17 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import replace
 from typing import Any
-from typing import Callable
+
 
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QDoubleValidator
     from PySide6.QtGui import QIntValidator
     from PySide6.QtWidgets import QAbstractItemView
-    from PySide6.QtWidgets import QCheckBox
     from PySide6.QtWidgets import QComboBox
     from PySide6.QtWidgets import QDialog
     from PySide6.QtWidgets import QHBoxLayout
@@ -75,9 +75,7 @@ class TrackerTableFieldInput(QWidget):
         return deepcopy(self._value)
 
     def open_editor(self) -> None:
-        from .tracker_table_field_editor_dialog import (
-            TrackerTableFieldEditorDialog,
-        )
+        from .tracker_table_field_editor_dialog import TrackerTableFieldEditorDialog
 
         dialog_field = replace(
             self.field_value,

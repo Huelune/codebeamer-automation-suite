@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-from typing import Iterable
 
 from .tracker_query_models import TrackerItemSummary
 
@@ -60,9 +60,7 @@ def build_tracker_hierarchy(
                 "전체 조회 결과는 있지만 최상위 아이템을 확인할 수 없습니다."
             )
 
-    parent_by_id: dict[int, int | None] = {
-        root_id: None for root_id in ordered_root_ids
-    }
+    parent_by_id: dict[int, int | None] = dict.fromkeys(ordered_root_ids)
     explicit_child_order: dict[int, list[int]] = {}
 
     def assign_parent(child_id: int, parent_id: int, *, source: str) -> None:

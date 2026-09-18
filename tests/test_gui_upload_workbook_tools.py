@@ -212,9 +212,11 @@ class UploadWorkbookServiceTest(unittest.TestCase):
 
     def test_tracker_template_rejects_unsupported_output_extension(self) -> None:
         schema_df = pd.DataFrame([{"field_name": "Summary", "is_supported": True}])
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(DeveloperExcelToolError, ".xlsx"):
-                self.service.export_tracker_template(schema_df, Path(temp_dir) / "template.xls")
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            self.assertRaisesRegex(DeveloperExcelToolError, ".xlsx"),
+        ):
+            self.service.export_tracker_template(schema_df, Path(temp_dir) / "template.xls")
 
     def test_failed_upload_report_uses_whitelist_and_redacts_sensitive_values(self) -> None:
         failed_df = pd.DataFrame(

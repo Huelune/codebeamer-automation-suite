@@ -12,7 +12,7 @@ GUI_THEME_LABELS = {
     "kefico": "케피코",
     "igloo": "이글루",
 }
-GUI_THEME_CHOICES = [(key, label) for key, label in GUI_THEME_LABELS.items()]
+GUI_THEME_CHOICES = list(GUI_THEME_LABELS.items())
 
 _BASE_GUI_STYLESHEET = """
 QMainWindow {

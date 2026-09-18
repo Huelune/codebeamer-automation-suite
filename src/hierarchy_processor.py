@@ -22,9 +22,7 @@ class HierarchyProcessor:
             return True
         if isinstance(value, float) and pd.isna(value):
             return True
-        if isinstance(value, str) and value.strip() == "":
-            return True
-        return False
+        return isinstance(value, str) and value.strip() == ""
 
     @classmethod
     def normalize_scalar(cls, value: Any) -> Any:
@@ -123,7 +121,7 @@ class HierarchyProcessor:
         keep_cols = [
             column
             for column in work.columns
-            if column not in [self.summary_col, "_group", UPLOAD_RECORD_KEY_COLUMN] + list_cols
+            if column not in [self.summary_col, "_group", UPLOAD_RECORD_KEY_COLUMN, *list_cols]
         ]
         merged_rows = []
 
@@ -220,4 +218,4 @@ class HierarchyProcessor:
         return self._normalize_dataframe_values(work)
 
 
-__all__ = ["HierarchyProcessor", "UPLOAD_RECORD_KEY_COLUMN"]
+__all__ = ["UPLOAD_RECORD_KEY_COLUMN", "HierarchyProcessor"]

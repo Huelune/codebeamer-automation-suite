@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -10,10 +10,14 @@ SOURCE_ROOT = REPOSITORY_ROOT / "src"
 
 
 class ImportBoundaryTest(unittest.TestCase):
-    def test_source_modules_do_not_use_star_imports(self) -> None:
+    def test_source_and_test_modules_do_not_use_star_imports(self) -> None:
         violations: list[str] = []
 
-        for source_path in SOURCE_ROOT.rglob("*.py"):
+        scanned_paths = [
+            *SOURCE_ROOT.rglob("*.py"),
+            *(REPOSITORY_ROOT / "tests").rglob("*.py"),
+        ]
+        for source_path in scanned_paths:
             tree = ast.parse(source_path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom) and any(alias.name == "*" for alias in node.names):
@@ -33,14 +37,19 @@ class ImportBoundaryTest(unittest.TestCase):
             [],
         )
 
-    def test_gui_page_facades_preserve_public_factories(self) -> None:
-        from src.gui.page_execution import create_mapping_page
-        from src.gui.page_execution_mapping import create_mapping_page as mapping_factory
-        from src.gui.page_setup import create_settings_page
-        from src.gui.page_setup_settings import create_settings_page as settings_factory
+    def test_pure_reexport_facades_are_removed(self) -> None:
+        """재내보내기만 하던 GUI 파사드는 제거하고 정의 모듈을 직접 import한다."""
+        removed_modules = [
+            SOURCE_ROOT / "gui" / "pages.py",
+            SOURCE_ROOT / "gui" / "services.py",
+            SOURCE_ROOT / "gui" / "page_execution.py",
+            SOURCE_ROOT / "gui" / "page_setup.py",
+        ]
 
-        self.assertIs(create_mapping_page, mapping_factory)
-        self.assertIs(create_settings_page, settings_factory)
+        self.assertEqual(
+            [path.relative_to(REPOSITORY_ROOT) for path in removed_modules if path.exists()],
+            [],
+        )
 
 
 if __name__ == "__main__":

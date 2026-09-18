@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 from copy import deepcopy
+from datetime import UTC
 from datetime import datetime
-from datetime import timezone
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -27,11 +28,10 @@ from src.api_monitor import API_MONITOR_DEFAULT_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MAX_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MIN_SLOW_THRESHOLD_MS
 
-from .settings_store import AppSettings
-from .settings_store import ConnectionProfile
 from .settings_store import CREDENTIAL_STORAGE_LOCAL
 from .settings_store import CREDENTIAL_STORAGE_NONE
 from .settings_store import CREDENTIAL_STORAGE_OS
+from .settings_store import ConnectionProfile
 from .settings_store import GuiSettings
 from .settings_store import GuiSettingsStore
 from .settings_store import effective_gui_settings
@@ -984,7 +984,7 @@ class SettingsCenterPage(QWidget):
         self._finish_validation_task()
 
     def _record_validation_success(self) -> None:
-        validated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        validated_at = datetime.now(UTC).isoformat(timespec="seconds")
         if self.draft_settings.offline_mode:
             self.draft_settings.test_mode_validated_signature = (
                 test_mode_validation_signature(self.draft_settings)
@@ -1006,10 +1006,8 @@ class SettingsCenterPage(QWidget):
         busy_token = self._validation_busy_token
         self._validation_busy_token = None
         if busy_token is not None and callable(self.busy_finished):
-            try:
+            with contextlib.suppress(Exception):
                 self.busy_finished(busy_token)
-            except Exception:
-                pass
         if task is not None:
             task.deleteLater()
         self._refresh_validation_controls()

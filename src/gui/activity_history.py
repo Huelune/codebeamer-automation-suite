@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import json
+import threading
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
 from enum import Enum
-import json
 from pathlib import Path
-import threading
 from typing import Any
 from uuid import uuid4
 
@@ -157,7 +157,7 @@ class ActivityRecord:
         details: dict[str, Any] | None = None,
         occurred_at: str | None = None,
         record_id: str | None = None,
-    ) -> "ActivityRecord":
+    ) -> ActivityRecord:
         return cls(
             record_id=_bounded_text(record_id or uuid4().hex, limit=64),
             occurred_at=_bounded_text(
@@ -180,7 +180,7 @@ class ActivityRecord:
         )
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "ActivityRecord":
+    def from_payload(cls, payload: dict[str, Any]) -> ActivityRecord:
         if not isinstance(payload, dict):
             raise ValueError("실행 기록 항목은 객체여야 합니다.")
         return cls.create(
@@ -345,12 +345,12 @@ __all__ = [
     "ACTIVITY_HISTORY_VERSION",
     "ACTIVITY_OPERATION_LABELS",
     "ACTIVITY_RESULT_LABELS",
+    "DEFAULT_ACTIVITY_HISTORY_LIMIT",
     "ActivityHistoryError",
     "ActivityHistoryStore",
     "ActivityOperation",
     "ActivityRecord",
     "ActivityResult",
-    "DEFAULT_ACTIVITY_HISTORY_LIMIT",
     "default_activity_history_path",
     "sanitize_activity_details",
 ]

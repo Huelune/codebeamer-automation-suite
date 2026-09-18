@@ -8,30 +8,30 @@ from types import SimpleNamespace
 
 import pandas as pd
 
-from src.gui.pages import _project_selection_refresh_button_text
-from src.gui.pages import _project_selection_source_signature
-from src.gui.pages import _project_selection_status_text
-from src.gui.pages import _settings_mode_description
-from src.gui.pages import _settings_mode_toggle_text
-from src.gui.pages import _build_tracker_item_regex_preview_text
-from src.gui.pages import _configure_constrained_panel
-from src.gui.pages import _tracker_item_sample_values
-from src.gui.pages import FileSelectionPage
-from src.gui.pages import MappingPage
-from src.gui.pages import RootItemPage
-from src.gui.pages import UploadPage
-from src.gui.pages import create_file_selection_page
-from src.gui.pages import create_mapping_page
-from src.gui.pages import create_result_page
-from src.gui.pages import create_root_item_page
-from src.gui.pages import create_upload_page
-from src.gui.pages import create_validation_page
 from src.gui.page_batch_settings import create_batch_settings_page
+from src.gui.page_common import _build_tracker_item_regex_preview_text
+from src.gui.page_common import _configure_constrained_panel
+from src.gui.page_common import _project_selection_refresh_button_text
+from src.gui.page_common import _project_selection_source_signature
+from src.gui.page_common import _project_selection_status_text
+from src.gui.page_common import _settings_mode_description
+from src.gui.page_common import _settings_mode_toggle_text
+from src.gui.page_common import _tracker_item_sample_values
+from src.gui.page_execution_mapping import MappingPage
+from src.gui.page_execution_mapping import create_mapping_page
+from src.gui.page_execution_run import UploadPage
+from src.gui.page_execution_run import create_result_page
+from src.gui.page_execution_run import create_upload_page
+from src.gui.page_execution_run import create_validation_page
+from src.gui.page_setup_file import FileSelectionPage
+from src.gui.page_setup_file import RootItemPage
+from src.gui.page_setup_file import create_file_selection_page
+from src.gui.page_setup_file import create_root_item_page
+from src.gui.service_core import FileSignature
+from src.gui.service_core import PreviewData
+from src.gui.service_core import SheetPreviewData
+from src.gui.service_core import WorkbookMetadata
 from src.gui.settings_store import GuiSettings
-from src.gui.services import FileSignature
-from src.gui.services import PreviewData
-from src.gui.services import SheetPreviewData
-from src.gui.services import WorkbookMetadata
 from src.gui.styles import build_gui_stylesheet
 
 

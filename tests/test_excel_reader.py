@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from copy import copy
 import tempfile
 import unittest
+from copy import copy
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch

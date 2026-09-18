@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QAbstractItemView
@@ -326,11 +327,8 @@ class TrackerTableFieldEditorDialog(QDialog):
                     cell is None and row_index == initialize_missing_row,
                 )
                 self._connect_widget_dirty_signal(widget)
-                if _is_wiki_column(column):
-                    if isinstance(widget, QPlainTextEdit):
-                        widget.textChanged.connect(self._refresh_wiki_preview)
-                    elif isinstance(widget, QLineEdit):
-                        widget.textChanged.connect(self._refresh_wiki_preview)
+                if _is_wiki_column(column) and isinstance(widget, (QPlainTextEdit, QLineEdit)):
+                    widget.textChanged.connect(self._refresh_wiki_preview)
         for row_index, height in enumerate(previous_heights[: len(self.rows)]):
             self.table.setRowHeight(row_index, height)
         if self.rows:
@@ -353,9 +351,7 @@ class TrackerTableFieldEditorDialog(QDialog):
             del args
             self._mark_widget_dirty(widget)
 
-        if isinstance(widget, QLineEdit):
-            widget.textChanged.connect(mark_dirty)
-        elif isinstance(widget, QPlainTextEdit):
+        if isinstance(widget, (QLineEdit, QPlainTextEdit)):
             widget.textChanged.connect(mark_dirty)
         elif isinstance(widget, QComboBox):
             widget.currentIndexChanged.connect(mark_dirty)

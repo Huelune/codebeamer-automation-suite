@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from typing import Any
 
 
@@ -36,7 +37,7 @@ class ItemRelationSummary:
     external_url: str = ""
 
     @classmethod
-    def from_raw(cls, group: str, raw: dict[str, Any]) -> "ItemRelationSummary":
+    def from_raw(cls, group: str, raw: dict[str, Any]) -> ItemRelationSummary:
         revision = raw.get("itemRevision")
         if not isinstance(revision, dict):
             revision = raw.get("item") if isinstance(raw.get("item"), dict) else {}
@@ -66,7 +67,7 @@ class ItemRelationsSnapshot:
     outgoing_associations: tuple[ItemRelationSummary, ...] = field(default_factory=tuple)
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any]) -> "ItemRelationsSnapshot":
+    def from_raw(cls, raw: dict[str, Any]) -> ItemRelationsSnapshot:
         def values(key: str) -> tuple[ItemRelationSummary, ...]:
             candidates = raw.get(key)
             if not isinstance(candidates, list):
@@ -97,7 +98,7 @@ class ItemHistoryEntry:
     change_summary: str = ""
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any]) -> "ItemHistoryEntry":
+    def from_raw(cls, raw: dict[str, Any]) -> ItemHistoryEntry:
         revision = raw.get("itemRevision")
         if not isinstance(revision, dict):
             revision = raw
@@ -118,7 +119,7 @@ class ItemHistorySnapshot:
     current_version: int | None = None
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any] | list[Any], *, current_version: int | None = None) -> "ItemHistorySnapshot":
+    def from_raw(cls, raw: dict[str, Any] | list[Any], *, current_version: int | None = None) -> ItemHistorySnapshot:
         if isinstance(raw, list):
             candidates = raw
         elif isinstance(raw, dict):

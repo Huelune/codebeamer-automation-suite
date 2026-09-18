@@ -13,6 +13,9 @@
 - 기본은 ASCII를 사용하고, 파일이 이미 한글을 쓰거나 한글이 더 적절한 경우에만 비ASCII를 추가한다.
 - 파일 검색은 `rg`, 파일 생성/수정은 `apply_patch`를 우선 사용한다.
 - 사용자가 만든 관련 없는 변경은 절대 되돌리지 않는다.
+- lint와 type check 설정은 `pyproject.toml`이 단일 출처다. 규칙을 끄는 대신 위반을 정리하는 방향을 우선한다.
+- mypy 제외 목록(`[[tool.mypy.overrides]]`)은 점진 도입용 백로그다. 모듈을 정리하면 목록에서 지우고, 새 모듈을 추가하지 않는다.
+- 재내보내기만 하는 모듈을 새로 만들지 않는다. 소비자는 정의 모듈에서 직접 import 한다.
 
 ## Git 및 커밋 규칙
 - 커밋 메시지는 반드시 Conventional Commits 형식을 따른다.
@@ -60,6 +63,9 @@
 - 테스트 편의를 위해서도 실제 사용자/조직 식별자가 들어간 fixture를 새로 추가하지 않는다.
 
 ## 테스트 및 검증
+- 개발 환경은 저장소 루트 `.venv`를 사용한다. 준비 명령은 README의 `빠른 시작`에 있다.
+- 커밋 전에 `ruff check .`, `mypy`, `unittest discover -s tests -q`를 실행한다. CI의 `Lint and type check`, `Regression tests` job이 같은 명령을 쓴다.
+- GUI 테스트는 `QT_QPA_PLATFORM=offscreen`으로 실행한다.
 - 변경 범위에 맞는 테스트를 직접 실행하고 결과를 함께 보고한다.
 - GUI 레이아웃이나 상태 로직을 바꿀 때는 관련 GUI 테스트를 최소한 한 번은 돌린다.
 - 업로드/매핑/lookup 로직을 바꿀 때는 기존 회귀 테스트가 깨지지 않는지 우선 확인한다.

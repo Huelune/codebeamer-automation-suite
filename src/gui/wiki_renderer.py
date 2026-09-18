@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from html import escape
-from html.parser import HTMLParser
+import re
 from dataclasses import dataclass
 from hashlib import sha256
-import re
+from html import escape
+from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urljoin
 from urllib.parse import urlparse

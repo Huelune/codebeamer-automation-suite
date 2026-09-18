@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from copy import deepcopy
+from pathlib import Path
 
 from src.gui.settings_store import GuiSettings
 from src.gui.tracker_bulk_update import BulkFieldChange
 from src.gui.tracker_bulk_update import BulkUpdateRunStore
 from src.gui.tracker_bulk_update import TrackerBulkUpdateService
 from src.gui.tracker_bulk_update import build_bulk_field_values
-from src.gui.tracker_item_editor import build_create_tracker_schema
 from src.gui.tracker_bulk_update_dialog import TrackerBulkUpdateDialog
+from src.gui.tracker_item_editor import build_create_tracker_schema
 
 
 SCHEMA = {
@@ -133,12 +133,11 @@ class TrackerBulkUpdateTest(unittest.TestCase):
 
     def test_mandatory_and_status_fields_cannot_be_cleared(self) -> None:
         for field_id in (3, 7):
-            with self.subTest(field_id=field_id):
-                with self.assertRaisesRegex(ValueError, "값 비우기"):
-                    build_bulk_field_values(
-                        self.schema,
-                        (BulkFieldChange(self.field(field_id), clear=True),),
-                    )
+            with self.subTest(field_id=field_id), self.assertRaisesRegex(ValueError, "값 비우기"):
+                build_bulk_field_values(
+                    self.schema,
+                    (BulkFieldChange(self.field(field_id), clear=True),),
+                )
 
     def test_service_chunks_without_total_limit(self) -> None:
         result = self.service.execute(

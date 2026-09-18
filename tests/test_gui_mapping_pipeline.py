@@ -1,6 +1,24 @@
 from __future__ import annotations
 
-from tests.gui_service_fixtures import *
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from openpyxl import Workbook
+
+from src.gui.service_core import GuiExcelService
+from src.gui.settings_store import GuiSettings
+from src.gui.upload_service import GuiUploadPipelineService
+from src.models import PayloadStatus
+from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
+from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
+from tests.gui_service_fixtures import CountingGuiExcelService
+from tests.gui_service_fixtures import FakeClient
+from tests.gui_service_fixtures import FakeExcelReader
+from tests.gui_service_fixtures import UpdateModeFakeClient
+from tests.gui_service_fixtures import UpsertModeFakeClient
+
 
 class GuiMappingPipelineServiceTest(unittest.TestCase):
     def test_prepare_mapping_context_builds_upload_columns_and_default_mapping(self) -> None:

@@ -1,6 +1,20 @@
 from __future__ import annotations
 
-from tests.gui_service_fixtures import *
+import tempfile
+import unittest
+from pathlib import Path
+
+from openpyxl import Workbook
+
+from src.gui.root_item_service import ROOT_ITEM_MODE_GROUP_BY_COLUMN
+from src.gui.root_item_service import ROOT_SOURCE_GROUP_VALUE
+from src.gui.service_core import GuiExcelService
+from src.gui.settings_store import GuiSettings
+from src.gui.upload_service import GuiUploadPipelineService
+from tests.gui_service_fixtures import FakeClient
+from tests.gui_service_fixtures import FakeExcelReader
+from tests.gui_service_fixtures import TrackerItemQueryFakeClient
+
 
 class GuiRootItemPipelineServiceTest(unittest.TestCase):
     def test_build_root_item_preview_context_parses_named_groups(self) -> None:

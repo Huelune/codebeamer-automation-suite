@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from typing import Any
 
 from .tracker_content_models import AttachmentSummary
@@ -37,7 +38,7 @@ class ItemComment:
     attachments: tuple[AttachmentSummary, ...] = field(default_factory=tuple)
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any]) -> "ItemComment":
+    def from_raw(cls, raw: dict[str, Any]) -> ItemComment:
         raw_id = raw.get("id") or raw.get("commentId")
         attachments: list[AttachmentSummary] = []
         raw_attachments = raw.get("attachments")
@@ -81,7 +82,7 @@ class ItemCommentsSnapshot:
     comments: tuple[ItemComment, ...] = field(default_factory=tuple)
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any] | list[Any]) -> "ItemCommentsSnapshot":
+    def from_raw(cls, raw: dict[str, Any] | list[Any]) -> ItemCommentsSnapshot:
         if isinstance(raw, list):
             candidates = raw
         elif isinstance(raw, dict):

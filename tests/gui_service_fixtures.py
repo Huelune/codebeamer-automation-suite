@@ -1,23 +1,8 @@
 from __future__ import annotations
 
-import json
-import tempfile
-import unittest
-from pathlib import Path
-
-from openpyxl import Workbook
 import pandas as pd
 
-from src.gui.services import GuiCodebeamerService
-from src.gui.services import GuiExcelService
-from src.gui.services import GuiUploadPipelineService
-from src.gui.services import ROOT_ITEM_MODE_GROUP_BY_COLUMN
-from src.gui.services import ROOT_SOURCE_GROUP_VALUE
-from src.gui.settings_store import GuiSettings
-from src.gui.settings_store import GUI_UPLOAD_MODE_UPSERT
-from src.gui.settings_store import GUI_UPLOAD_MODE_UPDATE
-from src.models import MappingStatus
-from src.models import PayloadStatus
+from src.gui.service_core import GuiExcelService
 
 
 class FakeExcelReader:
@@ -82,7 +67,6 @@ class FakeExcelReader:
             ws = wb[sheet_name]
             rows = list(ws.iter_rows(values_only=True))
             headers = self.read_headers(file_path, sheet_name)
-            summary_index = headers.index(self.summary_col)
             records = []
             for excel_row, values in enumerate(rows[self.header_row:], start=self.header_row + 1):
                 normalized = list(values)
@@ -90,7 +74,7 @@ class FakeExcelReader:
                     continue
                 record = {header: normalized[index] if index < len(normalized) else None for index, header in enumerate(headers)}
                 record["_excel_row"] = excel_row
-                record["_summary_indent"] = 0 if normalized[summary_index] is not None else 0
+                record["_summary_indent"] = 0
                 records.append(record)
             return pd.DataFrame(records, dtype=object)
         finally:

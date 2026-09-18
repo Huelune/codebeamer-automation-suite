@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -24,9 +25,7 @@ class ExcelReader:
             return True
         if isinstance(value, float) and pd.isna(value):
             return True
-        if isinstance(value, str) and value.strip() == "":
-            return True
-        return False
+        return isinstance(value, str) and value.strip() == ""
 
     @staticmethod
     def _normalize_headers(headers: list[Any]) -> list[str]:
@@ -82,9 +81,8 @@ class ExcelReader:
     def _normalize_cell_value(cls, value: Any) -> Any:
         if value is None:
             return None
-        if isinstance(value, float):
-            if pd.isna(value):
-                return None
+        if isinstance(value, float) and pd.isna(value):
+            return None
         return value
 
     @classmethod
@@ -156,10 +154,8 @@ class ExcelReader:
             return [sheet.name for sheet in workbook.sheets]
         finally:
             if workbook is not None:
-                try:
+                with contextlib.suppress(Exception):
                     workbook.close()
-                except Exception:
-                    pass
             app.quit()
 
     def _xlwings_headers(self, file_path: str, sheet_name: str | int) -> list[str]:
@@ -187,10 +183,8 @@ class ExcelReader:
             return self._normalize_headers(rows[0] if rows else [])
         finally:
             if workbook is not None:
-                try:
+                with contextlib.suppress(Exception):
                     workbook.close()
-                except Exception:
-                    pass
             app.quit()
 
     def list_sheet_names(self, file_path: str) -> list[str]:
@@ -342,10 +336,8 @@ class ExcelReader:
             return headers, rows
         finally:
             if workbook is not None:
-                try:
+                with contextlib.suppress(Exception):
                     workbook.close()
-                except Exception:
-                    pass
             app.quit()
 
     def count_upload_rows(self, file_path: str, sheet_name: str | int) -> int:
@@ -443,7 +435,7 @@ class ExcelReader:
                     summary_value = normalized_row[summary_col_index]
                     indent_level = self._resolve_indent_level(summary_cell, summary_value)
 
-                    record = dict(zip(headers, normalized_row))
+                    record = dict(zip(headers, normalized_row, strict=False))
                     record["_excel_row"] = excel_row
                     record["_summary_indent"] = indent_level
                     records.append(record)
@@ -507,7 +499,7 @@ class ExcelReader:
                 summary_value = normalized_row[summary_col_idx_1based - 1]
                 indent_level = self._resolve_indent_level(summary_cell, summary_value)
 
-                record = dict(zip(headers, normalized_row))
+                record = dict(zip(headers, normalized_row, strict=False))
                 record["_excel_row"] = excel_row
                 record["_summary_indent"] = indent_level
                 records.append(record)
@@ -515,8 +507,6 @@ class ExcelReader:
             return self._normalize_dataframe_values(pd.DataFrame(records, dtype=object))
         finally:
             if workbook is not None:
-                try:
+                with contextlib.suppress(Exception):
                     workbook.close()
-                except Exception:
-                    pass
             app.quit()

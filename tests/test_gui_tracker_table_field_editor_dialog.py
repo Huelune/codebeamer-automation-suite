@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import replace
 import os
 import unittest
+from dataclasses import replace
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,9 +16,7 @@ from PySide6.QtWidgets import QPlainTextEdit
 from src.gui.tracker_item_editor import EditableFieldOption
 from src.gui.tracker_item_editor import EditableTrackerField
 from src.gui.tracker_item_editor import FieldEditorKind
-from src.gui.tracker_table_field_editor_dialog import (
-    TrackerTableFieldEditorDialog,
-)
+from src.gui.tracker_table_field_editor_dialog import TrackerTableFieldEditorDialog
 
 
 def _column(

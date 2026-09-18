@@ -1,24 +1,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from src.mapping_service import MappingService
-from src.upload_policy import DEFAULT_TRACKER_ITEM_ID_REGEX
 from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
 from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
 from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
-from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
-from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
-
-from .services import ROOT_ASSIGNMENT_MODE_FILE_SOURCE
-from .services import ROOT_ASSIGNMENT_MODE_FIXED_VALUE
-from .services import ROOT_ITEM_MODE_FILE
-from .services import ROOT_ITEM_MODE_GROUP_BY_COLUMN
-from .services import gui_display_text
-from .styles import GUI_THEME_CHOICES
-from .styles import normalize_gui_theme_name
 
 
 USER_HIDDEN_TABLE_COLUMNS = {
@@ -62,9 +50,7 @@ def _is_hidden_user_table_column(column_name: object) -> bool:
         return True
     if text.startswith("_"):
         return True
-    if "__" in text:
-        return True
-    return False
+    return "__" in text
 
 
 def _settings_mode_toggle_text(is_offline: bool) -> str:
@@ -205,8 +191,8 @@ def _require_qt():
         from PySide6.QtWidgets import QComboBox
         from PySide6.QtWidgets import QDoubleSpinBox
         from PySide6.QtWidgets import QFileDialog
-        from PySide6.QtWidgets import QFrame
         from PySide6.QtWidgets import QFormLayout
+        from PySide6.QtWidgets import QFrame
         from PySide6.QtWidgets import QHBoxLayout
         from PySide6.QtWidgets import QHeaderView
         from PySide6.QtWidgets import QLabel
@@ -216,9 +202,9 @@ def _require_qt():
         from PySide6.QtWidgets import QPushButton
         from PySide6.QtWidgets import QSizePolicy
         from PySide6.QtWidgets import QSpinBox
-        from PySide6.QtWidgets import QTabWidget
         from PySide6.QtWidgets import QTableWidget
         from PySide6.QtWidgets import QTableWidgetItem
+        from PySide6.QtWidgets import QTabWidget
         from PySide6.QtWidgets import QToolButton
         from PySide6.QtWidgets import QVBoxLayout
         from PySide6.QtWidgets import QWidget

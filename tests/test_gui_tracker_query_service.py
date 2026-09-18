@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from src.gui.settings_store import GuiSettings
 from src.gui.tracker_query_models import TrackerQuery

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
 from enum import Enum
-import re
 from typing import Any
-from typing import Generic
-from typing import Iterable
-from typing import TypeVar
 
 
 DEFAULT_TRACKER_QUERY_PAGE_SIZE = 100
@@ -297,7 +295,7 @@ class TrackerItemReferenceSummary:
     name: str
 
     @classmethod
-    def from_raw(cls, value: Any) -> "TrackerItemReferenceSummary | None":
+    def from_raw(cls, value: Any) -> TrackerItemReferenceSummary | None:
         if not isinstance(value, dict):
             return None
         item_id = _optional_int(value.get("id"))
@@ -316,7 +314,7 @@ class ProjectSummary:
     raw_reference: dict[str, Any] = field(default_factory=dict, compare=False)
 
     @classmethod
-    def from_raw(cls, value: dict[str, Any]) -> "ProjectSummary":
+    def from_raw(cls, value: dict[str, Any]) -> ProjectSummary:
         if not isinstance(value, dict):
             raise ValueError("프로젝트 응답은 객체여야 합니다.")
         project_id = _positive_int(value.get("id"), label="프로젝트 ID")
@@ -343,7 +341,7 @@ class TrackerSummary:
         *,
         project_id: int | None = None,
         project_name: str = "",
-    ) -> "TrackerSummary":
+    ) -> TrackerSummary:
         if not isinstance(value, dict):
             raise ValueError("트래커 응답은 객체여야 합니다.")
         tracker_id = _positive_int(value.get("id"), label="트래커 ID")
@@ -391,7 +389,7 @@ class TrackerItemSummary:
         tracker_name: str = "",
         project_id: int | None = None,
         project_name: str = "",
-    ) -> "TrackerItemSummary":
+    ) -> TrackerItemSummary:
         if not isinstance(value, dict):
             raise ValueError("트래커 아이템 응답은 객체여야 합니다.")
         item_id = _positive_int(value.get("id"), label="아이템 ID")
@@ -456,7 +454,7 @@ class TrackerFieldValue:
     raw_value: dict[str, Any] = field(default_factory=dict, compare=False)
 
     @classmethod
-    def from_raw(cls, value: dict[str, Any]) -> "TrackerFieldValue":
+    def from_raw(cls, value: dict[str, Any]) -> TrackerFieldValue:
         raw_value = value.get("value")
         if "values" in value:
             raw_value = value.get("values")
@@ -538,7 +536,7 @@ class TrackerItemDetail:
         value: dict[str, Any],
         *,
         tracker_payload: dict[str, Any] | None = None,
-    ) -> "TrackerItemDetail":
+    ) -> TrackerItemDetail:
         if not isinstance(value, dict):
             raise ValueError("아이템 상세 응답은 객체여야 합니다.")
         tracker_payload = tracker_payload if isinstance(tracker_payload, dict) else {}
@@ -631,11 +629,8 @@ class TrackerItemContext:
     project_name: str = ""
 
 
-ItemT = TypeVar("ItemT")
-
-
 @dataclass(frozen=True)
-class PageResult(Generic[ItemT]):
+class PageResult[ItemT]:
     items: tuple[ItemT, ...]
     page: int
     page_size: int
@@ -671,7 +666,7 @@ class PageResult(Generic[ItemT]):
         raw_page: Any,
         requested_page: int,
         requested_page_size: int,
-    ) -> "PageResult[ItemT]":
+    ) -> PageResult[ItemT]:
         normalized_items = tuple(items)
         payload = raw_page if isinstance(raw_page, dict) else {}
         page = _optional_int(payload.get("page")) or int(requested_page)
@@ -699,8 +694,8 @@ class PageResult(Generic[ItemT]):
 
 __all__ = [
     "DEFAULT_TRACKER_QUERY_PAGE_SIZE",
-    "LoadState",
     "MAX_TRACKER_QUERY_PAGE_SIZE",
+    "LoadState",
     "PageResult",
     "ProjectSummary",
     "TrackerFieldValue",

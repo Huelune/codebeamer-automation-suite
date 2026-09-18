@@ -269,9 +269,8 @@ def _normalize_scalar_value(value: Any) -> Any:
     """payload에서 다루기 어려운 결측값만 정리하고 나머지 원래 값은 보존한다."""
     if value is None or isinstance(value, bool):
         return value
-    if isinstance(value, float):
-        if math.isnan(value):
-            return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
     return value
 
 

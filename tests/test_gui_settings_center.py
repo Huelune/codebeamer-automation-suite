@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from src.gui.main_window import MainWindow
 from src.gui.main_window import ROUTE_BATCH_UPLOAD
 from src.gui.main_window import ROUTE_SETTINGS
-from src.gui.settings_center import SETTINGS_CATEGORY_LABELS
+from src.gui.main_window import MainWindow
 from src.gui.settings_center import SETTINGS_CATEGORY_DEVELOPER
+from src.gui.settings_center import SETTINGS_CATEGORY_LABELS
 from src.gui.settings_center import SETTINGS_CATEGORY_TEST_MODE
 from src.gui.settings_center import SettingsCenterPage
 from src.gui.settings_store import CREDENTIAL_STORAGE_NONE

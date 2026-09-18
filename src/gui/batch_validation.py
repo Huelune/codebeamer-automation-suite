@@ -301,7 +301,7 @@ class BatchValidationService:
                 logger=self.logger,
             )
             merged_df = processor.merge_multiline_records(cached_raw_df.copy(), list_cols=list_cols)
-            return int(len(merged_df.index))
+            return len(merged_df.index)
 
         reader = self.reader_cls(
             header_row=header_row,
@@ -321,7 +321,7 @@ class BatchValidationService:
             logger=self.logger,
         )
         merged_df = processor.merge_multiline_records(raw_df, list_cols=list_cols)
-        return int(len(merged_df.index))
+        return len(merged_df.index)
 
     def _count_batch_upload_rows(
         self,
@@ -342,7 +342,7 @@ class BatchValidationService:
                     cached_raw_df.copy(),
                     list_cols=list_cols,
                 )
-                total_rows += int(len(merged_df.index))
+                total_rows += len(merged_df.index)
                 continue
 
             total_rows += self._count_upload_rows_for_file(

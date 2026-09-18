@@ -312,7 +312,7 @@ class WizardUserLookupMixin:
             matches: list[dict[str, Any]] = []
 
             if "USER" in allowed_types:
-                user_resolved, user_info, user_status, user_error = self._lookup_user_reference(lookup_text)
+                user_resolved, _user_info, user_status, user_error = self._lookup_user_reference(lookup_text)
                 if user_resolved is not None and user_status == UserLookupStatus.RESOLVED.value:
                     matches.append(user_resolved)
                 elif user_error and user_status not in {

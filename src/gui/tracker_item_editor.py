@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import replace
 from enum import Enum
-import re
 from typing import Any
-from typing import Iterable
+
+from src.codebeamer_client import CodebeamerClient
+from src.models.common import CONNECTED_FIELD_TYPE_VALUE_MODEL_MAP
 
 from .service_core import _build_gui_client
 from .tracker_query_models import TrackerItemDetail
 from .tracker_query_service import TrackerQueryService
-from src.codebeamer_client import CodebeamerClient
-from src.models.common import CONNECTED_FIELD_TYPE_VALUE_MODEL_MAP
 
 
 class FieldEditorKind(str, Enum):
@@ -67,7 +68,7 @@ class EditableFieldOption:
     raw_reference: dict[str, Any] = field(default_factory=dict, compare=False)
 
     @classmethod
-    def from_raw(cls, value: dict[str, Any]) -> "EditableFieldOption | None":
+    def from_raw(cls, value: dict[str, Any]) -> EditableFieldOption | None:
         if not isinstance(value, dict):
             return None
         try:
@@ -95,7 +96,7 @@ class EditableTrackerField:
     mandatory: bool = False
     editor_kind: FieldEditorKind = FieldEditorKind.UNSUPPORTED
     options: tuple[EditableFieldOption, ...] = field(default_factory=tuple)
-    table_columns: tuple["EditableTrackerField", ...] = field(default_factory=tuple)
+    table_columns: tuple[EditableTrackerField, ...] = field(default_factory=tuple)
     current_value: Any = field(default=None, compare=False)
     unsupported_reason: str = ""
     raw_schema: dict[str, Any] = field(default_factory=dict, compare=False)

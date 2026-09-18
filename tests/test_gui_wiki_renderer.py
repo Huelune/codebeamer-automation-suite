@@ -5,8 +5,8 @@ import unittest
 from src.gui.wiki_renderer import codebeamer_wiki_to_html
 from src.gui.wiki_renderer import is_explicit_wiki_type
 from src.gui.wiki_renderer import payload_uses_wiki
-from src.gui.wiki_renderer import sanitize_wiki_style
 from src.gui.wiki_renderer import sanitize_server_wiki_html
+from src.gui.wiki_renderer import sanitize_wiki_style
 
 
 class WikiRendererTest(unittest.TestCase):

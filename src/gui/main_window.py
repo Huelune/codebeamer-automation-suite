@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from dataclasses import replace
 
 from PySide6.QtCore import QTimer
@@ -17,19 +18,19 @@ from .activity_history import ActivityRecord
 from .activity_history import default_activity_history_path
 from .activity_history_page import ActivityHistoryPage
 from .batch_window import BatchUploadWindow
-from .developer_tools_window import DeveloperToolsWindow
 from .developer_tool_panels import ExcelToolPanel
 from .developer_tool_panels import PayloadToolPanel
 from .developer_tool_panels import ReadOnlyQueryToolPanel
 from .developer_tool_panels import SchemaCacheToolPanel
+from .developer_tools_window import DeveloperToolsWindow
 from .error_reporting import notify_user_error
 from .loading_overlay import LoadingOverlay
 from .settings_center import SettingsCenterPage
 from .settings_store import GuiSettings
 from .settings_store import GuiSettingsStore
-from .tracker_workspace import TrackerWorkspacePage
 from .tracker_bulk_update import BulkUpdateRunStore
 from .tracker_bulk_update import default_bulk_update_runs_path
+from .tracker_workspace import TrackerWorkspacePage
 from .window_support import _estimate_upload_remaining_seconds
 from .window_support import _format_clock_text
 from .window_support import _format_duration_text
@@ -630,10 +631,8 @@ class MainWindow(QMainWindow):
             navigation_collapsed=self.navigation_collapsed,
         )
         self.batch_window.session_state.settings = updated_settings
-        try:
+        with contextlib.suppress(Exception):
             self.settings_store.save_window_preferences(updated_settings)
-        except Exception:
-            pass
         self.diagnostics.record(
             level=DiagnosticLevel.INFO,
             source=DiagnosticSource.APPLICATION,
@@ -649,16 +648,16 @@ class MainWindow(QMainWindow):
 
 
 __all__ = [
+    "APPLICATION_NAVIGATION_COLLAPSED_WIDTH",
     "APP_ROUTE_COLLAPSED_LABELS",
     "APP_ROUTE_LABELS",
-    "APPLICATION_NAVIGATION_COLLAPSED_WIDTH",
-    "BatchUploadWindow",
-    "MainWindow",
-    "TrackerWorkspacePage",
     "ROUTE_ACTIVITY",
     "ROUTE_BATCH_UPLOAD",
     "ROUTE_SETTINGS",
     "ROUTE_TRACKER_WORKSPACE",
+    "BatchUploadWindow",
+    "MainWindow",
+    "TrackerWorkspacePage",
     "_estimate_upload_remaining_seconds",
     "_format_clock_text",
     "_format_duration_text",

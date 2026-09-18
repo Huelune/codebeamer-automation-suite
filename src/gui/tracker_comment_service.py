@@ -6,7 +6,8 @@ from src.codebeamer_client import CodebeamerClient
 
 from .service_core import _build_gui_client
 from .tracker_comment_models import ItemCommentsSnapshot
-from .tracker_query_models import TrackerQueryErrorKind, TrackerQueryServiceError
+from .tracker_query_models import TrackerQueryErrorKind
+from .tracker_query_models import TrackerQueryServiceError
 from .tracker_query_service import classify_tracker_query_error
 
 

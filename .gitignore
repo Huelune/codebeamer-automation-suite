@@ -17,3 +17,7 @@ data/*
 !data/gui-offline-sample/
 !data/gui-offline-sample/**
 *.ipynb
+.venv/
+venv/
+.ruff_cache/
+.mypy_cache/

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from types import SimpleNamespace
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
 import zipfile
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from src.api_monitor import ApiMonitorService
 from src.diagnostics import DiagnosticLevel
@@ -273,12 +273,14 @@ class DiagnosticBundleTest(unittest.TestCase):
             target = Path(temp_dir) / "diagnostics.zip"
             target.write_bytes(b"existing")
 
-            with patch.object(Path, "replace", side_effect=OSError("replace failed")):
-                with self.assertRaises(OSError):
-                    export_diagnostic_bundle(
-                        target,
-                        diagnostics_snapshot=service.snapshot(),
-                    )
+            with (
+                patch.object(Path, "replace", side_effect=OSError("replace failed")),
+                self.assertRaises(OSError),
+            ):
+                export_diagnostic_bundle(
+                    target,
+                    diagnostics_snapshot=service.snapshot(),
+                )
 
             self.assertEqual(target.read_bytes(), b"existing")
             self.assertEqual(

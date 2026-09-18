@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import time
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
-from typing import Callable
 
 import pandas as pd
 
@@ -27,6 +27,37 @@ from .upload_context import FailedUploadRetryContext
 from .upload_context import FailedUploadRetryJob
 from .upload_context import MappingContext
 from .upload_context import RootItemUploadSpec
+
+
+def _build_file_scoped_event_forwarder(
+    *,
+    file_label: str,
+    file_path: str,
+    emit: Callable[[dict[str, Any]], None],
+) -> Callable[[dict[str, Any]], None]:
+    """업로드 이벤트에 파일 정보를 붙여 전달하는 콜백을 만든다.
+
+    반복문 안에서 콜백을 직접 정의하면 루프 변수를 늦게 바인딩하므로
+    파일별 값을 인자로 고정한 별도 함수로 만든다.
+    """
+
+    def forward(event: dict[str, Any]) -> None:
+        forwarded = dict(event)
+        forwarded["source_file"] = file_label
+        forwarded["source_file_path"] = file_path
+
+        upload_name = str(forwarded.get("upload_name") or "").strip()
+        forwarded["upload_name"] = (
+            f"[{file_label}] {upload_name}" if upload_name else f"[{file_label}]"
+        )
+
+        message = str(forwarded.get("message") or "").strip()
+        if message:
+            forwarded["message"] = f"[{file_label}] {message}"
+
+        emit(forwarded)
+
+    return forward
 
 
 class BatchUploadService:
@@ -99,7 +130,7 @@ class BatchUploadService:
             return (0, 0)
 
         if upload_mode == GUI_UPLOAD_MODE_UPDATE:
-            return (0, int(len(ready_df)))
+            return (0, len(ready_df))
 
         if upload_mode == GUI_UPLOAD_MODE_UPSERT and "_operation" in ready_df.columns:
             operation_series = ready_df["_operation"].fillna("").astype(str).str.lower()
@@ -109,7 +140,7 @@ class BatchUploadService:
                 insert_count += len(root_item_specs)
             return (insert_count, update_count)
 
-        insert_count = int(len(ready_df))
+        insert_count = len(ready_df)
         if (
             insert_count > 0
             and root_item_specs
@@ -321,7 +352,7 @@ class BatchUploadService:
         remaining = cls._concat_frames([failed_df, unresolved_df])
         for retry_job in retry_jobs:
             remaining = cls._drop_retry_targets(remaining, retry_job)
-        return int(len(remaining.index))
+        return len(remaining.index)
 
     @classmethod
     def _phase_results_from_frames(
@@ -623,23 +654,11 @@ class BatchUploadService:
                 "message": f"[{job_index}/{len(prepared_jobs)}] {job.file_label} {action_label}를 시작합니다.",
             })
 
-            def _forward_event(event: dict[str, Any]) -> None:
-                forwarded = dict(event)
-                forwarded["source_file"] = job.file_label
-                forwarded["source_file_path"] = job.file_path
-
-                upload_name = str(forwarded.get("upload_name") or "").strip()
-                forwarded["upload_name"] = (
-                    f"[{job.file_label}] {upload_name}"
-                    if upload_name
-                    else f"[{job.file_label}]"
-                )
-
-                message = str(forwarded.get("message") or "").strip()
-                if message:
-                    forwarded["message"] = f"[{job.file_label}] {message}"
-
-                _emit(forwarded)
+            _forward_event = _build_file_scoped_event_forwarder(
+                file_label=job.file_label,
+                file_path=job.file_path,
+                emit=_emit,
+            )
 
             if upload_mode == GUI_UPLOAD_MODE_UPDATE:
                 result = job.wizard.update_items(
@@ -926,20 +945,11 @@ class BatchUploadService:
                 ),
             })
 
-            def _forward_event(event: dict[str, Any]) -> None:
-                forwarded = dict(event)
-                forwarded["source_file"] = retry_job.file_label
-                forwarded["source_file_path"] = retry_job.file_path
-                upload_name = str(forwarded.get("upload_name") or "").strip()
-                forwarded["upload_name"] = (
-                    f"[{retry_job.file_label}] {upload_name}"
-                    if upload_name
-                    else f"[{retry_job.file_label}]"
-                )
-                message = str(forwarded.get("message") or "").strip()
-                if message:
-                    forwarded["message"] = f"[{retry_job.file_label}] {message}"
-                _emit(forwarded)
+            _forward_event = _build_file_scoped_event_forwarder(
+                file_label=retry_job.file_label,
+                file_path=retry_job.file_path,
+                emit=_emit,
+            )
 
             payload_df = retry_job.wizard.state.payload_df
             operation_by_row_id: dict[int, str] = {}

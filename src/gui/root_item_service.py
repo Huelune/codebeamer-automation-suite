@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
-from typing import Callable
 
 import pandas as pd
 
@@ -385,9 +385,7 @@ class RootItemService:
         explicit_name_assignment = False
         if name_schema_field:
             raw_explicit_assignments = explicit_root_config.get("field_assignments")
-            if isinstance(raw_explicit_assignments, dict) and name_schema_field in raw_explicit_assignments:
-                explicit_name_assignment = True
-            elif isinstance(explicit_field_sources, dict) and name_schema_field in explicit_field_sources:
+            if (isinstance(raw_explicit_assignments, dict) and name_schema_field in raw_explicit_assignments) or (isinstance(explicit_field_sources, dict) and name_schema_field in explicit_field_sources):
                 explicit_name_assignment = True
 
         if (

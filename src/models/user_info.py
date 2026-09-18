@@ -42,7 +42,7 @@ class UserInfo(DomainModel):
         })
 
     @classmethod
-    def from_raw(cls, raw_value: dict[str, Any]) -> "UserInfo":
+    def from_raw(cls, raw_value: dict[str, Any]) -> UserInfo:
         """서버에서 받은 사용자 JSON을 `UserInfo` 객체로 바꾼다."""
         init_kwargs: dict[str, Any] = {}
         for field_info in fields(cls):

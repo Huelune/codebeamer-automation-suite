@@ -1,38 +1,20 @@
 from __future__ import annotations
 
+import json
+import re
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import replace
-import json
 from pathlib import Path
-import re
-import time
 from typing import Any
 
 import pandas as pd
 
-from .offline_query import build_offline_cbql_predicate
 from src.codebeamer_client import CodebeamerClient
 from src.excel_reader import ExcelReader
-from src.hierarchy_processor import HierarchyProcessor
-from src.models import MappingStatus
-from src.mapping_service import MappingService
-from src.models import OptionMapKind
-from src.models import OptionCheckStatus
-from src.models import PayloadStatus
-from src.upload_pipeline import load_tracker_schema_df
-from src.upload_pipeline import prepare_upload_dataframe
-from src.upload_pipeline import run_validation_pipeline
-from src.upload_pipeline import suggest_mapping_from_headers
-from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
-from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
-from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
-from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
-from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
-from src.upload_policy import upload_mode_allows_root_items as gui_upload_mode_allows_root_items
-from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
-from src.wizard import CodebeamerUploadWizard
+
+from .offline_query import build_offline_cbql_predicate
 
 
 @dataclass
@@ -42,7 +24,7 @@ class FileSignature:
     modified_ns: int
 
     @classmethod
-    def capture(cls, file_path: str) -> "FileSignature":
+    def capture(cls, file_path: str) -> FileSignature:
         path = Path(str(file_path)).expanduser()
         stat = path.stat()
         return cls(
@@ -205,7 +187,7 @@ class OfflineGuiClient:
             self._load_query_data(self.query_data)
 
     @classmethod
-    def from_settings(cls, settings) -> "OfflineGuiClient":
+    def from_settings(cls, settings) -> OfflineGuiClient:
         schema_path = str(getattr(settings, "offline_schema_path", "") or "").strip()
         schema = _load_json_snapshot(schema_path, label="테스트 schema")
         tracker_configuration = None

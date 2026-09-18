@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import contextlib
 import sys
 import threading
 import time
+from collections.abc import Callable
 from types import TracebackType
-from typing import Callable
 
 from PySide6.QtCore import QObject
-from PySide6.QtCore import QThread
 from PySide6.QtCore import Qt
+from PySide6.QtCore import QThread
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QMessageBox
@@ -185,20 +186,14 @@ class GuiExceptionReporter(QObject):
         thread_args=None,
     ) -> None:
         if self._exception_logger is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._exception_logger(exc_type, exc_value, traceback, thread_name)
-            except Exception:
-                pass
         if thread_args is not None and self._previous_thread_hook is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._previous_thread_hook(thread_args)
-            except Exception:
-                pass
             return
-        try:
+        with contextlib.suppress(Exception):
             self._previous_sys_hook(exc_type, exc_value, traceback)
-        except Exception:
-            pass
 
     def _report_exception(
         self,
@@ -254,10 +249,8 @@ class GuiExceptionReporter(QObject):
             else:
                 show_error_alert(self.app.activeWindow(), title, message)
         except Exception as exc:
-            try:
+            with contextlib.suppress(Exception):
                 sys.__stderr__.write(f"GUI error alert failed: {exc}\n")
-            except Exception:
-                pass
         finally:
             self._reporting = False
 
