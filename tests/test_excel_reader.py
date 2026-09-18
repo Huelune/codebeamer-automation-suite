@@ -130,16 +130,15 @@ class ExcelReaderTest(unittest.TestCase):
 
             reader = ExcelReader(header_row=1, summary_col="Summary")
 
-            with patch("src.excel_reader.OPENPYXL_PREVIEW_SCAN_ROW_LIMIT", 5):
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "사용 범위가 지나치게 큽니다",
-                ):
-                    reader.read_preview_rows(
-                        str(path),
-                        0,
-                        max_rows=10,
-                    )
+            with (
+                patch("src.excel_reader.OPENPYXL_PREVIEW_SCAN_ROW_LIMIT", 5),
+                self.assertRaisesRegex(ValueError, "사용 범위가 지나치게 큽니다"),
+            ):
+                reader.read_preview_rows(
+                    str(path),
+                    0,
+                    max_rows=10,
+                )
 
     def test_read_excel_normalizes_integer_like_numbers_without_decimal_suffix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
