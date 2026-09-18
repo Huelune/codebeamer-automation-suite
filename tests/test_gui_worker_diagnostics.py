@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

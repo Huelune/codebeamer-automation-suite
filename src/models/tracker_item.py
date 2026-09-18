@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from dataclasses import field
-import re
 from typing import Any
 from typing import ClassVar
 
@@ -18,7 +18,6 @@ from .common import _coerce_bool
 from .common import _drop_none
 from .common import _stringify_scalar
 from .field_values import AbstractFieldValue
-from .field_values import TableFieldValue
 from .field_values import _build_field_value
 from .references import AbstractReference
 from .references import CommentReference

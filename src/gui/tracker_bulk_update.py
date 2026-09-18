@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import json
+import threading
+from collections.abc import Callable
+from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import dataclass
-from dataclasses import field
 from datetime import datetime
-import json
 from pathlib import Path
-import threading
 from typing import Any
-from typing import Callable
-from typing import Iterable
 from uuid import uuid4
+
+from src.codebeamer_client import CodebeamerClient
 
 from .service_core import _build_gui_client
 from .tracker_item_editor import EditableTrackerField
@@ -21,7 +22,6 @@ from .tracker_item_editor import TrackerItemWriteError
 from .tracker_item_editor import TrackerItemWriteErrorKind
 from .tracker_item_editor import build_field_value
 from .tracker_item_editor import classify_tracker_item_write_error
-from src.codebeamer_client import CodebeamerClient
 
 
 BULK_UPDATE_RUNS_FILE_NAME = "bulk_update_runs.json"
@@ -370,7 +370,7 @@ class BulkUpdateRunRecord:
     cancelled: bool
 
     @classmethod
-    def from_result(cls, result: BulkUpdateRunResult) -> "BulkUpdateRunRecord":
+    def from_result(cls, result: BulkUpdateRunResult) -> BulkUpdateRunRecord:
         return cls(
             run_id=result.run_id,
             occurred_at=datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -417,7 +417,7 @@ class BulkUpdateRunRecord:
         }
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> "BulkUpdateRunRecord":
+    def from_payload(cls, payload: dict[str, Any]) -> BulkUpdateRunRecord:
         def ids(key: str) -> tuple[int, ...]:
             values = payload.get(key)
             if not isinstance(values, list):
@@ -511,13 +511,13 @@ def default_bulk_update_runs_path(root_dir: str | Path) -> Path:
 
 __all__ = [
     "BULK_UPDATE_RUNS_FILE_NAME",
+    "DEFAULT_BULK_UPDATE_CHUNK_SIZE",
     "BulkFieldChange",
     "BulkUpdateChunkResult",
     "BulkUpdateFailure",
     "BulkUpdateRunRecord",
     "BulkUpdateRunResult",
     "BulkUpdateRunStore",
-    "DEFAULT_BULK_UPDATE_CHUNK_SIZE",
     "TrackerBulkUpdateService",
     "build_bulk_field_values",
     "default_bulk_update_runs_path",

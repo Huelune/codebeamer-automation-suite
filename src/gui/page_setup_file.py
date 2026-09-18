@@ -4,13 +4,9 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QWidget as QtWidget
 
-from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
-from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
-
 from .page_common import PREVIEW_TABLE_MIN_HEIGHT
 from .page_common import PRIMARY_TABLE_MIN_HEIGHT
 from .page_common import WIDE_FORM_PANEL_MAX_WIDTH
-from .page_common import _configure_card_layout
 from .page_common import _configure_constrained_panel
 from .page_common import _configure_data_table
 from .page_common import _configure_form_field
@@ -18,19 +14,11 @@ from .page_common import _configure_form_layout
 from .page_common import _configure_inline_layout
 from .page_common import _configure_page_layout
 from .page_common import _configure_table_columns
-from .page_common import _project_selection_refresh_button_text
-from .page_common import _project_selection_source_signature
-from .page_common import _project_selection_status_text
 from .page_common import _require_qt
-from .page_common import _settings_mode_description
-from .page_common import _settings_mode_toggle_text
-from .page_common import _settings_upload_mode_choices
-from .services import ROOT_ASSIGNMENT_MODE_FILE_SOURCE
-from .services import ROOT_ASSIGNMENT_MODE_FIXED_VALUE
-from .services import ROOT_ITEM_MODE_FILE
-from .services import ROOT_ITEM_MODE_GROUP_BY_COLUMN
-from .styles import GUI_THEME_CHOICES
-from .styles import normalize_gui_theme_name
+from .root_item_service import ROOT_ASSIGNMENT_MODE_FILE_SOURCE
+from .root_item_service import ROOT_ASSIGNMENT_MODE_FIXED_VALUE
+from .root_item_service import ROOT_ITEM_MODE_FILE
+from .root_item_service import ROOT_ITEM_MODE_GROUP_BY_COLUMN
 
 
 def _initialize_file_selection_page(
@@ -593,12 +581,12 @@ def _initialize_root_item_page(
     _configure_page_layout(layout)
 
     description_label = QLabel(
-        (
+
             "업로드 전에 생성할 상단 폴더 구조를 설정합니다. "
             "파일별 루트 폴더와 파일 내부 특정 컬럼 값별 그룹 폴더를 각각 독립적으로 사용할 수 있습니다."
             if is_structure_page
             else "앞 단계에서 정한 상단 폴더 구조에 어떤 필드 값을 넣을지 설정합니다."
-        )
+
     )
     description_label.setWordWrap(True)
     description_label.setObjectName("section_label")
@@ -1025,7 +1013,7 @@ def create_placeholder_page(title_text: str, description: str):
     QWidget = qt["QWidget"]
     QVBoxLayout = qt["QVBoxLayout"]
     QHBoxLayout = qt["QHBoxLayout"]
-    QLabel = qt["QLabel"]
+    qt["QLabel"]
     QPushButton = qt["QPushButton"]
     QPlainTextEdit = qt["QPlainTextEdit"]
 

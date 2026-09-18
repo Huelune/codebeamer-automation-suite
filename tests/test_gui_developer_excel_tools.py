@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import csv
+import sys
+import tempfile
+import unittest
 from datetime import date
 from datetime import datetime
 from datetime import time
 from datetime import timedelta
-import sys
-import tempfile
-from types import SimpleNamespace
-import unittest
-from unittest.mock import patch
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from openpyxl import Workbook
 from openpyxl import load_workbook
@@ -302,12 +302,11 @@ class DeveloperExcelToolServiceTest(unittest.TestCase):
             source = Path(temp_dir) / "source.xls"
             source.write_bytes(b"fake-xls")
 
-            with patch.dict(sys.modules, {"xlwings": None}):
-                with self.assertRaisesRegex(
-                    DeveloperExcelToolError,
-                    "Microsoft Excel과 xlwings",
-                ):
-                    self.service.inspect(source)
+            with patch.dict(sys.modules, {"xlwings": None}), self.assertRaisesRegex(
+                DeveloperExcelToolError,
+                "Microsoft Excel과 xlwings",
+            ):
+                self.service.inspect(source)
 
     def test_xls_reports_unavailable_excel_explicitly(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -318,12 +317,11 @@ class DeveloperExcelToolServiceTest(unittest.TestCase):
                 raise RuntimeError("Excel is unavailable")
 
             fake_xlwings = SimpleNamespace(App=fail_to_start)
-            with patch.dict(sys.modules, {"xlwings": fake_xlwings}):
-                with self.assertRaisesRegex(
-                    DeveloperExcelToolError,
-                    "Microsoft Excel을 시작할 수 없습니다",
-                ):
-                    self.service.inspect(source)
+            with patch.dict(sys.modules, {"xlwings": fake_xlwings}), self.assertRaisesRegex(
+                DeveloperExcelToolError,
+                "Microsoft Excel을 시작할 수 없습니다",
+            ):
+                self.service.inspect(source)
 
     @staticmethod
     def _fake_xlwings(matrix):

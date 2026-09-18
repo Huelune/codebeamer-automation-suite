@@ -1,20 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
 from typing import Any
-from typing import Callable
+
+from src.codebeamer_client import CodebeamerClient
 
 from .service_core import _build_gui_client
-from .tracker_query_models import PageResult
-from .tracker_query_models import ProjectSummary
-from .tracker_query_models import TrackerItemContext
-from .tracker_query_models import TrackerItemDetail
-from .tracker_query_models import TrackerItemSummary
-from .tracker_query_models import TrackerQuery
-from .tracker_query_models import TrackerQueryErrorKind
-from .tracker_query_models import TrackerQueryServiceError
-from .tracker_query_models import TrackerSummary
 from .tracker_baseline_compare import BaselineComparisonResult
 from .tracker_baseline_compare import BaselineComparisonSource
 from .tracker_baseline_compare import TrackerBaseline
@@ -24,7 +17,15 @@ from .tracker_hierarchy import TrackerHierarchySnapshot
 from .tracker_hierarchy import build_tracker_hierarchy
 from .tracker_hierarchy_export import TrackerHierarchyExportSnapshot
 from .tracker_hierarchy_export import build_tracker_hierarchy_snapshot
-from src.codebeamer_client import CodebeamerClient
+from .tracker_query_models import PageResult
+from .tracker_query_models import ProjectSummary
+from .tracker_query_models import TrackerItemContext
+from .tracker_query_models import TrackerItemDetail
+from .tracker_query_models import TrackerItemSummary
+from .tracker_query_models import TrackerQuery
+from .tracker_query_models import TrackerQueryErrorKind
+from .tracker_query_models import TrackerQueryServiceError
+from .tracker_query_models import TrackerSummary
 
 
 _ERROR_MESSAGES = {

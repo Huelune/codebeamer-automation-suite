@@ -16,8 +16,8 @@ from src.models import PayloadTargetKind
 from src.models import PreconstructionKind
 from src.models import ReferenceType
 from src.models import TrackerItemBase
-from src.models import UserInfo
 from src.models import UrlFieldValue
+from src.models import UserInfo
 from src.models import WikiTextFieldValue
 from src.wizard import CodebeamerUploadWizard
 

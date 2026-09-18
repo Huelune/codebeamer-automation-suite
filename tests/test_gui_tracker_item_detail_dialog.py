@@ -4,13 +4,14 @@ import base64
 import os
 import unittest
 
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
 from src.gui.tracker_content_models import AttachmentSummary
-from src.gui.tracker_comment_models import ItemCommentsSnapshot
-from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
+from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
 from src.gui.tracker_query_models import TrackerItemDetail
 
 

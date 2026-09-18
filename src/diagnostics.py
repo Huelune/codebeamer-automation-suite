@@ -1,27 +1,28 @@
 from __future__ import annotations
 
-from collections import deque
-from contextlib import contextmanager
-from contextvars import ContextVar
-from dataclasses import dataclass
-from datetime import datetime
-from enum import Enum
 import hashlib
-from importlib import metadata
 import json
-from pathlib import Path
 import platform
 import re
 import threading
 import time
 import traceback as traceback_module
+import zipfile
+from collections import deque
+from collections.abc import Iterable
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextlib import suppress
+from contextvars import ContextVar
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from importlib import metadata
+from pathlib import Path
 from types import TracebackType
 from typing import Any
-from typing import Iterable
-from typing import Iterator
-from uuid import uuid4
 from urllib.parse import urlsplit
-import zipfile
+from uuid import uuid4
 
 
 DEFAULT_DIAGNOSTIC_EVENT_LIMIT = 2_000
@@ -630,7 +631,7 @@ def export_diagnostic_bundle(
             "이 패키지는 세션 진단 이벤트, API 메타데이터, 실행 결과 요약과 "
             "환경 버전만 포함합니다. 인증 정보, 서버 주소, 요청/응답 본문, query 값, "
             "Excel 셀 값과 원본 설정 파일은 포함하지 않습니다.\n"
-        ).encode("utf-8"),
+        ).encode(),
     }
     manifest = {
         "schemaVersion": DIAGNOSTIC_BUNDLE_VERSION,
@@ -659,10 +660,8 @@ def export_diagnostic_bundle(
                 archive.writestr(name, content)
         temporary.replace(target)
     except Exception:
-        try:
+        with suppress(OSError):
             temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
         raise
 
     return DiagnosticBundleSummary(

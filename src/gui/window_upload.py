@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from pathlib import Path
 import time
+from pathlib import Path
 
 from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 
 from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
+from .upload_workbook_tools import UploadWorkbookService
+from .window_support import UploadProgressState
 from .window_support import _format_clock_text
 from .window_support import _format_duration_text
 from .window_support import _format_upload_eta_text
 from .window_support import _format_upload_progress_text
-from .window_support import UploadProgressState
-from .upload_workbook_tools import UploadWorkbookService
 from .worker import UploadWorker
 
 

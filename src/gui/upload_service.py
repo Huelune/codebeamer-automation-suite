@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-import time
 from typing import Any
 
 import pandas as pd
@@ -11,50 +9,31 @@ from src.excel_reader import ExcelReader
 from src.hierarchy_processor import HierarchyProcessor
 from src.mapping_service import MappingService
 from src.models import OptionMapKind
-from src.models import PayloadStatus
 from src.upload_pipeline import load_tracker_schema_df
 from src.upload_pipeline import prepare_upload_dataframe
-from src.upload_pipeline import run_validation_pipeline
 from src.upload_pipeline import suggest_mapping_from_headers
-from src.upload_policy import BLOCKING_OPTION_STATUSES
-from src.upload_policy import DEFAULT_TRACKER_ITEM_ID_REGEX
-from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
-from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
 from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
-from src.upload_policy import USER_LOOKUP_FAILURE_SUFFIXES
-from src.upload_policy import default_operation_scope
-from src.upload_policy import normalize_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
-from src.upload_policy import scope_applies_to_upload_mode
-from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 from src.upload_policy import upload_mode_allows_root_items as gui_upload_mode_allows_root_items
-from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
 from src.wizard import CodebeamerUploadWizard
 
 from .batch_upload import BatchUploadService
-from .batch_validation import BatchValidationService
 from .batch_validation import GUI_EXCLUDED_MAPPING_COLUMNS
+from .batch_validation import BatchValidationService
+from .root_item_service import RootItemService
 from .service_core import GuiExcelService
 from .service_core import PreviewData
 from .service_core import _build_gui_client
-from .service_core import gui_display_text
-from .root_item_service import ROOT_ASSIGNMENT_MODE_FILE_SOURCE
-from .root_item_service import ROOT_ASSIGNMENT_MODE_FIXED_VALUE
-from .root_item_service import ROOT_ITEM_MODE_FILE
-from .root_item_service import ROOT_ITEM_MODE_GROUP_BY_COLUMN
-from .root_item_service import ROOT_SOURCE_GROUP_VALUE
-from .root_item_service import RootItemService
 from .tracker_config import TrackerConfigurationService
-from .upload_context import BatchUploadJob
 from .upload_context import DefaultValueCandidate
 from .upload_context import MappingContext
-from .upload_context import RootFieldCandidate
 from .upload_context import RootItemPreviewContext
 from .upload_context import RootItemUploadSpec
-from .upload_context import RootSourceOption
 from .upload_context import TrackerItemFieldCandidate
 from .upload_context import ValidationContext
 from .validation_presenter import ValidationPresenter
+
+
 GUI_EXCLUDED_TARGET_FIELDS = {"id", "parent"}
 GUI_VALUE_KIND_STATIC_OPTIONS = "static_options"
 GUI_VALUE_KIND_BOOL = "bool"
@@ -150,10 +129,9 @@ class GuiUploadPipelineService:
 
     @staticmethod
     def _is_gui_excluded_schema_field(row: pd.Series | dict[str, Any]) -> bool:
-        field_name = str((row.get("field_name") if isinstance(row, dict) else row.get("field_name")) or "").strip().lower()
-        tracker_item_field = str(
-            (row.get("tracker_item_field") if isinstance(row, dict) else row.get("tracker_item_field")) or ""
-        ).strip().lower()
+        # dict 와 pandas.Series 모두 get 을 제공하므로 분기 없이 같은 방식으로 읽는다.
+        field_name = str(row.get("field_name") or "").strip().lower()
+        tracker_item_field = str(row.get("tracker_item_field") or "").strip().lower()
         return field_name in GUI_EXCLUDED_TARGET_FIELDS or tracker_item_field in GUI_EXCLUDED_TARGET_FIELDS
 
     @staticmethod
@@ -534,10 +512,7 @@ class GuiUploadPipelineService:
 
         default_root_item_config = self._default_root_item_config(mappable_schema_df)
         upload_mode = normalize_gui_upload_mode(getattr(settings, "upload_mode", None))
-        if not gui_upload_mode_allows_root_items(upload_mode):
-            default_root_item_config["enabled"] = False
-            default_root_item_config["group_enabled"] = False
-        elif upload_mode == GUI_UPLOAD_MODE_UPSERT:
+        if not gui_upload_mode_allows_root_items(upload_mode) or upload_mode == GUI_UPLOAD_MODE_UPSERT:
             default_root_item_config["enabled"] = False
             default_root_item_config["group_enabled"] = False
 

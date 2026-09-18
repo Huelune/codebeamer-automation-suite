@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
 import json
-from typing import Callable
+from collections.abc import Callable
+from datetime import datetime
+
 
 try:
     from PySide6.QtCore import Qt

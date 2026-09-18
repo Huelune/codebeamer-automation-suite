@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
-from typing import Callable
 
 import pandas as pd
 
@@ -15,7 +15,6 @@ from .models import TableFieldValue
 from .models import TrackerItemBase
 from .models import UserLookupStatus
 from .models.field_values import _build_field_value
-from .upload_policy import normalize_upload_mode
 from .upload_policy import scope_applies_to_operation
 
 
@@ -61,9 +60,7 @@ class WizardItemBuilderService:
             return False
         if isinstance(value, float) and pd.isna(value):
             return False
-        if isinstance(value, str) and value.strip() == "":
-            return False
-        return True
+        return not (isinstance(value, str) and value.strip() == "")
 
     @staticmethod
     def _has_configured_value(value: Any) -> bool:
@@ -72,9 +69,7 @@ class WizardItemBuilderService:
             return False
         if isinstance(value, float) and pd.isna(value):
             return False
-        if isinstance(value, str) and value.strip() == "":
-            return False
-        return True
+        return not (isinstance(value, str) and value.strip() == "")
 
     @staticmethod
     def _schema_field_info(field_row: pd.Series, schema_field: str) -> dict[str, Any]:
@@ -257,6 +252,7 @@ class WizardItemBuilderService:
             row_id=row_id,
             detail=f"value={row[df_col]!r}",
         )
+        return None
 
     def _resolve_default_field_values(
         self,
@@ -532,6 +528,7 @@ class WizardItemBuilderService:
                 f"reason={option_info.get('unsupported_reason')!r}"
             ),
         )
+        return None
 
     def _resolve_manual_field_value(
         self,
@@ -661,6 +658,7 @@ class WizardItemBuilderService:
                 f"reason={option_info.get('unsupported_reason')!r}"
             ),
         )
+        return None
 
     def _apply_manual_field_values(
         self,

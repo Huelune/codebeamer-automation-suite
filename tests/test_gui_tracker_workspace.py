@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import base64
-from copy import deepcopy
 import os
+import unittest
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
-import unittest
 from unittest.mock import patch
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -18,12 +19,12 @@ from src.gui.settings_store import GuiSettings
 from src.gui.tracker_baseline_compare import BaselineComparisonKind
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
+from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
 from src.gui.tracker_content_models import WikiRenderResult
 from src.gui.tracker_content_models import WikiResourceReference
-from src.gui.tracker_comment_models import ItemCommentsSnapshot
-from src.gui.tracker_item_create_dialog import TrackerItemCreateRequest
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
+from src.gui.tracker_item_create_dialog import TrackerItemCreateRequest
 from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
 from src.gui.tracker_item_detail_session import TrackerItemDetailSession
 from src.gui.tracker_item_editor import TrackerItemEditorService

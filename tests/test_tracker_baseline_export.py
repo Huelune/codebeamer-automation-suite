@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from datetime import datetime
-from pathlib import Path
 import tempfile
 import unittest
+from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 from openpyxl import load_workbook
 
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
-from src.gui.tracker_baseline_export import BaselineExportError
 from src.gui.tracker_baseline_export import LONG_VALUE_CELL_LINE_FEEDS
 from src.gui.tracker_baseline_export import LONG_VALUE_CELL_TEXT
 from src.gui.tracker_baseline_export import LONG_VALUE_SHEET_TITLE
+from src.gui.tracker_baseline_export import BaselineExportError
 from src.gui.tracker_baseline_export import baseline_export_fields
 from src.gui.tracker_baseline_export import create_baseline_comparison_workbook
 from src.gui.tracker_baseline_export import export_baseline_comparison_xlsx
@@ -416,19 +416,18 @@ class TrackerBaselineExportTest(unittest.TestCase):
             with patch(
                 "src.gui.tracker_baseline_export.Workbook.save",
                 new=fail_after_partial_write,
+            ), self.assertRaisesRegex(
+                BaselineExportError,
+                "Excel 파일을 저장하지 못했습니다",
             ):
-                with self.assertRaisesRegex(
-                    BaselineExportError,
-                    "Excel 파일을 저장하지 못했습니다",
-                ):
-                    export_baseline_comparison_xlsx(
-                        self.result,
-                        path,
-                        tracker_name="요구사항",
-                        reference_label="현재 상태",
-                        comparison_label="R1",
-                        selected_field_keys=("name",),
-                    )
+                export_baseline_comparison_xlsx(
+                    self.result,
+                    path,
+                    tracker_name="요구사항",
+                    reference_label="현재 상태",
+                    comparison_label="R1",
+                    selected_field_keys=("name",),
+                )
 
             self.assertEqual(path.read_bytes(), b"existing workbook")
             self.assertEqual([item.name for item in Path(temp_dir).iterdir()], ["baseline.xlsx"])

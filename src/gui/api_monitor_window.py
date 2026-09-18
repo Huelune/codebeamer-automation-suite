@@ -354,12 +354,11 @@ class ApiMonitorPanel(QFrame):
             return False
         if status_filter == "429" and event.status_code != 429:
             return False
-        if status_filter.endswith("xx"):
-            if event.status_code is None or event.status_code // 100 != int(status_filter[0]):
-                return False
-        if self.slow_only_checkbox.isChecked() and event.elapsed_ms < snapshot.slow_threshold_ms:
+        if status_filter.endswith("xx") and (
+            event.status_code is None or event.status_code // 100 != int(status_filter[0])
+        ):
             return False
-        return True
+        return not (self.slow_only_checkbox.isChecked() and event.elapsed_ms < snapshot.slow_threshold_ms)
 
     def _rebuild_table(self, snapshot: ApiMonitorSnapshot) -> None:
         events = [event for event in snapshot.events if self._event_matches(event, snapshot)]

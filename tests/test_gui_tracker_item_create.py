@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import os
 import unittest
+from copy import deepcopy
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from src.gui.settings_store import GuiSettings
 from src.gui.tracker_item_create_dialog import TrackerItemCreateDialog
-from src.gui.tracker_item_editor import FieldEditorKind
 from src.gui.tracker_item_editor import TrackerItemEditorService
 from src.gui.tracker_item_editor import TrackerItemFieldChange
 from src.gui.tracker_item_editor import TrackerItemWriteError

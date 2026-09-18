@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import replace
 from datetime import datetime
-import time
 from typing import Any
 
 from .settings_store import GuiSettings
@@ -19,14 +19,14 @@ def _require_qt():
         from PySide6.QtCore import QSize
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QApplication
-        from PySide6.QtWidgets import QDialog
         from PySide6.QtWidgets import QComboBox
-        from PySide6.QtWidgets import QInputDialog
-        from PySide6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QDialog
         from PySide6.QtWidgets import QFrame
         from PySide6.QtWidgets import QHBoxLayout
+        from PySide6.QtWidgets import QInputDialog
         from PySide6.QtWidgets import QLabel
         from PySide6.QtWidgets import QMainWindow
+        from PySide6.QtWidgets import QMessageBox
         from PySide6.QtWidgets import QPlainTextEdit
         from PySide6.QtWidgets import QProgressBar
         from PySide6.QtWidgets import QPushButton

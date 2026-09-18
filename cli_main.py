@@ -146,7 +146,7 @@ def _prompt_default_field_values(mapper: MappingService, schema_df) -> dict[str,
 
     selected_defaults: dict[str, str] = {}
     for candidate in candidates:
-        options = ["설정 안 함"] + list(candidate["options"])
+        options = ["설정 안 함", *list(candidate["options"])]
         selected_index = choose_one(
             f"필드 '{candidate['field_name']}' 기본값 선택",
             options,
@@ -270,9 +270,10 @@ def main():
         if has_blocking_issues:
             if not confirm("차단 이슈를 확인했습니다. 그래도 계속 진행할까요?", default=False):
                 return
-        elif not option_check_df.empty:
-            if not confirm("사전 구성 정보를 확인했습니다. 계속 진행할까요?", default=True):
-                return
+        elif not option_check_df.empty and not confirm(
+            "사전 구성 정보를 확인했습니다. 계속 진행할까요?", default=True
+        ):
+            return
     else:
         print("옵션/참조형 필드 매핑 대상이 없습니다.")
 

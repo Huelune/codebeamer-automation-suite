@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import re
 import unittest
+from pathlib import Path
 
 from openpyxl import load_workbook
 

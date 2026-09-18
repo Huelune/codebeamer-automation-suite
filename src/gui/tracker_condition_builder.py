@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtCore import Signal
@@ -19,7 +20,6 @@ try:
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
-from .tracker_item_editor import EditableTrackerField
 from .tracker_item_editor import EditableTrackerSchema
 from .tracker_item_editor import FieldEditorKind
 from .tracker_query_models import TrackerQueryCondition

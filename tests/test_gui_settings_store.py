@@ -5,20 +5,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.gui.settings_store import GuiSettings
-from src.gui.settings_store import GuiSettingsStore
-from src.gui.settings_store import GuiWorkflowPreset
-from src.gui.settings_store import AppSettings
-from src.gui.settings_store import ConnectionProfile
 from src.gui.settings_store import CREDENTIAL_STORAGE_LOCAL
 from src.gui.settings_store import CREDENTIAL_STORAGE_NONE
 from src.gui.settings_store import CREDENTIAL_STORAGE_OS
+from src.gui.settings_store import AppSettings
+from src.gui.settings_store import ConnectionProfile
+from src.gui.settings_store import GuiSettings
+from src.gui.settings_store import GuiSettingsStore
+from src.gui.settings_store import GuiWorkflowPreset
 from src.gui.settings_store import effective_gui_settings
 from src.gui.settings_store import profile_validation_signature
 from src.gui.settings_store import test_mode_validation_signature
-from src.gui.settings_store import GUI_UPLOAD_MODE_UPSERT
-from src.gui.settings_store import GUI_UPLOAD_MODE_UPDATE
 from src.gui.styles import DEFAULT_GUI_THEME
+from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
+from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
 
 
 try:

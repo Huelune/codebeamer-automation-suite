@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import base64
-from contextvars import ContextVar
 import time
+from contextvars import ContextVar
 from typing import Any
 from urllib.parse import urljoin
 from urllib.parse import urlparse

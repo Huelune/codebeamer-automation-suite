@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import unittest
+from dataclasses import dataclass
 
 from src.gui.tracker_item_context_models import ItemHistorySnapshot
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot

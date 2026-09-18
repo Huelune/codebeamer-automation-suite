@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
 import json
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer
@@ -20,9 +20,9 @@ from PySide6.QtWidgets import QLineEdit
 from PySide6.QtWidgets import QPlainTextEdit
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QSplitter
-from PySide6.QtWidgets import QTabWidget
 from PySide6.QtWidgets import QTableWidget
 from PySide6.QtWidgets import QTableWidgetItem
+from PySide6.QtWidgets import QTabWidget
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QWidget
 
@@ -236,9 +236,7 @@ class DiagnosticsPanel(QWidget):
         if level and event.level.value != level:
             return False
         source = str(self.source_combo.currentData() or "")
-        if source and event.source.value != source:
-            return False
-        return True
+        return not (source and event.source.value != source)
 
     def _rebuild_table(self, snapshot: DiagnosticSnapshot) -> None:
         selected_sequence = None

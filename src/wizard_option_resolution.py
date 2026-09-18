@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
-from typing import Callable
 
 import pandas as pd
 
@@ -86,7 +86,7 @@ class WizardOptionResolutionService:
             for _, row in work.iterrows()
         ]
 
-        for df_col in option_mapping.keys():
+        for df_col in option_mapping:
             if df_col not in work.columns:
                 continue
             scope = self.state.selected_mapping_modes.get(str(df_col).strip())
@@ -114,7 +114,7 @@ class WizardOptionResolutionService:
     ) -> pd.DataFrame:
         """검증용으로 마스킹한 원본 옵션 컬럼은 표시와 후속 처리용으로 복원한다."""
         restored = processed_df.copy()
-        for df_col in option_mapping.keys():
+        for df_col in option_mapping:
             if df_col not in restored.columns or df_col not in source_df.columns:
                 continue
             restored[df_col] = source_df[df_col].tolist()
@@ -143,7 +143,7 @@ class WizardOptionResolutionService:
                 (selected_mapping_modes or {}).get(str(df_column).strip()),
                 upload_mode=upload_mode,
             )
-            for df_column in selected_mapping.keys()
+            for df_column in selected_mapping
             if str(df_column).strip()
         }
         self.state.selected_mapping_modes = normalized_mapping_modes
@@ -182,7 +182,7 @@ class WizardOptionResolutionService:
                 (selected_default_value_modes or {}).get(schema_field),
                 upload_mode=upload_mode,
             )
-            for schema_field in normalized_default_values.keys()
+            for schema_field in normalized_default_values
         }
         self.state.selected_default_value_modes = normalized_default_value_modes
         effective_default_values = {

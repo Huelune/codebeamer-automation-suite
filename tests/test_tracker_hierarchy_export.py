@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime
-from pathlib import Path
 import tempfile
 import unittest
+from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 from openpyxl import load_workbook
 
+from src.gui.tracker_hierarchy import build_tracker_hierarchy
 from src.gui.tracker_hierarchy_export import TrackerHierarchyExportError
 from src.gui.tracker_hierarchy_export import build_tracker_hierarchy_export_snapshot
 from src.gui.tracker_hierarchy_export import build_tracker_hierarchy_snapshot
@@ -15,7 +16,6 @@ from src.gui.tracker_hierarchy_export import create_tracker_hierarchy_workbook
 from src.gui.tracker_hierarchy_export import export_tracker_hierarchy_xlsx
 from src.gui.tracker_hierarchy_export import hierarchy_export_fields_from_schema
 from src.gui.tracker_query_models import TrackerItemSummary
-from src.gui.tracker_hierarchy import build_tracker_hierarchy
 
 
 SCHEMA = {

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
-import re
 from typing import Any
 
 from .tracker_query_models import TrackerItemSummary
@@ -23,7 +23,7 @@ class TrackerBaseline:
     created_at: str = ""
 
     @classmethod
-    def from_raw(cls, value: dict[str, Any]) -> "TrackerBaseline":
+    def from_raw(cls, value: dict[str, Any]) -> TrackerBaseline:
         baseline_id = int(value.get("id") or 0)
         if baseline_id <= 0:
             raise ValueError("Baseline ID가 올바르지 않습니다.")
@@ -55,7 +55,7 @@ class TrackerFieldDifference:
     after: Any
     is_changed: bool
     is_table: bool = False
-    table_columns: tuple["TrackerTableColumn", ...] = ()
+    table_columns: tuple[TrackerTableColumn, ...] = ()
 
     def before_text(self) -> str:
         if self.is_table:
@@ -679,7 +679,7 @@ __all__ = [
     "TrackerFieldDifference",
     "TrackerItemComparison",
     "TrackerTableColumn",
-    "comparison_value_key",
     "compare_tracker_items",
+    "comparison_value_key",
     "table_field_rows",
 ]

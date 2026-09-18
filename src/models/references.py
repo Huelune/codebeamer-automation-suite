@@ -13,7 +13,7 @@ from .common import _drop_none
 @dataclass
 class BaseReference(DomainModel):
     TYPE_NAME: ClassVar[str | None] = None
-    _TYPE_REGISTRY: ClassVar[dict[str, type["BaseReference"]]] = {}
+    _TYPE_REGISTRY: ClassVar[dict[str, type[BaseReference]]] = {}
 
     id: int
     name: str | None = None
@@ -38,7 +38,7 @@ class BaseReference(DomainModel):
         cls,
         raw_value: dict[str, Any],
         reference_type: str | None = None,
-    ) -> "BaseReference":
+    ) -> BaseReference:
         """원본 dict를 현재 reference 클래스 인스턴스로 만든다."""
         resolved_type = raw_value.get("type") or reference_type or cls.TYPE_NAME
         init_kwargs: dict[str, Any] = {}
@@ -55,7 +55,7 @@ class BaseReference(DomainModel):
         return cls(**init_kwargs)
 
     @classmethod
-    def resolve_type(cls, reference_type: str | None) -> type["BaseReference"]:
+    def resolve_type(cls, reference_type: str | None) -> type[BaseReference]:
         """type 문자열에 맞는 reference 클래스를 찾아준다."""
         if reference_type in {None, ReferenceType.ABSTRACT.value}:
             return AbstractReference

@@ -7,8 +7,8 @@ from .mapping_service import MappingService
 from .models import WizardState
 from .wizard_data import WizardDataPreparationMixin
 from .wizard_item_builder import WizardItemBuilderService
-from .wizard_option_resolution import WizardOptionResolutionService
 from .wizard_operations import WizardOperationMixin
+from .wizard_option_resolution import WizardOptionResolutionService
 from .wizard_payload import WizardPayloadMixin
 from .wizard_payload_cache import WizardPayloadCacheService
 from .wizard_tracker_lookup import WizardTrackerItemLookupMixin

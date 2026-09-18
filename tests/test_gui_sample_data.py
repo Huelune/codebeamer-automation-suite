@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from src.gui.services import GuiExcelService
+from src.gui.service_core import GuiExcelService
 
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "gui-offline-sample"

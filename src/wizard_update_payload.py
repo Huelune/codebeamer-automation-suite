@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
-from typing import Callable
 
 import pandas as pd
 
@@ -154,7 +154,7 @@ class WizardUpdatePayloadService:
         """결과 DataFrame 행 수를 안전하게 계산한다."""
         if not isinstance(frame, pd.DataFrame) or frame.empty:
             return 0
-        return int(len(frame))
+        return len(frame)
 
     def _apply_upsert_hierarchy_validation(
         self,

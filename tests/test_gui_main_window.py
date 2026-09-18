@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from src.api_monitor import API_MONITOR
 from src.app_metadata import APPLICATION_TITLE
+from src.gui.activity_history_page import ActivityHistoryPage
+from src.gui.batch_window import BatchUploadWindow
+from src.gui.main_window import APP_ROUTE_COLLAPSED_LABELS
+from src.gui.main_window import APP_ROUTE_LABELS
+from src.gui.main_window import APPLICATION_NAVIGATION_COLLAPSED_WIDTH
+from src.gui.main_window import ROUTE_ACTIVITY
+from src.gui.main_window import ROUTE_BATCH_UPLOAD
+from src.gui.main_window import ROUTE_SETTINGS
+from src.gui.main_window import ROUTE_TRACKER_WORKSPACE
+from src.gui.main_window import MainWindow
 from src.gui.main_window import _estimate_upload_remaining_seconds
 from src.gui.main_window import _format_clock_text
 from src.gui.main_window import _format_upload_eta_text
@@ -16,22 +27,12 @@ from src.gui.main_window import _format_upload_progress_text
 from src.gui.main_window import _merge_root_item_page_configs
 from src.gui.main_window import _merge_window_preferences
 from src.gui.main_window import _window_size_from_settings
-from src.gui.main_window import APP_ROUTE_LABELS
-from src.gui.main_window import APP_ROUTE_COLLAPSED_LABELS
-from src.gui.main_window import APPLICATION_NAVIGATION_COLLAPSED_WIDTH
-from src.gui.main_window import MainWindow
-from src.gui.main_window import ROUTE_ACTIVITY
-from src.gui.main_window import ROUTE_BATCH_UPLOAD
-from src.gui.main_window import ROUTE_SETTINGS
-from src.gui.main_window import ROUTE_TRACKER_WORKSPACE
-from src.gui.batch_window import BatchUploadWindow
-from src.gui.activity_history_page import ActivityHistoryPage
 from src.gui.settings_center import SettingsCenterPage
-from src.gui.tracker_workspace import TrackerWorkspacePage
+from src.gui.settings_store import AppSettings
 from src.gui.settings_store import GuiSettings
 from src.gui.settings_store import GuiSettingsStore
-from src.gui.settings_store import AppSettings
 from src.gui.settings_store import test_mode_validation_signature
+from src.gui.tracker_workspace import TrackerWorkspacePage
 from src.gui.window_support import GuiSessionState
 from src.gui.window_support import UploadProgressState
 

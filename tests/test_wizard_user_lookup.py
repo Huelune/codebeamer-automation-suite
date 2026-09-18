@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import contextlib
 import unittest
 
 import pandas as pd
@@ -10,16 +11,15 @@ from src.models import OptionMapKind
 from src.models import UserInfo
 from src.wizard import CodebeamerUploadWizard
 
+
 try:
     import xlwings._xlmac as _xlmac
 
     for cleanup_name in ("cleanup", "clean_up"):
         cleanup_func = getattr(_xlmac, cleanup_name, None)
         if cleanup_func is not None:
-            try:
+            with contextlib.suppress(Exception):
                 atexit.unregister(cleanup_func)
-            except Exception:
-                pass
 except Exception:
     pass
 

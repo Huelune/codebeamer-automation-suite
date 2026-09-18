@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import unittest
 
+from src.gui.service_core import OfflineGuiClient
 from src.gui.settings_store import GuiSettings
 from src.gui.tracker_baseline_compare import BaselineComparisonKind
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
 from src.gui.tracker_query_models import TrackerItemSummary
 from src.gui.tracker_query_service import TrackerQueryService
-from src.gui.service_core import OfflineGuiClient
 
 
 def _summary(item_id: int, *, status: str = "Open", rows=None) -> TrackerItemSummary:

@@ -5,15 +5,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from src.gui.batch_window import BatchUploadWindow
 from src.gui.settings_store import AppSettings
 from src.gui.settings_store import ConnectionProfile
-from src.gui.settings_store import GUI_UPLOAD_MODE_UPDATE
 from src.gui.settings_store import GuiSettings
 from src.gui.settings_store import GuiSettingsStore
 from src.gui.settings_store import GuiWorkflowPreset
+from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
 
 
 class GuiWorkflowPresetCollectionTest(unittest.TestCase):

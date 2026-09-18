@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
-from types import SimpleNamespace
 import tempfile
 import time
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

@@ -14,13 +14,7 @@ from src.api_monitor import API_MONITOR_DEFAULT_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MAX_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MIN_SLOW_THRESHOLD_MS
 from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
-from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
-from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
-from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
-from src.upload_policy import upload_mode_allows_root_items as gui_upload_mode_allows_root_items
-from src.upload_policy import upload_mode_supports_create as gui_upload_mode_supports_create
-from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
 
 from .styles import DEFAULT_GUI_THEME
 from .styles import normalize_gui_theme_name

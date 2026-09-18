@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from dataclasses import dataclass
-import json
 from typing import Any
 
 import pandas as pd
@@ -233,7 +233,7 @@ def diff_schema_frames(
                     change="추가",
                     identity=identity,
                     field_name=str((new or {}).get("field_name") or ""),
-                    changed_properties=tuple(),
+                    changed_properties=(),
                     before=None,
                     after=deepcopy(new),
                 )
@@ -245,7 +245,7 @@ def diff_schema_frames(
                     change="삭제",
                     identity=identity,
                     field_name=str(old.get("field_name") or ""),
-                    changed_properties=tuple(),
+                    changed_properties=(),
                     before=deepcopy(old),
                     after=None,
                 )

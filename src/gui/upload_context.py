@@ -75,7 +75,7 @@ class ValidationContext:
 class BatchUploadJob:
     file_path: str
     file_label: str
-    root_item_specs: list["RootItemUploadSpec"]
+    root_item_specs: list[RootItemUploadSpec]
     ready_count: int
     insert_ready_count: int
     update_ready_count: int

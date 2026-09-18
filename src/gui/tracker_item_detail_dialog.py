@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from html import escape
 
+
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtCore import Signal
@@ -23,24 +24,24 @@ try:
     from PySide6.QtWidgets import QPushButton
     from PySide6.QtWidgets import QScrollArea
     from PySide6.QtWidgets import QSplitter
-    from PySide6.QtWidgets import QTabWidget
     from PySide6.QtWidgets import QTableWidget
     from PySide6.QtWidgets import QTableWidgetItem
+    from PySide6.QtWidgets import QTabWidget
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
 except ImportError as exc:  # pragma: no cover
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
-from .tracker_content_models import AttachmentResource
-from .tracker_content_models import AttachmentSummary
 from .tracker_comment_models import ItemComment
 from .tracker_comment_models import ItemCommentsSnapshot
+from .tracker_content_models import AttachmentResource
+from .tracker_content_models import AttachmentSummary
 from .tracker_item_context_models import ItemHistorySnapshot
 from .tracker_item_context_models import ItemRelationsSnapshot
 from .tracker_query_models import TrackerItemDetail
+from .wiki_content_view import WikiContentView
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
-from .wiki_content_view import WikiContentView
 
 
 class ZoomableImageView(QGraphicsView):
@@ -92,12 +93,12 @@ class ZoomableImageView(QGraphicsView):
         self.scale(0.8, 0.8)
         self._fit_mode = False
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if self._fit_mode:
             self.fit_image()
 
-    def wheelEvent(self, event) -> None:  # noqa: N802 - Qt API
+    def wheelEvent(self, event) -> None:
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             self.zoom_in() if event.angleDelta().y() > 0 else self.zoom_out()
             event.accept()

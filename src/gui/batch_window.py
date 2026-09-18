@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 
 from .activity_history import ActivityRecord
-from .services import GuiCodebeamerService
-from .services import GuiExcelService
-from .services import GuiUploadPipelineService
+from .service_core import GuiCodebeamerService
+from .service_core import GuiExcelService
 from .settings_store import GuiSettings
 from .settings_store import GuiSettingsStore
+from .upload_service import GuiUploadPipelineService
 from .window_shell import WindowShellMixin
 from .window_support import GuiSessionState
 from .window_support import UploadProgressState
@@ -118,9 +119,7 @@ class BatchUploadWindow(WindowShellMixin, WindowWorkflowMixin, WindowUploadMixin
     def _record_activity(self, record: ActivityRecord) -> None:
         if self._activity_recorder is None:
             return
-        try:
+        with contextlib.suppress(Exception):
             self._activity_recorder(record)
-        except Exception:
-            pass
 
 __all__ = ["BatchUploadWindow"]

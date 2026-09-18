@@ -8,8 +8,8 @@ from src.upload_policy import upload_mode_action_label as gui_upload_mode_action
 
 from .settings_store import GuiSettings
 from .settings_store import GuiWorkflowPreset
-from .window_support import _merge_root_item_page_configs
 from .window_support import UploadProgressState
+from .window_support import _merge_root_item_page_configs
 from .window_support import _merge_window_preferences
 
 

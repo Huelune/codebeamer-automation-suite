@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 try:
     from PySide6.QtCore import QUrl
     from PySide6.QtGui import QImage
@@ -26,7 +27,7 @@ class WikiContentView(QTextBrowser):
         self._result: WikiRenderResult | None = None
         self._source_html = ""
 
-    def setHtml(self, text: str) -> None:  # noqa: N802 - Qt API compatibility
+    def setHtml(self, text: str) -> None:
         self._source_html = str(text or "")
         super().setHtml(self._source_html)
 

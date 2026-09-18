@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import csv
+import os
+import re
+import tempfile
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import date
@@ -9,9 +13,6 @@ from datetime import time
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
-import os
-import re
-import tempfile
 from typing import Any
 
 from openpyxl import Workbook
@@ -20,6 +21,7 @@ from openpyxl.styles import Alignment
 from openpyxl.styles import Font
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
+
 
 EXCEL_CELL_MAX_CHARACTERS = 32_767
 _SUPPORTED_INPUT_SUFFIXES = {".xlsx", ".xlsm", ".xls", ".csv"}
@@ -114,10 +116,8 @@ def _atomic_workbook_save(workbook: Workbook, target: Path) -> None:
         temporary_path = None
     finally:
         if temporary_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 temporary_path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def _atomic_text_save(text: str, target: Path, *, encoding: str) -> None:
@@ -135,10 +135,8 @@ def _atomic_text_save(text: str, target: Path, *, encoding: str) -> None:
         temporary_path = None
     finally:
         if temporary_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 temporary_path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def _normalize_header(value: Any, index: int) -> str:
@@ -227,14 +225,10 @@ def _read_xls_values(
         return normalized_rows, selected, sheet_names
     finally:
         if workbook is not None:
-            try:
+            with contextlib.suppress(Exception):
                 workbook.close()
-            except Exception:
-                pass
-        try:
+        with contextlib.suppress(Exception):
             app.quit()
-        except Exception:
-            pass
 
 
 def _csv_rows(path: Path, *, encoding: str, delimiter: str) -> list[list[Any]]:
@@ -682,10 +676,10 @@ class DeveloperExcelToolService:
             rows: list[list[Any]] = []
             for formula_row, value_row in zip(
                 formula_sheet.iter_rows(),
-                value_sheet.iter_rows(),
+                value_sheet.iter_rows(), strict=False,
             ):
                 output_row: list[Any] = []
-                for formula_cell, value_cell in zip(formula_row, value_row):
+                for formula_cell, value_cell in zip(formula_row, value_row, strict=False):
                     if formula_cell.data_type == "f" and value_cell.value is None:
                         raise DeveloperExcelToolError(
                             f"{formula_sheet.title}!{formula_cell.coordinate} 수식의 계산된 값이 없어 값 전용 변환을 중단했습니다. Excel에서 계산 후 저장하세요."
@@ -701,9 +695,9 @@ class DeveloperExcelToolService:
 
 
 __all__ = [
+    "EXCEL_CELL_MAX_CHARACTERS",
     "DeveloperExcelToolError",
     "DeveloperExcelToolService",
-    "EXCEL_CELL_MAX_CHARACTERS",
     "ExcelConversionResult",
     "ExcelInspectionIssue",
     "ExcelInspectionReport",

@@ -4,13 +4,13 @@ from dataclasses import replace
 
 from .loading_overlay import LoadingOverlay
 from .page_batch_settings import create_batch_settings_page
-from .pages import create_file_selection_page
-from .pages import create_mapping_page
-from .pages import create_project_selection_page
-from .pages import create_result_page
-from .pages import create_root_item_page
-from .pages import create_upload_page
-from .pages import create_validation_page
+from .page_execution_mapping import create_mapping_page
+from .page_execution_run import create_result_page
+from .page_execution_run import create_upload_page
+from .page_execution_run import create_validation_page
+from .page_setup_file import create_file_selection_page
+from .page_setup_file import create_root_item_page
+from .page_setup_settings import create_project_selection_page
 from .styles import build_gui_stylesheet
 from .styles import normalize_gui_theme_name
 from .worker import BackgroundTask
@@ -531,10 +531,7 @@ class WindowShellMixin:
         if "\n" not in text and len(compact) <= 160:
             return compact, ""
 
-        if lines:
-            summary = lines[0]
-        else:
-            summary = compact
+        summary = lines[0] if lines else compact
         if len(summary) > 160:
             summary = f"{summary[:157].rstrip()}..."
         return summary, text

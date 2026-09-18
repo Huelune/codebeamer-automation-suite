@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from .models import PayloadStatus
 from .models import UploadStatus
-from .upload_policy import normalize_upload_mode
-from .upload_policy import upload_mode_supports_update
 
 
 class WizardOperationMixin:
@@ -402,10 +400,7 @@ class WizardOperationMixin:
                     error_status_code = self._http_status_code(exc)
                     error_response_json = self._response_json(exc)
                     error_message = ""
-                    if error_response_json is not None:
-                        error_message = str(error_response_json)
-                    else:
-                        error_message = str(exc)
+                    error_message = str(error_response_json) if error_response_json is not None else str(exc)
 
                     failed_logs.append({
                         "_row_id": row_id,

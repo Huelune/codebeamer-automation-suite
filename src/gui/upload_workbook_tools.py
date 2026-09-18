@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -243,7 +243,7 @@ class UploadWorkbookService:
         for key, label in _SUMMARY_LABELS.items():
             if key in summary:
                 summary_sheet.append([label, _safe_output_value(summary[key], cell=label)])
-        summary_sheet.append(["문제 목록 수", int(len(issues.index))])
+        summary_sheet.append(["문제 목록 수", len(issues.index)])
         _style_header(summary_sheet)
         summary_sheet.freeze_panes = "A2"
         _fit_columns(summary_sheet)
@@ -288,7 +288,7 @@ class UploadWorkbookService:
         return WorkbookExportResult(
             output_path=str(target),
             sheet_names=("요약", "문제 목록"),
-            row_count=int(len(issues.index)),
+            row_count=len(issues.index),
             column_count=len(visible_columns),
         )
 
@@ -424,7 +424,7 @@ class UploadWorkbookService:
 
         guide_sheet = workbook.create_sheet("사용 안내")
         guide_sheet.append(["컬럼", "필수 기준", "필수 상태", "입력 안내"])
-        for header, meta in zip(headers, header_meta):
+        for header, meta in zip(headers, header_meta, strict=False):
             mandatory_mode = str(meta["mandatory_mode"])
             mandatory_status_names = tuple(meta["mandatory_status_names"])
             guide_sheet.append(
@@ -522,8 +522,8 @@ class UploadWorkbookService:
         summary_sheet = workbook.active
         summary_sheet.title = "요약"
         summary_sheet.append(["업로드 결과", "건수"])
-        summary_sheet.append(["실패", int(len(failed.index))])
-        summary_sheet.append(["상위 항목 미해결", int(len(unresolved.index))])
+        summary_sheet.append(["실패", len(failed.index)])
+        summary_sheet.append(["상위 항목 미해결", len(unresolved.index)])
         summary_sheet.append(["확인 필요 합계", int(len(failed.index) + len(unresolved.index))])
         summary_sheet.append([])
         summary_sheet.append([

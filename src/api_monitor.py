@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
 import math
 import re
 import threading
 import time
-from typing import Callable
+from collections import deque
+from collections.abc import Callable
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from .diagnostics import current_operation_id

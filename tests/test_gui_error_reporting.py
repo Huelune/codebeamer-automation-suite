@@ -11,9 +11,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QPushButton
 
+from src.diagnostics import DiagnosticService
 from src.gui.error_reporting import install_global_exception_handler
 from src.gui.error_reporting import safe_exception_message
-from src.diagnostics import DiagnosticService
 
 
 class GuiErrorReportingTest(unittest.TestCase):
