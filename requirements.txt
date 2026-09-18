@@ -1,8 +1,10 @@
-pandas
-requests
-xlwings
-python-dotenv
-openpyxl
-PySide6
-cryptography
-keyring
+# 개발용 런타임 의존성. 릴리스 빌드는 requirements-release.txt의 고정 버전을 사용한다.
+# 상한은 릴리스 빌드에서 검증한 메이저 버전까지만 허용한다.
+pandas>=2.2,<4
+requests>=2.32,<3
+xlwings>=0.33,<1
+python-dotenv>=1.0,<2
+openpyxl>=3.1,<4
+PySide6>=6.8,<7
+cryptography>=43,<51
+keyring>=25,<26

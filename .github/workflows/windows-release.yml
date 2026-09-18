@@ -1,4 +1,4 @@
-name: Windows release
+name: CI and Windows release
 
 on:
   pull_request:
@@ -21,8 +21,55 @@ env:
   QT_QPA_PLATFORM: offscreen
 
 jobs:
+  lint:
+    name: Lint and type check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install lint dependencies
+        run: python -m pip install --requirement requirements-dev.txt
+
+      - name: Run ruff
+        run: python -m ruff check --output-format github .
+
+      - name: Run mypy
+        run: python -m mypy
+
+  test:
+    name: Regression tests
+    runs-on: windows-2022
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: x64
+          cache: pip
+          cache-dependency-path: requirements-release.txt
+
+      - name: Install pinned release dependencies
+        shell: pwsh
+        run: python -m pip install --requirement requirements-release.txt
+
+      - name: Run full regression tests
+        shell: pwsh
+        run: python -m unittest discover -s tests -q
+
   build:
-    name: Test and build Windows x64
+    name: Build Windows x64
+    needs: [lint, test]
     runs-on: windows-2022
     outputs:
       artifact_version: ${{ steps.metadata.outputs.artifact_version }}
@@ -44,10 +91,6 @@ jobs:
       - name: Install pinned release dependencies
         shell: pwsh
         run: python -m pip install --requirement requirements-release.txt
-
-      - name: Run full regression tests
-        shell: pwsh
-        run: python -m unittest discover -s tests -q
 
       - name: Resolve and validate artifact metadata
         id: metadata
