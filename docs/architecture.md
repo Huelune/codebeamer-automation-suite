@@ -194,8 +194,12 @@ payload cache, 업로드 실행 서비스를 조합하고 기존 payload 메서�
 주요 모듈:
 - `src/gui/main_window.py`
 - `src/gui/batch_window.py`
-- `src/gui/pages.py`
-- `src/gui/services.py`
+- `src/gui/page_setup_file.py`
+- `src/gui/page_setup_settings.py`
+- `src/gui/page_execution_mapping.py`
+- `src/gui/page_execution_run.py`
+- `src/gui/service_core.py`
+- `src/gui/upload_service.py`
 - `src/gui/settings_store.py`
 - `src/gui/settings_center.py`
 - `src/gui/page_batch_settings.py`
@@ -221,7 +225,7 @@ payload cache, 업로드 실행 서비스를 조합하고 기존 payload 메서�
 - 파일·루트 항목 화면: `src/gui/page_setup_file.py`
 - 매핑 화면: `src/gui/page_execution_mapping.py`
 - 검증·업로드·결과 화면: `src/gui/page_execution_run.py`
-- 페이지 호환 façade: `src/gui/page_setup.py`, `src/gui/page_execution.py`
+- 페이지와 서비스는 정의 모듈에서 직접 import 한다. 재내보내기만 하던 `pages.py`, `services.py`, `page_setup.py`, `page_execution.py` 파사드는 제거했다.
 - 최상위 앱 셸, 접이식 탐색 메뉴와 route 전환: `src/gui/main_window.py`
 - 참조 카운트형 로딩 오버레이와 회전 spinner: `src/gui/loading_overlay.py`
 - 기존 배치 마법사 조합: `src/gui/batch_window.py`, `src/gui/window_support.py`, `src/gui/window_shell.py`, `src/gui/window_workflow.py`, `src/gui/window_upload.py`

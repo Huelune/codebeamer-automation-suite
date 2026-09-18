@@ -5,28 +5,44 @@
 ## 권장 읽기 순서
 
 1. [README](../README.md)
-2. [아키텍처](./architecture.md)
-3. [Codebeamer 업로드 조사 정리](./codebeamer-upload-reference.md)
-4. [Codebeamer 프로젝트 시작 패키지](./codebeamer-project-start-kit.md)
-5. [CLI 사용 가이드](./cli-guide.md)
-6. [필드 지원 추가 가이드](./field-support-guide.md)
-7. [GUI 사용 가이드](./gui-plan.md)
-8. [트래커 작업공간 GUI 기획 및 스토리보드](./tracker-workspace-gui-storyboard.md)
-9. [트래커 조회 서비스 계약](./tracker-query-service.md)
-10. [트래커 아이템 단건 생성·수정·상태 전환·삭제](./tracker-item-editor.md)
-11. [통합 실행 기록](./activity-history.md)
-12. [Codebeamer API 모니터](./api-monitor.md)
-13. [개발자 도구와 진단 패키지](./developer-tools.md)
-14. [트러블슈팅](./troubleshooting.md)
-15. [호환 경로 감사](./compatibility.md)
-16. [샘플 데이터 및 자격증명 감사](./security-audit.md)
-17. [GUI 리팩토링 진행 및 검증 기록](./refactoring-progress.md)
-18. [v2 변경 사항](./v2-changes.md)
+2. [기능 현황](./feature-status.md)
+3. [아키텍처](./architecture.md)
+4. [Codebeamer 업로드 조사 정리](./codebeamer-upload-reference.md)
+5. [Codebeamer 프로젝트 시작 패키지](./codebeamer-project-start-kit.md)
+6. [CLI 사용 가이드](./cli-guide.md)
+7. [필드 지원 추가 가이드](./field-support-guide.md)
+8. [GUI 사용 가이드](./gui-plan.md)
+9. [트래커 작업공간 GUI 기획 및 스토리보드](./tracker-workspace-gui-storyboard.md)
+10. [트래커 조회 서비스 계약](./tracker-query-service.md)
+11. [트래커 아이템 단건 생성·수정·상태 전환·삭제](./tracker-item-editor.md)
+12. [통합 실행 기록](./activity-history.md)
+13. [Codebeamer API 모니터](./api-monitor.md)
+14. [개발자 도구와 진단 패키지](./developer-tools.md)
+15. [트러블슈팅](./troubleshooting.md)
+
+## 감사·이력 문서
+
+현재 동작을 파악하는 데 필수는 아니지만 판단 근거로 보존하는 문서입니다.
+
+- [호환 경로 감사](./compatibility.md)
+- [샘플 데이터 및 자격증명 감사](./security-audit.md)
+- [GUI 오류 처리 감사](./gui-error-handling.md)
+- [GUI 리팩토링 진행 및 검증 기록](./refactoring-progress.md) (완료된 작업 기록)
+- [v2 변경 사항](./v2-changes.md) (완료된 작업 기록)
+
+## 개발 환경과 검증
+
+가상환경 생성, 의존성 설치, lint·type check·테스트 실행 명령은 [README의 빠른 시작](../README.md#빠른-시작)에 있습니다.
+lint 규칙과 type check 범위는 저장소 루트 `pyproject.toml`에 정의되어 있고, GitHub Actions의
+`Lint and type check`, `Regression tests` job이 같은 명령을 실행합니다.
 
 ## 문서별 역할
 
 - [README](../README.md)
-  저장소 소개, 빠른 시작, 현재 기본 실행 경로를 요약합니다.
+  저장소 소개, 빠른 시작, 개발 환경 준비와 현재 기본 실행 경로를 요약합니다.
+
+- [기능 현황](./feature-status.md)
+  `main` 기준으로 동작하는 핵심 기능, 화면 단위 구현 범위와 최근 보완 사항을 모아 둡니다.
 
 - [아키텍처](./architecture.md)
   코드 구조, 모듈 책임, 상태 모델, 최신 업로드 순서도를 설명합니다.
