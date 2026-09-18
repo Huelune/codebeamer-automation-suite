@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .payload_values import as_mapping
+
 
 ACTIVITY_HISTORY_FILE_NAME = "activity_history.json"
 ACTIVITY_HISTORY_VERSION = 1
@@ -195,7 +197,7 @@ class ActivityRecord:
             item_id=payload.get("itemId"),
             item_name=str(payload.get("itemName") or ""),
             parent_item_id=payload.get("parentItemId"),
-            details=(payload.get("details") if isinstance(payload.get("details"), dict) else {}),
+            details=(as_mapping(payload.get("details"))),
             occurred_at=str(payload.get("occurredAt") or ""),
             record_id=str(payload.get("recordId") or ""),
         )

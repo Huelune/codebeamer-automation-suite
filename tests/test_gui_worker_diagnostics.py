@@ -14,6 +14,7 @@ from src.diagnostics import DIAGNOSTICS
 from src.diagnostics import DiagnosticSource
 from src.gui.worker import BackgroundTask
 from src.gui.worker import UploadWorker
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class _UploadPipeline:

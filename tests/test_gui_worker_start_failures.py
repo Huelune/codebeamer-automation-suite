@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QPushButton
 
 from src.gui.window_shell import WindowShellMixin
 from src.gui.window_upload import WindowUploadMixin
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class _SignalStub:

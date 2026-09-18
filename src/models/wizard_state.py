@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
+from typing import TYPE_CHECKING
 from typing import Any
 
 import pandas as pd
+
+
+if TYPE_CHECKING:
+    # upload_policy 가 models 를 import 하므로 런타임 import 는 순환이 된다.
+    from src.upload_policy import OperationScope
 
 
 @dataclass
@@ -29,10 +35,10 @@ class WizardState:
     option_check_df: pd.DataFrame | None = None
 
     selected_mapping: dict[str, str] = field(default_factory=dict)
-    selected_mapping_modes: dict[str, dict[str, bool]] = field(default_factory=dict)
+    selected_mapping_modes: dict[str, OperationScope] = field(default_factory=dict)
     selected_option_mapping: dict[str, str] = field(default_factory=dict)
     selected_default_values: dict[str, Any] = field(default_factory=dict)
-    selected_default_value_modes: dict[str, dict[str, bool]] = field(default_factory=dict)
+    selected_default_value_modes: dict[str, OperationScope] = field(default_factory=dict)
     selected_tracker_item_settings: dict[str, dict[str, Any]] = field(default_factory=dict)
     resolved_default_values: dict[str, Any] = field(default_factory=dict)
     table_field_mapping: dict[str, dict[str, Any]] = field(default_factory=dict)

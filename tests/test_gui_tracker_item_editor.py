@@ -19,6 +19,7 @@ from src.gui.tracker_item_editor import build_field_value
 from src.gui.tracker_item_editor_panel import ConfirmItemDeleteDialog
 from src.gui.tracker_item_editor_panel import TrackerItemEditorPanel
 from src.gui.tracker_query_models import TrackerItemDetail
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 SCHEMA = {

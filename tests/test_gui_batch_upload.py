@@ -13,6 +13,7 @@ from src.models import PayloadStatus
 from src.upload_policy import UPLOAD_MODE_CREATE
 from src.upload_policy import UPLOAD_MODE_UPDATE
 from src.upload_policy import UPLOAD_MODE_UPSERT
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class RetryWizardStub:

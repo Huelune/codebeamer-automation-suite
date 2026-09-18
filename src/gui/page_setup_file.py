@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtWidgets import QWidget as QtWidget
 
@@ -453,7 +454,7 @@ def _initialize_file_selection_page(
     _set_preview_file_items(page._selected_file_paths, initial_settings.last_file_path)
     _update_file_display()
 
-    def _load_state(state: dict[str, object]) -> None:
+    def _load_state(state: dict[str, Any]) -> None:
         loaded_state = dict(state or {})
         loaded_file_paths = [
             str(path).strip()
@@ -977,18 +978,16 @@ def _initialize_root_item_page(
     regex_pattern.textChanged.connect(lambda _text: _refresh_preview())
     regex_target.currentIndexChanged.connect(lambda _index: _refresh_preview())
     group_by_column.currentIndexChanged.connect(lambda _index: _refresh_preview())
-    enable_root_item.toggled.connect(
-        lambda checked: (
-            _sync_root_enabled_state(bool(checked), bool(enable_group_folder.isChecked())),
-            _refresh_preview(),
-        )
-    )
-    enable_group_folder.toggled.connect(
-        lambda checked: (
-            _sync_root_enabled_state(bool(enable_root_item.isChecked()), bool(checked)),
-            _refresh_preview(),
-        )
-    )
+    def _on_root_item_toggled(checked: bool) -> None:
+        _sync_root_enabled_state(bool(checked), bool(enable_group_folder.isChecked()))
+        _refresh_preview()
+
+    def _on_group_folder_toggled(checked: bool) -> None:
+        _sync_root_enabled_state(bool(enable_root_item.isChecked()), bool(checked))
+        _refresh_preview()
+
+    enable_root_item.toggled.connect(_on_root_item_toggled)
+    enable_group_folder.toggled.connect(_on_group_folder_toggled)
 
     page.get_config = get_config
     page.load_context = load_context

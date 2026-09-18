@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from src.gui.tracker_content_models import AttachmentSummary
 from src.gui.tracker_content_models import WikiRenderContext
 from src.gui.tracker_content_service import TrackerContentService
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class FakeContentClient:

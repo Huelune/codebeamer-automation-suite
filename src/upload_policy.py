@@ -77,6 +77,15 @@ def upload_mode_action_label(upload_mode: Any) -> str:
     return "업로드"
 
 
+def as_operation_scope(raw_scope: Any) -> OperationScope:
+    """임의의 값을 OperationScope 형태로 복사한다. 없는 키는 False 로 채운다."""
+    mapping = raw_scope if isinstance(raw_scope, dict) else {}
+    return OperationScope(
+        create=bool(mapping.get("create", False)),
+        update=bool(mapping.get("update", False)),
+    )
+
+
 def default_operation_scope(upload_mode: Any) -> OperationScope:
     normalized_mode = normalize_upload_mode(upload_mode)
     return {

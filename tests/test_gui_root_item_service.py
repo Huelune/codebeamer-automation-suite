@@ -10,6 +10,7 @@ from src.gui.root_item_service import ROOT_ITEM_MODE_GROUP_BY_COLUMN
 from src.gui.root_item_service import ROOT_REGEX_TARGET_FILE_STEM
 from src.gui.root_item_service import ROOT_SOURCE_GROUP_VALUE
 from src.gui.root_item_service import RootItemService
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class RootItemServiceTest(unittest.TestCase):

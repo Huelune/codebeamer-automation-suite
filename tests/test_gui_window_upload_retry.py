@@ -11,6 +11,7 @@ import pandas as pd
 from src.gui.activity_history import ActivityResult
 from src.gui.batch_window import BatchUploadWindow
 from src.gui.settings_store import GuiSettingsStore
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

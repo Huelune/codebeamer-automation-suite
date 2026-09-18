@@ -242,7 +242,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
 
         output_dir = str(Path(self.session_state.settings.output_dir))
         self.upload_page.reset(retry_target_count)
-        self._activity_dry_run = bool(retry_context.dry_run)
+        self._activity_dry_run = bool(retry_context is not None and retry_context.dry_run)
         self._retry_in_progress = True
         self.upload_progress = UploadProgressState(
             retry_count=retry_target_count,
@@ -253,7 +253,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             settings=self.session_state.settings,
             file_state=self.session_state.file_state,
             mapping_context=self.session_state.mapping_context,
-            dry_run=bool(retry_context.dry_run),
+            dry_run=bool(retry_context is not None and retry_context.dry_run),
             continue_on_error=self.upload_page.continue_checkbox.isChecked(),
             output_dir=output_dir,
             retry_context=retry_context,
@@ -388,7 +388,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             return ""
         for value in values or []:
             if isinstance(value, dict):
-                raw_id = (
+                raw_id: Any = (
                     value.get("id")
                     or value.get("projectId")
                     or value.get("trackerId")
@@ -609,8 +609,10 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
         if event_type not in {"row_success", "row_failed"}:
             return
 
-        started_at = self.upload_progress.event_started_at.get(row_key)
-        elapsed = None if started_at is None else (time.perf_counter() - started_at)
+        row_started_at = self.upload_progress.event_started_at.get(row_key)
+        row_elapsed: float | None = (
+            None if row_started_at is None else (time.perf_counter() - row_started_at)
+        )
         if event_type == "row_success":
             self.upload_progress.success_count += 1
             phase_key = self._normalize_phase_key(event.get("phase"))
@@ -645,7 +647,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             item_name,
             status=status_text,
             finished_at=self._format_clock(),
-            duration_text=self._format_duration(elapsed),
+            duration_text=self._format_duration(row_elapsed),
             message=message,
         )
         self._update_upload_counter()

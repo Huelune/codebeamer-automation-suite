@@ -11,6 +11,7 @@ from src.gui.tracker_query_models import TrackerQueryCondition
 from src.gui.tracker_query_models import TrackerQueryGroup
 from src.gui.tracker_query_models import TrackerSearchMode
 from src.gui.tracker_query_models import mask_sensitive_payload
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class TrackerQueryModelTest(unittest.TestCase):

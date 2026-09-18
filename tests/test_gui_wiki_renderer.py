@@ -7,6 +7,7 @@ from src.gui.wiki_renderer import is_explicit_wiki_type
 from src.gui.wiki_renderer import payload_uses_wiki
 from src.gui.wiki_renderer import sanitize_server_wiki_html
 from src.gui.wiki_renderer import sanitize_wiki_style
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class WikiRendererTest(unittest.TestCase):

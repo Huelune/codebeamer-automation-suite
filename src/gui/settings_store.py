@@ -14,8 +14,11 @@ from src.api_monitor import API_MONITOR_DEFAULT_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MAX_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MIN_SLOW_THRESHOLD_MS
 from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
+from src.upload_policy import OperationScope
+from src.upload_policy import as_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 
+from .payload_values import as_mapping
 from .styles import DEFAULT_GUI_THEME
 from .styles import normalize_gui_theme_name
 
@@ -133,9 +136,9 @@ class GuiWorkflowPreset:
     file_options: dict[str, Any] = field(default_factory=dict)
     root_item_config: dict[str, Any] = field(default_factory=dict)
     selected_mapping: dict[str, str] = field(default_factory=dict)
-    selected_mapping_modes: dict[str, dict[str, bool]] = field(default_factory=dict)
+    selected_mapping_modes: dict[str, OperationScope] = field(default_factory=dict)
     selected_default_values: dict[str, str] = field(default_factory=dict)
-    selected_default_value_modes: dict[str, dict[str, bool]] = field(default_factory=dict)
+    selected_default_value_modes: dict[str, OperationScope] = field(default_factory=dict)
     selected_tracker_item_settings: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
@@ -593,7 +596,7 @@ class GuiSettingsStore:
         payload: dict[str, Any],
     ) -> GuiWorkflowPreset:
         raw_settings = payload.get("settings")
-        settings_payload = raw_settings if isinstance(raw_settings, dict) else {}
+        settings_payload = as_mapping(raw_settings)
         return GuiWorkflowPreset(
             version=int(payload.get("version") or 1),
             preset_id=str(payload.get("preset_id") or uuid4().hex),
@@ -944,12 +947,8 @@ class GuiSettingsStore:
         return dict(value) if isinstance(value, dict) else {}
 
     @staticmethod
-    def _operation_scope_payload(value: Any) -> dict[str, bool]:
-        payload = dict(value) if isinstance(value, dict) else {}
-        return {
-            "create": bool(payload.get("create", False)),
-            "update": bool(payload.get("update", False)),
-        }
+    def _operation_scope_payload(value: Any) -> OperationScope:
+        return as_operation_scope(value)
 
     def _load_legacy_settings(self) -> GuiSettings:
         if not self.settings_path.exists():
@@ -1208,7 +1207,7 @@ class GuiSettingsStore:
         if not path.exists():
             return {}
         payload = json.loads(path.read_text(encoding="utf-8"))
-        return payload if isinstance(payload, dict) else {}
+        return as_mapping(payload)
 
     def _write_json_atomic(self, path: Path, payload: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

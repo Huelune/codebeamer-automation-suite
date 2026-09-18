@@ -18,6 +18,7 @@ from src.gui.developer_tool_panels import ExcelToolPanel
 from src.gui.developer_tool_panels import PayloadToolPanel
 from src.gui.developer_tool_panels import ReadOnlyQueryToolPanel
 from src.gui.developer_tool_panels import SchemaCacheToolPanel
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class DeveloperToolPanelsTest(unittest.TestCase):

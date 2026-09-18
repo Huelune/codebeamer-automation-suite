@@ -5,6 +5,8 @@ import re
 import unittest
 from pathlib import Path
 
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 

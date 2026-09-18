@@ -10,6 +10,8 @@ from src.models import PayloadStatus
 from src.upload_pipeline import run_validation_pipeline
 from src.upload_policy import BLOCKING_OPTION_STATUSES
 from src.upload_policy import USER_LOOKUP_FAILURE_SUFFIXES
+from src.upload_policy import OperationScope
+from src.upload_policy import as_operation_scope
 from src.upload_policy import default_operation_scope
 from src.upload_policy import normalize_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
@@ -65,7 +67,7 @@ class BatchValidationService:
         selected_mapping_modes: dict[str, Any] | None,
         *,
         upload_mode: str | None,
-    ) -> dict[str, dict[str, bool]]:
+    ) -> dict[str, OperationScope]:
         return {
             str(df_column).strip(): normalize_operation_scope(
                 (selected_mapping_modes or {}).get(str(df_column).strip()),
@@ -82,18 +84,18 @@ class BatchValidationService:
         selected_default_value_modes: dict[str, Any] | None,
         *,
         upload_mode: str | None,
-    ) -> dict[str, dict[str, bool]]:
+    ) -> dict[str, OperationScope]:
         default_scope = default_operation_scope(upload_mode)
-        normalized: dict[str, dict[str, bool]] = {}
+        normalized: dict[str, OperationScope] = {}
         for schema_field in selected_default_values:
             field_name = str(schema_field).strip()
             if not field_name:
                 continue
             raw_scope = (selected_default_value_modes or {}).get(field_name)
             normalized[field_name] = (
-                dict(default_scope)
+                as_operation_scope(default_scope)
                 if scope_applies_to_upload_mode(raw_scope, upload_mode=upload_mode)
-                else {"create": False, "update": False}
+                else OperationScope(create=False, update=False)
             )
         return normalized
 
@@ -575,8 +577,8 @@ class BatchValidationService:
         selected_default_values: dict[str, str] | None = None,
         selected_tracker_item_settings: dict[str, dict[str, Any]] | None = None,
         *,
-        selected_mapping_modes: dict[str, dict[str, bool]] | None = None,
-        selected_default_value_modes: dict[str, dict[str, bool]] | None = None,
+        selected_mapping_modes: dict[str, OperationScope] | None = None,
+        selected_default_value_modes: dict[str, OperationScope] | None = None,
     ) -> ValidationContext:
         """`validate_mapping` 입력을 검증한다."""
         wizard = mapping_context.wizard

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_comment_service import TrackerCommentService
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 @dataclass

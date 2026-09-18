@@ -4,20 +4,12 @@ from dataclasses import dataclass
 from dataclasses import field
 from typing import Any
 
+from .payload_values import optional_int
 from .tracker_content_models import AttachmentSummary
 
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
-
-
-def _optional_int(value: Any) -> int | None:
-    if value in (None, "") or isinstance(value, bool):
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _person(value: Any) -> str:
@@ -48,15 +40,15 @@ class ItemComment:
             for value in raw_attachments:
                 if not isinstance(value, dict):
                     continue
-                attachment_id = _optional_int(value.get("id") or value.get("attachmentId"))
+                attachment_id = optional_int(value.get("id") or value.get("attachmentId"))
                 if attachment_id is None:
                     continue
                 attachments.append(
                     AttachmentSummary(
                         attachment_id=attachment_id,
                         name=_text(value.get("name") or value.get("fileName")) or f"첨부 {attachment_id}",
-                        version=_optional_int(value.get("version")),
-                        size=_optional_int(value.get("size") or value.get("fileSize")),
+                        version=optional_int(value.get("version")),
+                        size=optional_int(value.get("size") or value.get("fileSize")),
                         mime_type=_text(value.get("mimeType") or value.get("contentType")),
                         modified_at=_text(value.get("modifiedAt")),
                         md5=_text(value.get("md5")),
