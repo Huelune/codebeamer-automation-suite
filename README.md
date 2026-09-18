@@ -42,8 +42,7 @@ py -3 cli_main.py
 
 정식 태그는 `vX.Y.Z`, 릴리스 후보는 `vX.Y.Z-rc.N` 형식입니다. 태그 커밋이 `main` 이력에 포함되고
 태그의 기본 버전이 `VERSION`과 일치할 때만 Release가 게시됩니다. 따라서 아직 병합되지 않은 PR은
-배포에 포함되지 않습니다. 실제 `v0.1.0` 태그와 첫 Release는 파이프라인과 포함 기능을 `main`에 병합한
-뒤 별도 배포 작업에서 생성합니다.
+배포에 포함되지 않습니다.
 
 다운로드, 압축 해제, 체크섬·attestation 확인, 버전 변경과 태그 생성 절차 및 현재 검증 한계는
 [Windows Portable ZIP 배포 가이드](./docs/windows-release.md)에 정리했습니다.

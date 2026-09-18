@@ -104,8 +104,6 @@ git push origin v0.1.0
 일치해야 합니다. 열린 PR이나 아직 병합되지 않은 원격 브랜치의 변경은 Release에 포함되지 않습니다.
 실패한 태그를 다른 커밋으로 강제 이동하지 말고 원인을 수정한 새 태그를 사용합니다.
 
-실제 `v0.1.0` 태그는 Release workflow와 포함 기능이 `main`에 병합된 뒤 별도 배포 작업에서 생성합니다.
-
 ## GitHub Actions 동작
 
 Windows Release workflow는 pull request, 수동 실행과 `v*` 태그 push에서 실행됩니다. 모든 경우에
