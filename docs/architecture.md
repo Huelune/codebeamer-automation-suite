@@ -232,6 +232,9 @@ payload cache, 업로드 실행 서비스를 조합하고 기존 payload 메서�
 - GUI 서비스 분리: `src/gui/service_core.py`, `src/gui/upload_service.py`
 - 트래커 조회 모델·서비스: `src/gui/tracker_query_models.py`, `src/gui/tracker_query_service.py`
 - 트래커 계층·검색·상세 화면: `src/gui/tracker_workspace.py`
+- Baseline 전체 비교 패널: `src/gui/tracker_baseline_panel.py`
+- 작업공간 표시 helper(정렬 셀, 색상 혼합, 단건 조회 결과): `src/gui/tracker_workspace_support.py`
+- Excel 내보내기 공용 서식·셀 한도·열 너비: `src/gui/excel_export_style.py`
 - 트래커 단건 생성·부분 수정·상태 전환·삭제 계약: `src/gui/tracker_item_editor.py`
 - schema 기반 필드 편집과 삭제 확인 UI: `src/gui/tracker_item_editor_panel.py`
 - schema 기반 최상위·하위 단건 생성 UI: `src/gui/tracker_item_create_dialog.py`

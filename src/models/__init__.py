@@ -1,7 +1,7 @@
 from .common import CONNECTED_FIELD_TYPE_VALUE_MODEL_MAP
 from .common import ITEM_SEARCH_RESULT_KEYS
 from .common import OPTION_CONTAINER_KEYS
-from .common import TODO_FIELD_TYPE_VALUE_MODEL_MAP
+from .common import PENDING_FIELD_TYPE_VALUE_MODEL_MAP
 from .common import USER_SEARCH_RESULT_KEYS
 from .common import DescriptionFormat
 from .common import DomainModel
@@ -63,7 +63,7 @@ __all__ = [
     "CONNECTED_FIELD_TYPE_VALUE_MODEL_MAP",
     "ITEM_SEARCH_RESULT_KEYS",
     "OPTION_CONTAINER_KEYS",
-    "TODO_FIELD_TYPE_VALUE_MODEL_MAP",
+    "PENDING_FIELD_TYPE_VALUE_MODEL_MAP",
     "USER_SEARCH_RESULT_KEYS",
     "AbstractFieldValue",
     "AbstractReference",

@@ -8,14 +8,22 @@ from typing import Any
 
 from openpyxl import Workbook
 from openpyxl.cell import Cell
-from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Alignment
-from openpyxl.styles import Border
-from openpyxl.styles import Font
-from openpyxl.styles import PatternFill
-from openpyxl.styles import Side
 from openpyxl.utils import get_column_letter
 
+from .excel_export_style import BODY_FONT
+from .excel_export_style import CENTER_WRAP
+from .excel_export_style import EXCEL_MAX_CELL_LINE_FEEDS
+from .excel_export_style import EXCEL_MAX_CELL_TEXT
+from .excel_export_style import GROUP_FILL
+from .excel_export_style import HEADER_FILL
+from .excel_export_style import HEADER_FONT
+from .excel_export_style import LINK_FONT
+from .excel_export_style import THIN_BORDER
+from .excel_export_style import TOP_WRAP
+from .excel_export_style import WHITE_FONT
+from .excel_export_style import excel_text_units
+from .excel_export_style import normalize_excel_text
 from .tracker_baseline_compare import TrackerItemFieldValue
 from .tracker_baseline_compare import TrackerTableColumn
 from .tracker_baseline_compare import display_tracker_value
@@ -27,8 +35,6 @@ from .tracker_hierarchy import build_tracker_hierarchy
 from .tracker_query_models import TrackerItemSummary
 
 
-EXCEL_MAX_CELL_TEXT = 32767
-EXCEL_MAX_CELL_LINE_FEEDS = 253
 EXCEL_MAX_COLUMNS = 16384
 EXCEL_MAX_ROWS = 1048576
 LONG_VALUE_CELL_TEXT = 30000
@@ -108,7 +114,7 @@ class _LongValueCollector:
         value: str,
         source_coordinate: str,
     ) -> _LongValueRecord | None:
-        normalized = _normalize_excel_text(value)
+        normalized = normalize_excel_text(value)
         if not _requires_long_value_sheet(normalized):
             return None
         parts = _split_excel_text(
@@ -135,16 +141,6 @@ class _LongValueCollector:
         return record
 
 
-_FONT_NAME = "Arial Unicode MS"
-_GROUP_FILL = PatternFill("solid", fgColor="1F4E78")
-_HEADER_FILL = PatternFill("solid", fgColor="D9EAF7")
-_WHITE_FONT = Font(name=_FONT_NAME, color="FFFFFF", bold=True)
-_HEADER_FONT = Font(name=_FONT_NAME, color="1F2937", bold=True)
-_BODY_FONT = Font(name=_FONT_NAME, color="1F2937")
-_THIN_SIDE = Side(style="thin", color="CBD5E1")
-_BORDER = Border(left=_THIN_SIDE, right=_THIN_SIDE, top=_THIN_SIDE, bottom=_THIN_SIDE)
-_TOP_WRAP = Alignment(vertical="top", wrap_text=True)
-_CENTER_WRAP = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
 def hierarchy_export_fields_from_schema(
@@ -496,9 +492,9 @@ def _populate_item_sheet(
             for target_column in range(1, len(flattened) + _FIXED_COLUMN_COUNT + 1):
                 cell = sheet.cell(row, target_column)
                 if isinstance(cell, Cell):
-                    cell.border = _BORDER
+                    cell.border = THIN_BORDER
                     if cell.alignment is None or cell.alignment.indent == 0:
-                        cell.alignment = _TOP_WRAP
+                        cell.alignment = TOP_WRAP
         row_index = end_row + 1
 
     widths = {1: 13, 2: 42, 3: 12, 4: 18}
@@ -560,8 +556,8 @@ def _populate_info_sheet(
         _set_safe_value(sheet.cell(row_index, 1), label, context="내보내기 정보")
         _set_safe_value(sheet.cell(row_index, 2), value, context=f"내보내기 정보 {label}")
         for column in (1, 2):
-            sheet.cell(row_index, column).border = _BORDER
-            sheet.cell(row_index, column).alignment = _TOP_WRAP
+            sheet.cell(row_index, column).border = THIN_BORDER
+            sheet.cell(row_index, column).alignment = TOP_WRAP
         if row_index == 1:
             _style_header(sheet.cell(row_index, 1), group=True)
             _style_header(sheet.cell(row_index, 2), group=True)
@@ -591,13 +587,11 @@ def _populate_long_value_sheet(sheet, collector: _LongValueCollector) -> None:
                     value,
                     context=f"#{record.item_id} 긴 값 {part_index}/{len(record.parts)}",
                 )
-                sheet.cell(row_index, column).border = _BORDER
-                sheet.cell(row_index, column).alignment = _TOP_WRAP
+                sheet.cell(row_index, column).border = THIN_BORDER
+                sheet.cell(row_index, column).alignment = TOP_WRAP
             if part_index == 1:
                 sheet.cell(row_index, 1).hyperlink = f"#'트래커 항목'!{record.source_coordinate}"
-                sheet.cell(row_index, 1).font = Font(
-                    name=_FONT_NAME, color="0563C1", underline="single"
-                )
+                sheet.cell(row_index, 1).font = LINK_FONT
             row_index += 1
     widths = {1: 14, 2: 30, 3: 32, 4: 10, 5: 80}
     for column, width in widths.items():
@@ -638,7 +632,7 @@ def _write_scalar_value(
     if record is not None:
         cell = sheet.cell(start_row, column)
         cell.hyperlink = f"#'{LONG_VALUE_SHEET_TITLE}'!E{record.start_row}"
-        cell.font = Font(name=_FONT_NAME, color="0563C1", underline="single")
+        cell.font = LINK_FONT
 
 
 def _merge_value(
@@ -658,14 +652,14 @@ def _merge_value(
             end_column=column,
         )
     _set_safe_value(sheet.cell(start_row, column), value, context=context)
-    sheet.cell(start_row, column).alignment = _TOP_WRAP
+    sheet.cell(start_row, column).alignment = TOP_WRAP
 
 
 def _style_header(cell: Cell, *, group: bool = False) -> None:
-    cell.fill = _GROUP_FILL if group else _HEADER_FILL
-    cell.font = _WHITE_FONT if group else _HEADER_FONT
-    cell.alignment = _CENTER_WRAP
-    cell.border = _BORDER
+    cell.fill = GROUP_FILL if group else HEADER_FILL
+    cell.font = WHITE_FONT if group else HEADER_FONT
+    cell.alignment = CENTER_WRAP
+    cell.border = THIN_BORDER
 
 
 def _flattened_fields(
@@ -737,17 +731,11 @@ def _optional_positive_int(value: Any) -> int | None:
     return normalized if normalized > 0 else None
 
 
-def _normalize_excel_text(value: Any) -> str:
-    return ILLEGAL_CHARACTERS_RE.sub("", str(value or ""))
-
-
-def _excel_text_units(value: str) -> int:
-    return len(value.encode("utf-16-le")) // 2
 
 
 def _requires_long_value_sheet(value: str) -> bool:
     return (
-        _excel_text_units(value) > LONG_VALUE_CELL_TEXT
+        excel_text_units(value) > LONG_VALUE_CELL_TEXT
         or value.count("\n") > LONG_VALUE_CELL_LINE_FEEDS
     )
 
@@ -758,7 +746,7 @@ def _split_excel_text(
     max_text_units: int,
     max_line_feeds: int,
 ) -> tuple[str, ...]:
-    normalized = _normalize_excel_text(value)
+    normalized = normalize_excel_text(value)
     if not normalized:
         return ("",)
     parts: list[str] = []
@@ -792,7 +780,7 @@ def _split_excel_text(
 
 def _long_value_preview(value: str) -> str:
     suffix = f"\n\n[전체 내용은 '{LONG_VALUE_SHEET_TITLE}' 시트에서 확인]"
-    budget = max(LONG_VALUE_PREVIEW_TEXT - _excel_text_units(suffix), 1)
+    budget = max(LONG_VALUE_PREVIEW_TEXT - excel_text_units(suffix), 1)
     line_budget = max(LONG_VALUE_PREVIEW_LINE_FEEDS - suffix.count("\n"), 0)
     prefix = _split_excel_text(
         value,
@@ -803,10 +791,10 @@ def _long_value_preview(value: str) -> str:
 
 
 def _set_safe_value(cell: Cell, value: Any, *, context: str) -> None:
-    cell.font = _BODY_FONT
+    cell.font = BODY_FONT
     if isinstance(value, str):
-        normalized = _normalize_excel_text(value)
-        text_units = _excel_text_units(normalized)
+        normalized = normalize_excel_text(value)
+        text_units = excel_text_units(normalized)
         if text_units > EXCEL_MAX_CELL_TEXT:
             raise TrackerHierarchyExportError(
                 f"{context} 내용이 Excel 셀 길이 한도({EXCEL_MAX_CELL_TEXT:,}자)를 초과합니다."

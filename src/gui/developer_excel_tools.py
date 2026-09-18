@@ -22,8 +22,12 @@ from openpyxl.styles import Font
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
+from .excel_export_style import EXCEL_MAX_CELL_TEXT
+from .excel_export_style import fit_column_widths
 
-EXCEL_CELL_MAX_CHARACTERS = 32_767
+
+# 공개된 이름은 유지하고 값은 공용 상수를 단일 출처로 사용한다.
+EXCEL_CELL_MAX_CHARACTERS = EXCEL_MAX_CELL_TEXT
 _SUPPORTED_INPUT_SUFFIXES = {".xlsx", ".xlsm", ".xls", ".csv"}
 _FORMULA_PREFIXES = ("=", "+", "-", "@")
 _FORMULA_ERRORS = {
@@ -578,10 +582,7 @@ class DeveloperExcelToolService:
             cell.alignment = Alignment(vertical="center")
         worksheet.freeze_panes = f"A{header_row + 1}"
         worksheet.auto_filter.ref = worksheet.dimensions
-        for column_index in range(1, worksheet.max_column + 1):
-            values = [worksheet.cell(row=row, column=column_index).value for row in range(1, min(worksheet.max_row, 200) + 1)]
-            width = min(max((len(str(value)) for value in values if value is not None), default=8) + 2, 60)
-            worksheet.column_dimensions[get_column_letter(column_index)].width = max(width, 10)
+        fit_column_widths(worksheet)
         try:
             _atomic_workbook_save(workbook, target)
         finally:
