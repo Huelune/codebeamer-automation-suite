@@ -229,8 +229,10 @@ def _read_xls_values(
         return normalized_rows, selected, sheet_names
     finally:
         if workbook is not None:
+            # xlwings COM 정리 실패는 형태가 일정하지 않다. 읽어 둔 결과 반환을 막지 않는다.
             with contextlib.suppress(Exception):
                 workbook.close()
+        # Excel 프로세스 종료 실패도 마찬가지로 결과 반환을 막지 않는다.
         with contextlib.suppress(Exception):
             app.quit()
 
@@ -683,7 +685,8 @@ class DeveloperExcelToolService:
                 for formula_cell, value_cell in zip(formula_row, value_row, strict=False):
                     if formula_cell.data_type == "f" and value_cell.value is None:
                         raise DeveloperExcelToolError(
-                            f"{formula_sheet.title}!{formula_cell.coordinate} 수식의 계산된 값이 없어 값 전용 변환을 중단했습니다. Excel에서 계산 후 저장하세요."
+                            f"{formula_sheet.title}!{formula_cell.coordinate} 수식의 계산된 값이 없어 "
+                            "값 전용 변환을 중단했습니다. Excel에서 계산 후 저장하세요."
                         )
                     output_row.append(value_cell.value)
                 rows.append(output_row)

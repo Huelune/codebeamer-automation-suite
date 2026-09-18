@@ -119,6 +119,7 @@ class BatchUploadWindow(WindowShellMixin, WindowWorkflowMixin, WindowUploadMixin
     def _record_activity(self, record: ActivityRecord) -> None:
         if self._activity_recorder is None:
             return
+        # 실행 기록 저장은 부가 기능이다. 기록이 실패해도 업로드 흐름을 끊지 않는다.
         with contextlib.suppress(Exception):
             self._activity_recorder(record)
 

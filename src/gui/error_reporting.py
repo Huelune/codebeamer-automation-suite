@@ -186,12 +186,15 @@ class GuiExceptionReporter(QObject):
         thread_args=None,
     ) -> None:
         if self._exception_logger is not None:
+            # 전역 예외 처리기 안이다. 여기서 다시 예외가 나면 원래 예외 보고를 잃는다.
             with contextlib.suppress(Exception):
                 self._exception_logger(exc_type, exc_value, traceback, thread_name)
         if thread_args is not None and self._previous_thread_hook is not None:
+            # 이전 hook 이 남의 코드일 수 있어 어떤 예외든 우리 보고를 막게 두지 않는다.
             with contextlib.suppress(Exception):
                 self._previous_thread_hook(thread_args)
             return
+        # 이전 hook 이 남의 코드일 수 있어 어떤 예외든 우리 보고를 막게 두지 않는다.
         with contextlib.suppress(Exception):
             self._previous_sys_hook(exc_type, exc_value, traceback)
 
@@ -249,7 +252,9 @@ class GuiExceptionReporter(QObject):
             else:
                 show_error_alert(self.app.activeWindow(), title, message)
         except Exception as exc:
-            with contextlib.suppress(Exception):
+            # windowed EXE 에서는 sys.__stderr__ 가 None(AttributeError)이거나
+            # 이미 닫혀 있을(ValueError/OSError) 수 있다.
+            with contextlib.suppress(AttributeError, OSError, ValueError):
                 sys.__stderr__.write(f"GUI error alert failed: {exc}\n")
         finally:
             self._reporting = False

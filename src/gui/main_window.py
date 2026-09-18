@@ -631,6 +631,7 @@ class MainWindow(QMainWindow):
             navigation_collapsed=self.navigation_collapsed,
         )
         self.batch_window.session_state.settings = updated_settings
+        # 창 설정 저장 실패로 앱 종료가 막히면 안 된다. 저장은 다음 실행에서 다시 시도한다.
         with contextlib.suppress(Exception):
             self.settings_store.save_window_preferences(updated_settings)
         self.diagnostics.record(
