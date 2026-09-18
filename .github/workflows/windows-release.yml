@@ -69,7 +69,9 @@ jobs:
 
   build:
     name: Build Windows x64
-    needs: [lint, test]
+    # 테스트와 병렬로 돌려 전체 대기 시간을 줄인다.
+    # 테스트를 통과하지 않은 결과가 배포되지 않도록 release job 이 test 까지 요구한다.
+    needs: lint
     runs-on: windows-2022
     outputs:
       artifact_version: ${{ steps.metadata.outputs.artifact_version }}
@@ -182,7 +184,7 @@ jobs:
   release:
     name: Publish GitHub Release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, test]
     runs-on: windows-2022
     permissions:
       artifact-metadata: write
