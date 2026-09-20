@@ -17,6 +17,7 @@ from tests.gui_service_fixtures import TrackerItemNonTrackerConfigFakeClient
 from tests.gui_service_fixtures import TrackerItemQueryFakeClient
 from tests.gui_service_fixtures import TrackerItemReferenceIdConfigFakeClient
 from tests.gui_service_fixtures import UserReferenceDefaultFakeClient
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class GuiLookupPipelineServiceTest(unittest.TestCase):

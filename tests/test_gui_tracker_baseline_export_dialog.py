@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QDialogButtonBox
 from src.gui.tracker_baseline_compare import TrackerTableColumn
 from src.gui.tracker_baseline_export import BaselineExportField
 from src.gui.tracker_baseline_export_dialog import BaselineExportFieldDialog
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class BaselineExportFieldDialogTest(unittest.TestCase):

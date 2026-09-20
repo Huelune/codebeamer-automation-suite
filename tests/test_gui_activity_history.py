@@ -24,6 +24,7 @@ from src.gui.batch_window import BatchUploadWindow
 from src.gui.settings_store import GuiSettings
 from src.gui.settings_store import GuiSettingsStore
 from src.gui.window_support import UploadProgressState
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 def _record(

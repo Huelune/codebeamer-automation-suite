@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication
 from src.gui.tracker_baseline_compare import TrackerTableColumn
 from src.gui.tracker_hierarchy_export import TrackerHierarchyExportField
 from src.gui.tracker_hierarchy_export_dialog import TrackerHierarchyExportFieldDialog
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class TrackerHierarchyExportFieldDialogTest(unittest.TestCase):

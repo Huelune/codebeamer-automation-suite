@@ -5,6 +5,7 @@ import unittest
 from src.gui.tracker_hierarchy import TrackerHierarchyError
 from src.gui.tracker_hierarchy import build_tracker_hierarchy
 from src.gui.tracker_query_models import TrackerItemSummary
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 def _item(

@@ -18,6 +18,7 @@ from tests.gui_service_fixtures import FakeClient
 from tests.gui_service_fixtures import FakeExcelReader
 from tests.gui_service_fixtures import UpdateModeFakeClient
 from tests.gui_service_fixtures import UpsertModeFakeClient
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class GuiMappingPipelineServiceTest(unittest.TestCase):

@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QWidget
 
 from src.gui.loading_overlay import LoadingOverlay
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class LoadingOverlayTest(unittest.TestCase):

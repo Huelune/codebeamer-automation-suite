@@ -6,6 +6,7 @@ import pandas as pd
 
 from src.gui.validation_presenter import ValidationPresenter
 from src.models import PayloadStatus
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class ValidationPresenterTest(unittest.TestCase):

@@ -5,6 +5,7 @@ import unittest
 from src.gui.styles import DEFAULT_GUI_THEME
 from src.gui.styles import build_gui_stylesheet
 from src.gui.styles import normalize_gui_theme_name
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class GuiStylesTest(unittest.TestCase):

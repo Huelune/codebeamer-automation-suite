@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import sys
 import threading
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import QPushButton
 from src.diagnostics import DiagnosticService
 from src.gui.error_reporting import install_global_exception_handler
 from src.gui.error_reporting import safe_exception_message
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 class GuiErrorReportingTest(unittest.TestCase):
@@ -66,9 +69,13 @@ class GuiErrorReportingTest(unittest.TestCase):
         def fail() -> None:
             raise RuntimeError("worker failed")
 
-        thread = threading.Thread(target=fail, name="sample-worker")
-        thread.start()
-        thread.join()
+        # 처리기는 이전 hook 으로 넘겨 콘솔 traceback 을 유지한다.
+        # 그 출력을 여기서 받아 계약을 확인하고, 테스트 로그에는 남기지 않는다.
+        console = io.StringIO()
+        with contextlib.redirect_stderr(console):
+            thread = threading.Thread(target=fail, name="sample-worker")
+            thread.start()
+            thread.join()
         self._app.processEvents()
 
         self.assertEqual(
@@ -77,6 +84,9 @@ class GuiErrorReportingTest(unittest.TestCase):
         )
         self.assertEqual(self.alerts[0][0], "예상하지 못한 오류")
         self.assertIn("worker failed", self.alerts[0][1])
+        console_output = console.getvalue()
+        self.assertIn("sample-worker", console_output)
+        self.assertIn("RuntimeError: worker failed", console_output)
 
     def test_install_is_idempotent_and_restore_recovers_hooks(self) -> None:
         sys_hook = self.reporter._previous_sys_hook

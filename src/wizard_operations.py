@@ -71,6 +71,7 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
     # 조립된 뒤 사용할 속성의 타입 선언이다. 실제 값은
     # `CodebeamerUploadWizard.__init__` 이 채우므로 여기서는 선언만 둔다.
     client: CodebeamerClient
+    logger: Any
     payload_cache: WizardPayloadCacheService
     state: WizardState
 
@@ -226,7 +227,8 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
                     "status": UploadStatus.SUCCESS.value,
                 })
                 message = f"Row {root_item_name} uploaded successfully: item_id={root_item_id}"
-                print(message)
+                if self.logger:
+                    self.logger.info(message)
                 if event_callback is not None:
                     event_callback({
                         "type": "row_success",
@@ -332,7 +334,8 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
                             "status": UploadStatus.SUCCESS.value,
                         })
                         message = f"Row {parent_name} uploaded successfully: item_id={parent_item_id}"
-                        print(message)
+                        if self.logger:
+                            self.logger.info(message)
                         if event_callback is not None:
                             event_callback({
                                 "type": "row_success",
@@ -467,7 +470,8 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
                         "status": UploadStatus.SUCCESS.value,
                     })
                     message = f"Row {row['upload_name']} uploaded successfully: item_id={result['id']}"
-                    print(message)
+                    if self.logger:
+                        self.logger.info(message)
                     if event_callback is not None:
                         event_callback({
                             "type": "row_success",

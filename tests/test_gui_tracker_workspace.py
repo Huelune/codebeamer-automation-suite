@@ -35,6 +35,7 @@ from src.gui.tracker_query_service import TrackerQueryService
 from src.gui.tracker_workspace import CHILDREN_LOADED_ROLE
 from src.gui.tracker_workspace import ITEM_SUMMARY_ROLE
 from src.gui.tracker_workspace import TrackerWorkspacePage
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "gui-offline-sample"

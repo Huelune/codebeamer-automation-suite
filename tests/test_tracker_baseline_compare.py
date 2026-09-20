@@ -9,6 +9,7 @@ from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
 from src.gui.tracker_query_models import TrackerItemSummary
 from src.gui.tracker_query_service import TrackerQueryService
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 def _summary(item_id: int, *, status: str = "Open", rows=None) -> TrackerItemSummary:

@@ -10,6 +10,7 @@ from src.gui.tracker_condition_builder import TrackerConditionBuilder
 from src.gui.tracker_condition_builder import TrackerConditionDialog
 from src.gui.tracker_condition_builder import query_field_specs
 from src.gui.tracker_item_editor import build_create_tracker_schema
+from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 SCHEMA = {
