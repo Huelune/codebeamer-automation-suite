@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from .upload_policy import OperationScope
 from .upload_policy import normalize_operation_scope
 from .upload_policy import normalize_upload_mode
 from .upload_policy import scope_applies_to_operation
@@ -124,9 +125,9 @@ class WizardOptionResolutionService:
         self,
         selected_mapping: dict[str, str],
         selected_option_mapping: dict[str, str] | None = None,
-        selected_mapping_modes: dict[str, dict[str, bool]] | None = None,
+        selected_mapping_modes: dict[str, OperationScope] | None = None,
         selected_default_values: dict[str, Any] | None = None,
-        selected_default_value_modes: dict[str, dict[str, bool]] | None = None,
+        selected_default_value_modes: dict[str, OperationScope] | None = None,
         selected_tracker_item_settings: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[dict[str, str], pd.DataFrame]:
         """옵션/참조형 필드를 찾아 lookup과 검증을 한 번에 수행한다."""

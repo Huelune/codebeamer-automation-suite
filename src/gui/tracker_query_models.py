@@ -8,6 +8,9 @@ from dataclasses import field
 from enum import Enum
 from typing import Any
 
+from .payload_values import as_mapping
+from .payload_values import optional_int
+
 
 DEFAULT_TRACKER_QUERY_PAGE_SIZE = 100
 MAX_TRACKER_QUERY_PAGE_SIZE = 500
@@ -95,15 +98,6 @@ def _positive_int(value: Any, *, label: str) -> int:
     if normalized <= 0:
         raise ValueError(f"{label}은(는) 양의 정수여야 합니다.")
     return normalized
-
-
-def _optional_int(value: Any) -> int | None:
-    if value in (None, "") or isinstance(value, bool):
-        return None
-    try:
-        return int(value)
-    except Exception:
-        return None
 
 
 def _display_text(value: Any) -> str:
@@ -298,7 +292,7 @@ class TrackerItemReferenceSummary:
     def from_raw(cls, value: Any) -> TrackerItemReferenceSummary | None:
         if not isinstance(value, dict):
             return None
-        item_id = _optional_int(value.get("id"))
+        item_id = optional_int(value.get("id"))
         if item_id is None:
             return None
         return cls(
@@ -345,14 +339,14 @@ class TrackerSummary:
         if not isinstance(value, dict):
             raise ValueError("트래커 응답은 객체여야 합니다.")
         tracker_id = _positive_int(value.get("id"), label="트래커 ID")
-        project = value.get("project") if isinstance(value.get("project"), dict) else {}
+        project = as_mapping(value.get("project"))
         return cls(
             tracker_id=tracker_id,
             name=str(value.get("name") or value.get("key") or tracker_id),
             project_id=(
-                _optional_int(project.get("id"))
-                or _optional_int(value.get("projectId"))
-                or _optional_int(project_id)
+                optional_int(project.get("id"))
+                or optional_int(value.get("projectId"))
+                or optional_int(project_id)
             ),
             project_name=str(
                 project.get("name") or value.get("projectName") or project_name or ""
@@ -393,18 +387,18 @@ class TrackerItemSummary:
         if not isinstance(value, dict):
             raise ValueError("트래커 아이템 응답은 객체여야 합니다.")
         item_id = _positive_int(value.get("id"), label="아이템 ID")
-        tracker = value.get("tracker") if isinstance(value.get("tracker"), dict) else {}
-        project = value.get("project") if isinstance(value.get("project"), dict) else {}
-        if not project and isinstance(tracker.get("project"), dict):
-            project = tracker.get("project")
-        parent = value.get("parent") if isinstance(value.get("parent"), dict) else {}
+        tracker = as_mapping(value.get("tracker"))
+        project = as_mapping(value.get("project"))
+        if not project:
+            project = as_mapping(tracker.get("project"))
+        parent = as_mapping(value.get("parent"))
         children = value.get("children") if isinstance(value.get("children"), list) else []
         raw_assignees = value.get("assignedTo")
         if raw_assignees is None:
             raw_assignees = value.get("assignees")
         if not isinstance(raw_assignees, list):
             raw_assignees = [] if raw_assignees in (None, "") else [raw_assignees]
-        child_count = _optional_int(value.get("childCount"))
+        child_count = optional_int(value.get("childCount"))
         if child_count is None and children:
             child_count = len(children)
         has_children = bool(
@@ -421,12 +415,12 @@ class TrackerItemSummary:
                 or value.get("key")
                 or item_id
             ),
-            tracker_id=_optional_int(tracker.get("id")) or _optional_int(tracker_id),
+            tracker_id=optional_int(tracker.get("id")) or optional_int(tracker_id),
             tracker_name=str(tracker.get("name") or tracker_name or ""),
             project_id=(
-                _optional_int(project.get("id"))
-                or _optional_int(value.get("projectId"))
-                or _optional_int(project_id)
+                optional_int(project.get("id"))
+                or optional_int(value.get("projectId"))
+                or optional_int(project_id)
             ),
             project_name=str(
                 project.get("name") or value.get("projectName") or project_name or ""
@@ -436,11 +430,11 @@ class TrackerItemSummary:
                 text for text in (_display_text(item) for item in raw_assignees) if text
             ),
             modified_at=str(value.get("modifiedAt") or value.get("modified_at") or ""),
-            parent_id=_optional_int(parent.get("id")),
+            parent_id=optional_int(parent.get("id")),
             parent_name=str(parent.get("name") or ""),
             child_count=child_count,
             has_children=has_children,
-            version=_optional_int(value.get("version")),
+            version=optional_int(value.get("version")),
             raw_reference=deepcopy(value),
         )
 
@@ -459,7 +453,7 @@ class TrackerFieldValue:
         if "values" in value:
             raw_value = value.get("values")
         return cls(
-            field_id=_optional_int(value.get("fieldId") or value.get("id")),
+            field_id=optional_int(value.get("fieldId") or value.get("id")),
             name=str(value.get("name") or "이름 없는 필드"),
             type_name=str(value.get("type") or value.get("valueModel") or "Unknown"),
             display_value=_display_text(raw_value),
@@ -539,19 +533,17 @@ class TrackerItemDetail:
     ) -> TrackerItemDetail:
         if not isinstance(value, dict):
             raise ValueError("아이템 상세 응답은 객체여야 합니다.")
-        tracker_payload = tracker_payload if isinstance(tracker_payload, dict) else {}
+        tracker_payload = as_mapping(tracker_payload)
         project = (
-            tracker_payload.get("project")
-            if isinstance(tracker_payload.get("project"), dict)
-            else {}
+            as_mapping(tracker_payload.get("project"))
         )
         summary = TrackerItemSummary.from_raw(
             value,
-            tracker_id=_optional_int(tracker_payload.get("id")),
+            tracker_id=optional_int(tracker_payload.get("id")),
             tracker_name=str(tracker_payload.get("name") or ""),
             project_id=(
-                _optional_int(project.get("id"))
-                or _optional_int(tracker_payload.get("projectId"))
+                optional_int(project.get("id"))
+                or optional_int(tracker_payload.get("projectId"))
             ),
             project_name=str(
                 project.get("name") or tracker_payload.get("projectName") or ""
@@ -668,12 +660,12 @@ class PageResult[ItemT]:
         requested_page_size: int,
     ) -> PageResult[ItemT]:
         normalized_items = tuple(items)
-        payload = raw_page if isinstance(raw_page, dict) else {}
-        page = _optional_int(payload.get("page")) or int(requested_page)
-        page_size = _optional_int(payload.get("pageSize")) or len(normalized_items)
+        payload = as_mapping(raw_page)
+        page = optional_int(payload.get("page")) or int(requested_page)
+        page_size = optional_int(payload.get("pageSize")) or len(normalized_items)
         if page_size <= 0:
             page_size = int(requested_page_size)
-        total = _optional_int(payload.get("total"))
+        total = optional_int(payload.get("total"))
         if total is None:
             total = len(normalized_items)
         metadata = {

@@ -9,6 +9,7 @@ from typing import Any
 
 from src.codebeamer_client import CodebeamerClient
 
+from .payload_values import optional_int
 from .service_core import _build_gui_client
 from .tracker_content_models import AttachmentResource
 from .tracker_content_models import AttachmentSummary
@@ -28,15 +29,6 @@ _IMAGE_MIME_TYPES = {
     "image/svg+xml",
     "image/webp",
 }
-
-
-def _optional_int(value: Any) -> int | None:
-    if value in (None, "") or isinstance(value, bool):
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _attachment_payloads(payload: Any) -> list[dict[str, Any]]:
@@ -170,15 +162,15 @@ class TrackerContentService:
             )
         attachments: list[AttachmentSummary] = []
         for payload in payloads:
-            attachment_id = _optional_int(payload.get("id") or payload.get("attachmentId"))
+            attachment_id = optional_int(payload.get("id") or payload.get("attachmentId"))
             if attachment_id is None:
                 continue
             attachments.append(
                 AttachmentSummary(
                     attachment_id=attachment_id,
                     name=str(payload.get("name") or payload.get("fileName") or f"첨부 {attachment_id}"),
-                    version=_optional_int(payload.get("version")),
-                    size=_optional_int(payload.get("size") or payload.get("fileSize")),
+                    version=optional_int(payload.get("version")),
+                    size=optional_int(payload.get("size") or payload.get("fileSize")),
                     mime_type=str(payload.get("mimeType") or payload.get("contentType") or ""),
                     modified_at=str(payload.get("modifiedAt") or ""),
                     md5=str(payload.get("md5") or ""),

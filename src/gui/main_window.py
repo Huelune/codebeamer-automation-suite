@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import replace
+from typing import TYPE_CHECKING
+from typing import Any
 
 from PySide6.QtCore import QTimer
 
@@ -65,7 +67,13 @@ APPLICATION_NAVIGATION_COLLAPSED_WIDTH = 68
 
 
 _QT = _require_qt()
-QMainWindow = _QT["QMainWindow"]
+if TYPE_CHECKING:
+    # 런타임 가드는 아래 else 가 유지한다. 타입 체커에는 실제 클래스를 알려준다.
+    from PySide6.QtWidgets import QMainWindow
+    from PySide6.QtWidgets import QPushButton
+    from PySide6.QtWidgets import QWidget
+else:
+    QMainWindow = _QT["QMainWindow"]
 
 
 class MainWindow(QMainWindow):
@@ -91,8 +99,8 @@ class MainWindow(QMainWindow):
         self._last_normal_window_height = max(int(initial_settings.window_height), 620)
         self.current_route = ""
         self.navigation_collapsed = bool(initial_settings.navigation_collapsed)
-        self.route_widgets: dict[str, object] = {}
-        self.nav_buttons: dict[str, object] = {}
+        self.route_widgets: dict[str, QWidget] = {}
+        self.nav_buttons: dict[str, QPushButton] = {}
         self.developer_tools_window: DeveloperToolsWindow | None = None
         self.api_monitor_window: DeveloperToolsWindow | None = None
         self._busy_tokens: set[int] = set()
@@ -285,12 +293,11 @@ class MainWindow(QMainWindow):
         return token
 
     def _end_busy(self, token: object) -> None:
-        try:
-            normalized_token = int(token)
-        except (TypeError, ValueError):
+        # 콜백 경계라 object 로 들어온다. `_begin_busy` 가 돌려준 int 만 유효하다.
+        if not isinstance(token, int):
             return
-        self._busy_tokens.discard(normalized_token)
-        self.loading_overlay.finish(normalized_token)
+        self._busy_tokens.discard(token)
+        self.loading_overlay.finish(token)
 
     def _create_placeholder_page(
         self,
@@ -441,9 +448,10 @@ class MainWindow(QMainWindow):
         self.application_body_layout.invalidate()
         self.application_body_layout.activate()
         central_widget = self.centralWidget()
-        if central_widget is not None and central_widget.layout() is not None:
-            central_widget.layout().invalidate()
-            central_widget.layout().activate()
+        central_layout = central_widget.layout() if central_widget is not None else None
+        if central_layout is not None:
+            central_layout.invalidate()
+            central_layout.activate()
 
         settings_center = getattr(self, "settings_center_page", None)
         if settings_center is not None:
@@ -562,8 +570,8 @@ class MainWindow(QMainWindow):
 
     def _current_developer_tracker_id(self) -> int | None:
         tracker = getattr(self.tracker_workspace_page, "_current_tracker", None)
-        tracker_id = getattr(tracker, "tracker_id", None)
-        if tracker_id not in (None, ""):
+        tracker_id: Any = getattr(tracker, "tracker_id", None)
+        if tracker_id is not None and tracker_id != "":
             return int(tracker_id)
         fallback = self.batch_window.session_state.settings.default_tracker_id
         try:

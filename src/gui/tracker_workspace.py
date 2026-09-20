@@ -2157,7 +2157,10 @@ class TrackerWorkspacePage(QWidget):
         selected = self.search_table.selectedItems()
         if not selected:
             return
-        summary = self.search_table.item(selected[0].row(), 1).data(ITEM_SUMMARY_ROLE)
+        summary_cell = self.search_table.item(selected[0].row(), 1)
+        if summary_cell is None:
+            return
+        summary = summary_cell.data(ITEM_SUMMARY_ROLE)
         if isinstance(summary, TrackerItemSummary):
             self._load_detail(summary.item_id)
 
@@ -4877,9 +4880,15 @@ class TrackerWorkspacePage(QWidget):
                 version=summary.version,
             )
             id_item.setData(ITEM_SUMMARY_ROLE, updated)
-            self.search_table.item(row, 1).setText(updated.name)
-            self.search_table.item(row, 2).setText(updated.status or "-")
-            self.search_table.item(row, 3).setText(", ".join(updated.assignees) or "-")
+            # 셀이 아직 만들어지지 않았으면 갱신할 대상이 없다.
+            for column, text in (
+                (1, updated.name),
+                (2, updated.status or "-"),
+                (3, ", ".join(updated.assignees) or "-"),
+            ):
+                cell = self.search_table.item(row, column)
+                if cell is not None:
+                    cell.setText(text)
 
     def _remove_visible_item(self, item_id: int) -> None:
         def remove_from(parent: QTreeWidgetItem | None) -> bool:

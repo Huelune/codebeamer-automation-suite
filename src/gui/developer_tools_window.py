@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer
@@ -34,6 +35,13 @@ from src.diagnostics import DiagnosticService
 from src.diagnostics import DiagnosticSnapshot
 from src.diagnostics import DiagnosticSource
 from src.diagnostics import export_diagnostic_bundle
+
+
+if TYPE_CHECKING:
+    from .developer_tool_panels import ExcelToolPanel
+    from .developer_tool_panels import PayloadToolPanel
+    from .developer_tool_panels import ReadOnlyQueryToolPanel
+    from .developer_tool_panels import SchemaCacheToolPanel
 
 from .api_monitor_window import ApiMonitorPanel
 from .error_reporting import notify_user_error
@@ -333,6 +341,14 @@ class DiagnosticsPanel(QWidget):
 
 class DeveloperToolsWindow(QDialog):
     """Non-modal home for diagnostics and the existing API monitor."""
+
+    if TYPE_CHECKING:
+        # 패널은 `MainWindow` 가 개발자 도구를 열 때 밖에서 붙인다.
+        # 여기서는 그 계약을 선언만 해 둔다.
+        excel_tool_panel: ExcelToolPanel
+        payload_tool_panel: PayloadToolPanel
+        schema_cache_tool_panel: SchemaCacheToolPanel
+        read_only_query_tool_panel: ReadOnlyQueryToolPanel
 
     def __init__(
         self,

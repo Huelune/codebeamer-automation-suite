@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
+from functools import partial
 from typing import Any
 
 from src.codebeamer_client import CodebeamerClient
 
+from .payload_values import as_mapping
 from .service_core import _build_gui_client
 from .tracker_baseline_compare import BaselineComparisonResult
 from .tracker_baseline_compare import BaselineComparisonSource
@@ -777,7 +779,7 @@ class TrackerQueryService:
                 operation="load_item_detail",
             )
 
-        tracker = raw_item.get("tracker") if isinstance(raw_item.get("tracker"), dict) else {}
+        tracker = as_mapping(raw_item.get("tracker"))
         tracker_payload: dict[str, Any] = dict(tracker)
         tracker_id = tracker.get("id")
         get_tracker = getattr(client, "get_tracker", None)
@@ -813,7 +815,7 @@ class TrackerQueryService:
                 operation="resolve_item_context",
             )
         tracker_reference = (
-            raw_item.get("tracker") if isinstance(raw_item.get("tracker"), dict) else {}
+            as_mapping(raw_item.get("tracker"))
         )
         tracker_id = tracker_reference.get("id")
         if tracker_id is None:
@@ -874,7 +876,7 @@ class TrackerQueryService:
             visited.add(current_id)
             raw_item = self._run(
                 "load_ancestor_path",
-                lambda selected_id=current_id: client.get_item(selected_id),
+                partial(client.get_item, current_id),
             )
             if not isinstance(raw_item, dict):
                 raise TrackerQueryServiceError(

@@ -15,6 +15,8 @@ from src.codebeamer_client import CodebeamerClient
 from src.excel_reader import ExcelReader
 
 from .offline_query import build_offline_cbql_predicate
+from .payload_values import as_mapping
+from .payload_values import optional_int
 
 
 @dataclass
@@ -261,7 +263,7 @@ class OfflineGuiClient:
             if not isinstance(raw_tracker, dict):
                 raise ValueError("테스트 조회 데이터의 트래커 형식이 올바르지 않습니다.")
             tracker_id = int(raw_tracker.get("id") or 0)
-            project = raw_tracker.get("project") if isinstance(raw_tracker.get("project"), dict) else {}
+            project = as_mapping(raw_tracker.get("project"))
             project_id = int(raw_tracker.get("projectId") or project.get("id") or 0)
             if tracker_id <= 0 or tracker_id in self._offline_trackers:
                 raise ValueError("테스트 조회 데이터의 트래커 ID가 없거나 중복됩니다.")
@@ -281,11 +283,10 @@ class OfflineGuiClient:
             if not isinstance(raw_item, dict):
                 raise ValueError("테스트 조회 데이터의 아이템 형식이 올바르지 않습니다.")
             item_id = int(raw_item.get("id") or 0)
-            tracker = raw_item.get("tracker") if isinstance(raw_item.get("tracker"), dict) else {}
+            tracker = as_mapping(raw_item.get("tracker"))
             tracker_id = int(raw_item.get("trackerId") or tracker.get("id") or 0)
-            parent = raw_item.get("parent") if isinstance(raw_item.get("parent"), dict) else {}
-            parent_id_value = raw_item.get("parentId") or parent.get("id")
-            parent_id = int(parent_id_value) if parent_id_value not in (None, "") else None
+            parent = as_mapping(raw_item.get("parent"))
+            parent_id = optional_int(raw_item.get("parentId") or parent.get("id"))
             if item_id <= 0 or item_id in self._offline_items:
                 raise ValueError("테스트 조회 데이터의 아이템 ID가 없거나 중복됩니다.")
             if tracker_id not in self._offline_trackers:
@@ -298,10 +299,10 @@ class OfflineGuiClient:
 
         for item_id, parent_id in parent_ids.items():
             if parent_id is not None:
-                parent = self._offline_items.get(parent_id)
-                if parent is None:
+                parent_item = self._offline_items.get(parent_id)
+                if parent_item is None:
                     raise ValueError("테스트 조회 데이터의 parent 아이템을 찾을 수 없습니다.")
-                if int(parent.get("trackerId") or 0) != int(
+                if int(parent_item.get("trackerId") or 0) != int(
                     self._offline_items[item_id].get("trackerId") or 0
                 ):
                     raise ValueError("테스트 조회 데이터의 parent는 같은 트래커에 있어야 합니다.")
@@ -731,13 +732,11 @@ class OfflineGuiClient:
                 return str(item.get(field_name) or "").casefold()
 
             for field_name, reverse in reversed(order_terms):
-                matches.sort(
-                    key=lambda item, selected_field=field_name: _sort_value(
-                        item,
-                        selected_field,
-                    ),
-                    reverse=reverse,
-                )
+
+                def _sort_key(item: Any, selected_field: str = field_name) -> str:
+                    return _sort_value(item, selected_field)
+
+                matches.sort(key=_sort_key, reverse=reverse)
 
         return _offline_page(
             matches,

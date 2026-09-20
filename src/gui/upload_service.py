@@ -13,6 +13,7 @@ from src.upload_pipeline import load_tracker_schema_df
 from src.upload_pipeline import prepare_upload_dataframe
 from src.upload_pipeline import suggest_mapping_from_headers
 from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
+from src.upload_policy import OperationScope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 from src.upload_policy import upload_mode_allows_root_items as gui_upload_mode_allows_root_items
 from src.wizard import CodebeamerUploadWizard
@@ -84,7 +85,7 @@ class GuiUploadPipelineService:
         selected_mapping_modes: dict[str, Any] | None,
         *,
         upload_mode: str | None,
-    ) -> dict[str, dict[str, bool]]:
+    ) -> dict[str, OperationScope]:
         return BatchValidationService._normalize_mapping_modes(
             selected_mapping,
             selected_mapping_modes,
@@ -98,7 +99,7 @@ class GuiUploadPipelineService:
         selected_default_value_modes: dict[str, Any] | None,
         *,
         upload_mode: str | None,
-    ) -> dict[str, dict[str, bool]]:
+    ) -> dict[str, OperationScope]:
         return BatchValidationService._normalize_default_value_modes(
             selected_default_values,
             selected_default_value_modes,
@@ -586,9 +587,9 @@ class GuiUploadPipelineService:
         *,
         root_item_config: dict[str, Any] | None = None,
         selected_mapping: dict[str, str] | None = None,
-        selected_mapping_modes: dict[str, dict[str, bool]] | None = None,
+        selected_mapping_modes: dict[str, OperationScope] | None = None,
         selected_default_values: dict[str, str] | None = None,
-        selected_default_value_modes: dict[str, dict[str, bool]] | None = None,
+        selected_default_value_modes: dict[str, OperationScope] | None = None,
         selected_tracker_item_settings: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         """현재 파일 기준 자동 추천은 유지하고, 저장된 preset은 유효한 항목만 덮어쓴다."""
@@ -661,8 +662,8 @@ class GuiUploadPipelineService:
         selected_default_values: dict[str, str] | None = None,
         selected_tracker_item_settings: dict[str, dict[str, Any]] | None = None,
         *,
-        selected_mapping_modes: dict[str, dict[str, bool]] | None = None,
-        selected_default_value_modes: dict[str, dict[str, bool]] | None = None,
+        selected_mapping_modes: dict[str, OperationScope] | None = None,
+        selected_default_value_modes: dict[str, OperationScope] | None = None,
     ) -> ValidationContext:
         """다중 파일 매핑과 payload를 검증한다."""
         return self.batch_validation.validate_mapping(

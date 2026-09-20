@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+from typing import Any
+
+
+if TYPE_CHECKING:
+    from PySide6.QtCore import SignalInstance
 import time
 
 from src.diagnostics import DIAGNOSTICS
@@ -43,6 +49,23 @@ def _require_qt():
 class UploadWorker:
     """배치 업로드를 백그라운드에서 실행하고 진행 상황을 signal 로 알린다."""
 
+    if TYPE_CHECKING:
+        # `__new__` 가 만들어 돌려주는 배치 업로드 QThread 인스턴스의 공개 표면이다.
+        # 런타임 정의는 아래 `__new__` 안에 있다.
+        log_message: SignalInstance
+        progress_changed: SignalInstance
+        upload_event: SignalInstance
+        upload_finished: SignalInstance
+        upload_failed: SignalInstance
+
+        def request_pause(self) -> None: ...
+        def request_resume(self) -> None: ...
+        def request_cancel(self) -> None: ...
+        def start(self) -> None: ...
+        def wait(self) -> bool: ...
+        def deleteLater(self) -> None: ...
+        def isRunning(self) -> bool: ...
+
     def __new__(
         cls,
         pipeline_service,
@@ -59,7 +82,9 @@ class UploadWorker:
         base_cls = qt["QThread"]
         Signal = qt["Signal"]
 
-        class _UploadWorker(base_cls):
+        # base_cls 는 런타임에 결정되는 QThread 다. 타입 체커는 동적 기반 클래스를
+        # 다루지 못하므로 이 줄에서만 무시한다. 공개 표면은 위에 선언해 두었다.
+        class _UploadWorker(base_cls):  # type: ignore[misc, valid-type]
             log_message = Signal(str)
             progress_changed = Signal(int, int, str)
             upload_event = Signal(object)
@@ -123,7 +148,7 @@ class UploadWorker:
                             event_type = str(event.get("type"))
                             self.upload_event.emit(dict(event))
                             if event_type == "batch_total":
-                                total_value = event.get("total")
+                                total_value: Any = event.get("total")
                                 try:
                                     progress_state["total"] = max(int(total_value), 1)
                                 except Exception:
@@ -213,6 +238,17 @@ class UploadWorker:
 class BackgroundTask:
     """짧은 GUI 보조 작업을 백그라운드에서 실행하는 범용 worker다."""
 
+    if TYPE_CHECKING:
+        # `__new__` 가 만들어 돌려주는 짧은 GUI 보조 작업 QThread 인스턴스의 공개 표면이다.
+        # 런타임 정의는 아래 `__new__` 안에 있다.
+        completed: SignalInstance
+        failed: SignalInstance
+
+        def start(self) -> None: ...
+        def wait(self) -> bool: ...
+        def deleteLater(self) -> None: ...
+        def isRunning(self) -> bool: ...
+
     def __new__(cls, func, *args, **kwargs):
         qt = _require_qt()
         base_cls = qt["QThread"]
@@ -265,6 +301,20 @@ class BackgroundTask:
 
 class BulkUpdateWorker:
     """일괄 수정을 실행하면서 청크 진행률과 취소 상태를 전달한다."""
+
+    if TYPE_CHECKING:
+        # `__new__` 가 만들어 돌려주는 일괄 수정 QThread 인스턴스의 공개 표면이다.
+        # 런타임 정의는 아래 `__new__` 안에 있다.
+        progress_changed: SignalInstance
+        completed: SignalInstance
+        failed: SignalInstance
+        finished: SignalInstance
+
+        def request_cancel(self) -> None: ...
+        def start(self) -> None: ...
+        def wait(self) -> bool: ...
+        def deleteLater(self) -> None: ...
+        def isRunning(self) -> bool: ...
 
     def __new__(cls, service, settings, **request):
         qt = _require_qt()

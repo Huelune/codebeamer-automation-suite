@@ -4,14 +4,8 @@ from dataclasses import dataclass
 from dataclasses import field
 from typing import Any
 
-
-def _optional_int(value: Any) -> int | None:
-    if value in (None, "") or isinstance(value, bool):
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+from .payload_values import as_mapping
+from .payload_values import optional_int
 
 
 def _text(value: Any) -> str:
@@ -40,8 +34,8 @@ class ItemRelationSummary:
     def from_raw(cls, group: str, raw: dict[str, Any]) -> ItemRelationSummary:
         revision = raw.get("itemRevision")
         if not isinstance(revision, dict):
-            revision = raw.get("item") if isinstance(raw.get("item"), dict) else {}
-        item_id = _optional_int(revision.get("id") or raw.get("itemId") or raw.get("targetItemId"))
+            revision = as_mapping(raw.get("item"))
+        item_id = optional_int(revision.get("id") or raw.get("itemId") or raw.get("targetItemId"))
         common_item_id = _text(revision.get("commonItemId") or raw.get("commonItemId") or raw.get("targetCommonItemId"))
         display_name = _text(revision.get("name") or revision.get("summary") or raw.get("name") or raw.get("summary"))
         if not display_name:
@@ -54,7 +48,7 @@ class ItemRelationSummary:
             item_id=item_id,
             common_item_id=common_item_id,
             display_name=display_name,
-            version=_optional_int(revision.get("version") or raw.get("version")),
+            version=optional_int(revision.get("version") or raw.get("version")),
             external_url=_text(raw.get("url") or raw.get("uri") or raw.get("externalUrl")),
         )
 
@@ -106,7 +100,7 @@ class ItemHistoryEntry:
         if isinstance(summary_value, (list, dict)):
             summary_value = ""
         return cls(
-            version=_optional_int(revision.get("version") or raw.get("version")),
+            version=optional_int(revision.get("version") or raw.get("version")),
             modified_at=_text(raw.get("modifiedAt") or revision.get("modifiedAt")),
             modified_by=_person_name(raw.get("modifiedBy") or revision.get("modifiedBy")),
             change_summary=_text(summary_value),
@@ -123,10 +117,12 @@ class ItemHistorySnapshot:
         if isinstance(raw, list):
             candidates = raw
         elif isinstance(raw, dict):
-            candidates = next(
-                (raw.get(key) for key in ("versions", "history", "items", "content") if isinstance(raw.get(key), list)),
-                [],
-            )
+            candidates = []
+            for key in ("versions", "history", "items", "content"):
+                value = raw.get(key)
+                if isinstance(value, list):
+                    candidates = value
+                    break
         else:
             candidates = []
         entries = [ItemHistoryEntry.from_raw(value) for value in candidates if isinstance(value, dict)]

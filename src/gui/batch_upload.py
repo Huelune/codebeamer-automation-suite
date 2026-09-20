@@ -14,6 +14,7 @@ from src.upload_pipeline import prepare_upload_dataframe
 from src.upload_policy import UPLOAD_MODE_CREATE as GUI_UPLOAD_MODE_CREATE
 from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
 from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
+from src.upload_policy import as_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 from src.upload_policy import upload_mode_allows_root_items as gui_upload_mode_allows_root_items
@@ -458,14 +459,14 @@ class BatchUploadService:
 
         wizard.state.selected_mapping = dict(mapping_context.selected_mapping)
         wizard.state.selected_mapping_modes = {
-            str(key): dict(value)
+            str(key): as_operation_scope(value)
             for key, value in dict(mapping_context.selected_mapping_modes or {}).items()
             if str(key).strip() and isinstance(value, dict)
         }
         wizard.state.schema = schema
         wizard.state.schema_df = schema_df
         wizard.state.selected_default_value_modes = {
-            str(key): dict(value)
+            str(key): as_operation_scope(value)
             for key, value in dict(mapping_context.selected_default_value_modes or {}).items()
             if str(key).strip() and isinstance(value, dict)
         }

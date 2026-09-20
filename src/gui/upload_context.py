@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from src.upload_policy import OperationScope
 from src.wizard import CodebeamerUploadWizard
 
 from .service_core import PreviewData
@@ -37,10 +38,10 @@ class MappingContext:
     schema_df: pd.DataFrame
     upload_columns: list[str]
     selected_mapping: dict[str, str]
-    selected_mapping_modes: dict[str, dict[str, bool]]
+    selected_mapping_modes: dict[str, OperationScope]
     default_value_candidates: list[DefaultValueCandidate]
     selected_default_values: dict[str, str]
-    selected_default_value_modes: dict[str, dict[str, bool]]
+    selected_default_value_modes: dict[str, OperationScope]
     selected_tracker_item_settings: dict[str, dict[str, Any]]
     tracker_item_field_candidates: list[TrackerItemFieldCandidate]
     tracker_item_lookup_cache: dict[tuple[str, str], tuple[Any, str | None, str | None]]

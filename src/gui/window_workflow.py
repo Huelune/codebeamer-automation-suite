@@ -5,9 +5,11 @@ from typing import TYPE_CHECKING
 from typing import Any
 
 from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
+from src.upload_policy import OperationScope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 
+from .payload_values import as_mapping
 from .settings_store import GuiSettings
 from .settings_store import GuiWorkflowPreset
 from .window_support import UploadProgressState
@@ -215,7 +217,7 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
         file_state = self._current_file_state_snapshot()
         file_paths = [
             str(path).strip()
-            for path in file_state.get("file_paths") or []
+            for path in as_mapping(file_state).get("file_paths") or []
             if str(path).strip()
         ]
         if file_paths:
@@ -253,7 +255,9 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
         file_state = self._current_file_state_snapshot()
         file_options = {
             "sheet_name": str(file_state.get("sheet_name") or settings.excel_sheet_name or "0"),
-            "header_row": int(file_state.get("header_row") or settings.excel_header_row or 1),
+            "header_row": int(
+                as_mapping(file_state).get("header_row") or settings.excel_header_row or 1
+            ),
             "summary_column": str(file_state.get("summary_column") or settings.summary_column or "Summary"),
         }
 
@@ -284,9 +288,9 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
             )
 
         selected_mapping: dict[str, str] = {}
-        selected_mapping_modes: dict[str, dict[str, bool]] = {}
+        selected_mapping_modes: dict[str, OperationScope] = {}
         selected_default_values: dict[str, str] = {}
-        selected_default_value_modes: dict[str, dict[str, bool]] = {}
+        selected_default_value_modes: dict[str, OperationScope] = {}
         selected_tracker_item_settings: dict[str, dict[str, object]] = {}
         if callable(getattr(self.mapping_page, "get_selected_mapping", None)):
             selected_mapping = dict(self.mapping_page.get_selected_mapping() or {})
@@ -830,9 +834,9 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
     def _validate_mapping(
         self,
         selected_mapping: dict[str, str],
-        selected_mapping_modes: dict[str, dict[str, bool]],
+        selected_mapping_modes: dict[str, OperationScope],
         selected_default_values: dict[str, str],
-        selected_default_value_modes: dict[str, dict[str, bool]],
+        selected_default_value_modes: dict[str, OperationScope],
         selected_tracker_item_settings: dict[str, dict[str, object]],
     ) -> None:
         """`validate_mapping` 입력을 검증한다."""
