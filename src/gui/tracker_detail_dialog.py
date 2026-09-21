@@ -40,25 +40,16 @@ class DetailDialogController:
         self.page = page
 
     def open_dialog(self, _checked: bool = False) -> None:
-        detail = self.page._current_detail
+        panel = self.page.detail_panel
+        detail = panel.current_detail
         if detail is None:
             return
-        if self.page._description_uses_wiki:
-            description_html = (
-                self.page._description_render_result.html
-                if self.page._description_render_result is not None
-                else codebeamer_wiki_to_html(self.page._description_text)
-            )
-        else:
-            description_html = (
-                "<p>" + escape(self.page._description_text).replace("\n", "<br>") + "</p>"
-            )
         dialog = TrackerItemDetailDialog(
             detail,
-            description_html=description_html,
-            attachments=self.page._attachments,
-            image_resources=tuple(self.page._attachment_preview_resources.values()),
-            baseline_id=self.page._detail_baseline_id,
+            description_html=panel.description_html(),
+            attachments=panel.attachments,
+            image_resources=panel.preview_resources,
+            baseline_id=panel.baseline_id,
             parent=self.page,
         )
         session = TrackerItemDetailSession(detail.item_id, detail.version)
@@ -69,7 +60,7 @@ class DetailDialogController:
                 force=force,
             )
         )
-        dialog.comment_attachment_save_requested.connect(self.page._save_attachment)
+        dialog.comment_attachment_save_requested.connect(self.page.detail_panel.save_attachment)
         dialog.set_navigation_state(can_go_back=False, can_go_forward=False)
         dialog.context_tab_requested.connect(
             lambda kind, force=False: self.load_context(
@@ -254,7 +245,7 @@ class DetailDialogController:
             self.page._submit(
                 "detail_dialog_wiki",
                 lambda: self.page.content_service.render_wiki(
-                    settings, self.page._wiki_context(detail, None), detail.description
+                    settings, self.page.detail_panel.wiki_context(detail, None), detail.description
                 ),
                 lambda result: dialog.set_description_html(result.html) if current() else None,
                 lambda _exc: None,
@@ -266,7 +257,7 @@ class DetailDialogController:
             images = tuple(
                 value
                 for value in attachments
-                if self.page._is_attachment_image(value)
+                if self.page.detail_panel.is_attachment_image(value)
                 and (value.size is None or value.size <= MAX_INLINE_IMAGE_BYTES)
             )
             if not images:
@@ -411,7 +402,7 @@ class DetailDialogController:
                 def render_comment(selected: ItemComment = comment) -> WikiRenderResult:
                     return self.page.content_service.render_wiki(
                         settings,
-                        self.page._wiki_context(detail, None),
+                        self.page.detail_panel.wiki_context(detail, None),
                         selected.body,
                     )
 
@@ -423,7 +414,7 @@ class DetailDialogController:
                 )
 
             for attachment in comment.attachments:
-                if not self.page._is_attachment_image(attachment):
+                if not self.page.detail_panel.is_attachment_image(attachment):
                     continue
                 if attachment.size is not None and attachment.size > MAX_INLINE_IMAGE_BYTES:
                     continue
