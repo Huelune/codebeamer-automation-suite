@@ -27,7 +27,7 @@ class TrackerConfigurationService:
             return None
         try:
             return int(value)
-        except Exception:
+        except (TypeError, ValueError):
             return None
 
     @classmethod
@@ -119,7 +119,7 @@ class TrackerConfigurationService:
                     return [], TRACKER_ITEM_QUERY_STATUS_UNSUPPORTED
                 try:
                     normalized_id = int(domain_id)
-                except Exception:
+                except (TypeError, ValueError):
                     return [], TRACKER_ITEM_QUERY_STATUS_UNSUPPORTED
                 if normalized_id in seen_ids:
                     continue

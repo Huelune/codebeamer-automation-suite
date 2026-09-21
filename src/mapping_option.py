@@ -74,7 +74,7 @@ class MappingOptionMixin(_MappingOptionMixinSiblings):
             try:
                 if bool(pd.isna(unsupported_reason)):
                     unsupported_reason = None
-            except Exception:
+            except (TypeError, ValueError):
                 pass
         if unsupported_reason is not None and str(unsupported_reason).strip() == "":
             unsupported_reason = None

@@ -26,7 +26,7 @@ def _is_missing_scalar(value: Any) -> bool:
         return True
     try:
         return bool(pd.isna(value))
-    except Exception:
+    except (TypeError, ValueError):
         return False
 
 

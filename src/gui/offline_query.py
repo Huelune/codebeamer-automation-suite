@@ -122,7 +122,7 @@ def _numbers(value: Any) -> float | None:
         return float(value)
     try:
         return float(str(value))
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 

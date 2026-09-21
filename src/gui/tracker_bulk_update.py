@@ -178,7 +178,7 @@ def _failure_payload(exc: Exception) -> dict[str, Any] | None:
         if response is not None:
             try:
                 payload = response.json()
-            except Exception:
+            except (AttributeError, ValueError):
                 payload = None
             if isinstance(payload, dict):
                 return payload
@@ -458,7 +458,7 @@ class BulkUpdateRunStore:
                 return ()
             try:
                 payload = json.loads(self.path.read_text(encoding="utf-8"))
-            except Exception:
+            except (OSError, ValueError):
                 return ()
             raw_records = payload.get("records") if isinstance(payload, dict) else None
             if not isinstance(raw_records, list):

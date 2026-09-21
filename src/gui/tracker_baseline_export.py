@@ -26,6 +26,13 @@ from .excel_export_style import TOP_WRAP
 from .excel_export_style import WHITE_FONT
 from .excel_export_style import excel_text_units
 from .excel_export_style import normalize_excel_text
+from .excel_long_value import LONG_VALUE_CELL_LINE_FEEDS
+from .excel_long_value import LONG_VALUE_CELL_TEXT
+from .excel_long_value import LONG_VALUE_SHEET_TITLE
+from .excel_long_value import cell_preview
+from .excel_long_value import long_value_preview
+from .excel_long_value import requires_long_value_sheet
+from .excel_long_value import split_long_value
 from .tracker_baseline_compare import BaselineComparisonKind
 from .tracker_baseline_compare import BaselineComparisonResult
 from .tracker_baseline_compare import TrackerFieldDifference
@@ -37,11 +44,6 @@ from .tracker_baseline_compare import table_field_rows
 
 EXCEL_MAX_COLUMNS = 16384
 EXCEL_MAX_ROWS = 1048576
-LONG_VALUE_CELL_TEXT = 30000
-LONG_VALUE_CELL_LINE_FEEDS = 200
-LONG_VALUE_PREVIEW_TEXT = 180
-LONG_VALUE_PREVIEW_LINE_FEEDS = 3
-LONG_VALUE_SHEET_TITLE = "긴 값 전체보기"
 
 
 class BaselineExportError(RuntimeError):
@@ -126,13 +128,13 @@ class _LongValueCollector:
     ) -> _LongValueTarget | None:
         normalized_reference = normalize_excel_text(reference_text)
         normalized_comparison = normalize_excel_text(comparison_text)
-        reference_is_long = _requires_long_value_sheet(normalized_reference)
-        comparison_is_long = _requires_long_value_sheet(normalized_comparison)
+        reference_is_long = requires_long_value_sheet(normalized_reference)
+        comparison_is_long = requires_long_value_sheet(normalized_comparison)
         if not reference_is_long and not comparison_is_long:
             return None
 
-        reference_parts = _split_long_value(normalized_reference)
-        comparison_parts = _split_long_value(normalized_comparison)
+        reference_parts = split_long_value(normalized_reference)
+        comparison_parts = split_long_value(normalized_comparison)
         start_row = 3 + self.data_row_count
         row_count = max(len(reference_parts), len(comparison_parts), 1)
         if start_row + row_count - 1 > EXCEL_MAX_ROWS:
@@ -398,7 +400,7 @@ def _populate_summary_sheet(
         ("생성 시각", generated_at.isoformat(timespec="seconds")),
         (
             "선택 필드",
-            _cell_preview(
+            cell_preview(
                 "\n".join(field.label for field in selected_fields),
                 max_text_units=LONG_VALUE_CELL_TEXT,
                 max_line_feeds=LONG_VALUE_CELL_LINE_FEEDS,
@@ -535,10 +537,10 @@ def _populate_comparison_sheet(
                 72,
             )
             if item.reference is not None and name_target.reference_is_long:
-                item_name_value = _long_value_preview(reference_name)
+                item_name_value = long_value_preview(reference_name)
                 item_name_link_column = 8
             elif name_target.comparison_is_long:
-                item_name_value = _long_value_preview(comparison_name)
+                item_name_value = long_value_preview(comparison_name)
                 item_name_link_column = 9
         _merge_item_value(sheet, start_row, end_row, 3, item_name_value)
         if name_target is not None:
@@ -586,7 +588,7 @@ def _populate_comparison_sheet(
                     end_row,
                     reference_column,
                     (
-                        _long_value_preview(reference_text)
+                        long_value_preview(reference_text)
                         if long_target is not None and long_target.reference_is_long
                         else reference_text
                     ),
@@ -598,7 +600,7 @@ def _populate_comparison_sheet(
                     end_row,
                     comparison_column,
                     (
-                        _long_value_preview(comparison_text)
+                        long_value_preview(comparison_text)
                         if long_target is not None and long_target.comparison_is_long
                         else comparison_text
                     ),
@@ -778,7 +780,7 @@ def _write_table_column(
         _set_safe_value(
             reference_cell,
             (
-                _long_value_preview(reference_text)
+                long_value_preview(reference_text)
                 if long_target is not None and long_target.reference_is_long
                 else reference_text
             ),
@@ -787,7 +789,7 @@ def _write_table_column(
         _set_safe_value(
             comparison_cell,
             (
-                _long_value_preview(comparison_text)
+                long_value_preview(comparison_text)
                 if long_target is not None and long_target.comparison_is_long
                 else comparison_text
             ),
@@ -857,7 +859,7 @@ def _populate_long_value_sheet(
     comparison_header = sheet["I1"]
     _set_safe_value(
         reference_header,
-        _cell_preview(
+        cell_preview(
             f"기준 · {reference_label}",
             max_text_units=1000,
             max_line_feeds=4,
@@ -867,7 +869,7 @@ def _populate_long_value_sheet(
     )
     _set_safe_value(
         comparison_header,
-        _cell_preview(
+        cell_preview(
             f"비교 · {comparison_label}",
             max_text_units=1000,
             max_line_feeds=4,
@@ -916,20 +918,20 @@ def _populate_long_value_sheet(
             values = (
                 _KIND_LABELS[record.kind],
                 record.item_id,
-                _cell_preview(
+                cell_preview(
                     record.item_name,
                     max_text_units=1000,
                     max_line_feeds=12,
                     suffix="\n…",
                 ),
-                _cell_preview(
+                cell_preview(
                     record.field_label,
                     max_text_units=1000,
                     max_line_feeds=12,
                     suffix="\n…",
                 ),
                 record.table_row or "",
-                _cell_preview(
+                cell_preview(
                     record.table_column,
                     max_text_units=1000,
                     max_line_feeds=12,
@@ -990,121 +992,6 @@ def _populate_long_value_sheet(
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 0
     sheet.print_title_rows = "1:2"
-
-
-
-
-def _exceeds_text_limits(
-    value: str,
-    *,
-    max_text_units: int,
-    max_line_feeds: int,
-) -> bool:
-    return (
-        excel_text_units(value) > max_text_units
-        or value.count("\n") > max_line_feeds
-    )
-
-
-def _requires_long_value_sheet(value: str) -> bool:
-    return _exceeds_text_limits(
-        value,
-        max_text_units=LONG_VALUE_CELL_TEXT,
-        max_line_feeds=LONG_VALUE_CELL_LINE_FEEDS,
-    )
-
-
-def _split_long_value(value: str) -> tuple[str, ...]:
-    return _split_excel_text(
-        value,
-        max_text_units=LONG_VALUE_CELL_TEXT,
-        max_line_feeds=LONG_VALUE_CELL_LINE_FEEDS,
-    )
-
-
-def _split_excel_text(
-    value: str,
-    *,
-    max_text_units: int,
-    max_line_feeds: int,
-) -> tuple[str, ...]:
-    normalized = normalize_excel_text(value)
-    if not normalized:
-        return ("",)
-    parts: list[str] = []
-    start = 0
-    while start < len(normalized):
-        units = 0
-        line_feeds = 0
-        cursor = start
-        last_newline = -1
-        last_whitespace = -1
-        while cursor < len(normalized):
-            character = normalized[cursor]
-            character_units = 2 if ord(character) > 0xFFFF else 1
-            character_line_feeds = 1 if character == "\n" else 0
-            if (
-                units + character_units > max_text_units
-                or line_feeds + character_line_feeds > max_line_feeds
-            ):
-                break
-            units += character_units
-            line_feeds += character_line_feeds
-            if character == "\n":
-                last_newline = cursor
-            elif character.isspace():
-                last_whitespace = cursor
-            cursor += 1
-
-        if cursor >= len(normalized):
-            end = len(normalized)
-        else:
-            minimum_preferred = start + max((cursor - start) // 2, 1)
-            if last_newline >= minimum_preferred:
-                end = last_newline + 1
-            elif last_whitespace >= minimum_preferred:
-                end = last_whitespace + 1
-            else:
-                end = cursor
-        if end <= start:
-            end = start + 1
-        parts.append(normalized[start:end])
-        start = end
-    return tuple(parts)
-
-
-def _cell_preview(
-    value: Any,
-    *,
-    max_text_units: int,
-    max_line_feeds: int,
-    suffix: str,
-) -> str:
-    normalized = normalize_excel_text(value)
-    if not _exceeds_text_limits(
-        normalized,
-        max_text_units=max_text_units,
-        max_line_feeds=max_line_feeds,
-    ):
-        return normalized
-    normalized_suffix = normalize_excel_text(suffix)
-    text_budget = max(max_text_units - excel_text_units(normalized_suffix), 1)
-    line_feed_budget = max(max_line_feeds - normalized_suffix.count("\n"), 0)
-    prefix = _split_excel_text(
-        normalized,
-        max_text_units=text_budget,
-        max_line_feeds=line_feed_budget,
-    )[0]
-    return f"{prefix}{normalized_suffix}"
-
-
-def _long_value_preview(value: str) -> str:
-    return _cell_preview(
-        value,
-        max_text_units=LONG_VALUE_PREVIEW_TEXT,
-        max_line_feeds=LONG_VALUE_PREVIEW_LINE_FEEDS,
-        suffix=f"\n\n[전체 내용은 '{LONG_VALUE_SHEET_TITLE}' 시트에서 확인]",
-    )
 
 
 def _set_internal_link(

@@ -99,12 +99,12 @@ def _plain(value: Any) -> Any:
             pass
     try:
         missing = pd.isna(value)
-    except Exception:
+    except (TypeError, ValueError):
         missing = False
     try:
         if not hasattr(missing, "__len__") and bool(missing):
             return None
-    except Exception:
+    except (TypeError, ValueError):
         pass
     if hasattr(value, "item") and not isinstance(value, (str, bytes)):
         try:
@@ -130,7 +130,7 @@ def _payload_value(row: pd.Series) -> Any:
         try:
             if bool(pd.isna(value)):
                 continue
-        except Exception:
+        except (TypeError, ValueError):
             pass
         if isinstance(value, str):
             stripped = value.strip()

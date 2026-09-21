@@ -60,6 +60,38 @@ PySide6 signal/slot에서 처리되지 않은 Python 예외는 기본적으로 �
 
 이 경로는 콘솔에만 예외가 노출되는 누락이 아니라 명시적인 fallback입니다.
 
+## 예외 범위 기준
+
+`except Exception`이 넓어서 문제인 경우와 넓어야 하는 경우를 구분합니다.
+
+### 좁힌 경우
+
+발생 가능한 예외를 코드에서 셀 수 있으면 좁힙니다.
+
+| 대상 | 좁힌 예외 |
+| --- | --- |
+| `int()`, `float()` 값 변환 | `(TypeError, ValueError)` |
+| 파일 읽기 + `json.loads()` | `(OSError, ValueError)` |
+| 예외에 딸려 온 응답의 `.json()` | `(AttributeError, ValueError)` |
+| `pd.isna()` 결측 판정 | `(TypeError, ValueError)` |
+
+`json.JSONDecodeError`와 `UnicodeDecodeError`는 `ValueError` 하위라 별도로 적지 않습니다.
+응답 객체는 형태를 보장할 수 없어 `AttributeError`를 함께 받습니다.
+`pd.isna()`는 배열을 돌려줄 수 있고 그때 `bool()`이 `ValueError`를 냅니다.
+
+### 넓게 두는 경우
+
+아래는 예외 형태를 알 수 없거나, 좁히면 계약이 깨집니다. 좁히지 말고 근거 주석을 남깁니다.
+
+- **전역 예외 hook 내부** (`error_reporting.py`): 여기서 다시 예외가 나면 원래 예외 보고를 잃습니다.
+  이전 hook은 남의 코드일 수 있습니다.
+- **worker 경계**: 모든 예외를 실패 signal로 바꿔 사용자에게 알려야 합니다.
+- **주입된 콜백 호출** (`activity_recorder`, `settings_provider`, `query_executor` 등): 구현을 알 수 없습니다.
+- **xlwings COM 정리** (`workbook.close()`, `app.quit()`): 데스크톱 Excel을 COM으로 다루므로
+  실패가 `pywintypes.com_error`, `OSError` 등 여러 형태로 올라옵니다.
+- **duck typing 호출** (`value.to_dict()`, `value.item()`): 대상 객체가 무엇인지 보장되지 않습니다.
+- **best-effort 보조 저장** (창 위치, 실행 기록): 실패해도 주요 작업을 막지 않습니다.
+
 ## 회귀 검증
 
 - 실제 `QPushButton.clicked` slot에서 예외를 발생시켜 기존 hook 기록과 사용자 알림을 모두 확인합니다.

@@ -18,7 +18,7 @@ class MappingReferenceMixin:
             return True
         try:
             return bool(pd.isna(value))
-        except Exception:
+        except (TypeError, ValueError):
             return False
 
     @staticmethod
@@ -31,7 +31,7 @@ class MappingReferenceMixin:
         try:
             if bool(pd.isna(value)):
                 return False
-        except Exception:
+        except (TypeError, ValueError):
             pass
         if value is None:
             return False

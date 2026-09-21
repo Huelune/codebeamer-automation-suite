@@ -782,7 +782,7 @@ class CodebeamerClient:
                 continue
             try:
                 normalized_id = int(item_id)
-            except Exception:
+            except (TypeError, ValueError):
                 continue
             if normalized_id in seen_ids:
                 continue

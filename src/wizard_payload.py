@@ -408,7 +408,7 @@ class WizardPayloadMixin:
             for raw_row_id in raw_spec.get("row_ids") or []:
                 try:
                     normalized_row_ids.append(int(raw_row_id))
-                except Exception:
+                except (TypeError, ValueError):
                     continue
 
             normalized_spec = {

@@ -65,6 +65,6 @@ no_implicit_optional = true
 # 나머지 모듈은 모두 검사 대상이다. 모듈을 정리하면 이 목록에서 지운다.
 [[tool.mypy.overrides]]
 module = [
-    "src.gui.tracker_workspace",  # 17건
+    "src.gui.tracker_workspace",  # 7건 (모두 콜백 배선 lambda)
 ]
 ignore_errors = true

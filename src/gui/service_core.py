@@ -105,7 +105,7 @@ DEFAULT_OFFLINE_TRACKER_NAME = "Offline Tracker"
 def _normalize_offline_id(value: Any, default_value: int) -> int:
     try:
         normalized = int(value)
-    except Exception:
+    except (TypeError, ValueError):
         return default_value
     return normalized if normalized > 0 else default_value
 
@@ -121,7 +121,7 @@ def _load_json_snapshot(path_value: Any, *, label: str) -> Any:
 
     try:
         return json.loads(snapshot_path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         raise ValueError(f"{label} JSON을 읽을 수 없습니다: {exc}") from exc
 
 
