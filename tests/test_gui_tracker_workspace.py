@@ -1543,6 +1543,51 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(len(tasks), 5)
         self.assertEqual(len(self.page._inline_resource_reservations), 5)
 
+    def test_scheduled_inline_downloads_keep_their_own_resource(self) -> None:
+        """예약된 다운로드가 각자의 참조를 들고 있는지 확인한다.
+
+        콜백이 반복문 변수를 늦게 바인딩하면 5개가 모두 마지막 이미지를 내려받는다.
+        화면에는 이미지가 그려지므로 눈으로는 알아채기 어렵다.
+        """
+        detail = TrackerItemDetail.from_raw(
+            {
+                "id": 1205,
+                "name": "Image detail",
+                "version": 1,
+                "tracker": {
+                    "id": 24680001,
+                    "name": "Offline Requirements",
+                    "project": {"id": 246800, "name": "Offline Project"},
+                },
+            }
+        )
+        self.page._render_detail(detail)
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        requested_keys: list[str] = []
+
+        def record_download(*_args, **kwargs) -> AttachmentResource:
+            requested_keys.append(kwargs["resource_key"])
+            return AttachmentResource(kwargs["resource_key"], "image/png", b"payload")
+
+        self.page.content_service.download_resource = record_download
+        result = WikiRenderResult(
+            html="<p>images</p>",
+            resources=tuple(
+                WikiResourceReference(f"image-{index}", f"https://example.test/cb/attachment/{index}")
+                for index in range(3)
+            ),
+        )
+
+        self.page._load_inline_resources(result, self.page.detail_description, detail, None)
+        for task in tasks:
+            task.operation()
+
+        self.assertEqual(requested_keys, ["image-0", "image-1", "image-2"])
+
     def test_test_mode_editor_loads_schema_but_disables_write_actions(self) -> None:
         self.page.activate()
         self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
