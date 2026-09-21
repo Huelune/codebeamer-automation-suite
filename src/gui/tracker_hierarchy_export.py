@@ -24,6 +24,12 @@ from .excel_export_style import TOP_WRAP
 from .excel_export_style import WHITE_FONT
 from .excel_export_style import excel_text_units
 from .excel_export_style import normalize_excel_text
+from .excel_long_value import LONG_VALUE_CELL_LINE_FEEDS
+from .excel_long_value import LONG_VALUE_CELL_TEXT
+from .excel_long_value import LONG_VALUE_SHEET_TITLE
+from .excel_long_value import long_value_preview
+from .excel_long_value import requires_long_value_sheet
+from .excel_long_value import split_excel_text
 from .tracker_baseline_compare import TrackerItemFieldValue
 from .tracker_baseline_compare import TrackerTableColumn
 from .tracker_baseline_compare import display_tracker_value
@@ -37,11 +43,6 @@ from .tracker_query_models import TrackerItemSummary
 
 EXCEL_MAX_COLUMNS = 16384
 EXCEL_MAX_ROWS = 1048576
-LONG_VALUE_CELL_TEXT = 30000
-LONG_VALUE_CELL_LINE_FEEDS = 200
-LONG_VALUE_PREVIEW_TEXT = 180
-LONG_VALUE_PREVIEW_LINE_FEEDS = 3
-LONG_VALUE_SHEET_TITLE = "긴 값 전체보기"
 _FIXED_COLUMN_COUNT = 4
 _STRUCTURAL_FIELD_KEYS = {"id", "name", "summary", "parent", "children"}
 _INTERNAL_FIELD_KEYS = {"tracker", "project", "childCount", "hasChildren"}
@@ -115,9 +116,9 @@ class _LongValueCollector:
         source_coordinate: str,
     ) -> _LongValueRecord | None:
         normalized = normalize_excel_text(value)
-        if not _requires_long_value_sheet(normalized):
+        if not requires_long_value_sheet(normalized):
             return None
-        parts = _split_excel_text(
+        parts = split_excel_text(
             normalized,
             max_text_units=LONG_VALUE_CELL_TEXT,
             max_line_feeds=LONG_VALUE_CELL_LINE_FEEDS,
@@ -620,7 +621,7 @@ def _write_scalar_value(
         value=value,
         source_coordinate=source,
     )
-    display_value = _long_value_preview(value) if record is not None else value
+    display_value = long_value_preview(value) if record is not None else value
     _merge_value(
         sheet,
         start_row,
@@ -729,65 +730,6 @@ def _optional_positive_int(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
     return normalized if normalized > 0 else None
-
-
-
-
-def _requires_long_value_sheet(value: str) -> bool:
-    return (
-        excel_text_units(value) > LONG_VALUE_CELL_TEXT
-        or value.count("\n") > LONG_VALUE_CELL_LINE_FEEDS
-    )
-
-
-def _split_excel_text(
-    value: str,
-    *,
-    max_text_units: int,
-    max_line_feeds: int,
-) -> tuple[str, ...]:
-    normalized = normalize_excel_text(value)
-    if not normalized:
-        return ("",)
-    parts: list[str] = []
-    start = 0
-    while start < len(normalized):
-        units = 0
-        line_feeds = 0
-        cursor = start
-        last_break = -1
-        while cursor < len(normalized):
-            character = normalized[cursor]
-            character_units = 2 if ord(character) > 0xFFFF else 1
-            character_lines = 1 if character == "\n" else 0
-            if units + character_units > max_text_units or line_feeds + character_lines > max_line_feeds:
-                break
-            units += character_units
-            line_feeds += character_lines
-            if character.isspace():
-                last_break = cursor
-            cursor += 1
-        if cursor >= len(normalized):
-            end = len(normalized)
-        elif last_break >= start + max((cursor - start) // 2, 1):
-            end = last_break + 1
-        else:
-            end = max(cursor, start + 1)
-        parts.append(normalized[start:end])
-        start = end
-    return tuple(parts)
-
-
-def _long_value_preview(value: str) -> str:
-    suffix = f"\n\n[전체 내용은 '{LONG_VALUE_SHEET_TITLE}' 시트에서 확인]"
-    budget = max(LONG_VALUE_PREVIEW_TEXT - excel_text_units(suffix), 1)
-    line_budget = max(LONG_VALUE_PREVIEW_LINE_FEEDS - suffix.count("\n"), 0)
-    prefix = _split_excel_text(
-        value,
-        max_text_units=budget,
-        max_line_feeds=line_budget,
-    )[0]
-    return f"{prefix}{suffix}"
 
 
 def _set_safe_value(cell: Cell, value: Any, *, context: str) -> None:
