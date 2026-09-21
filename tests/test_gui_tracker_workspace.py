@@ -1307,6 +1307,40 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(len(detail_kwargs["image_resources"]), 1)
         detail_dialog.return_value.exec.assert_called_once()
 
+    def test_detail_dialog_is_built_with_the_real_class(self) -> None:
+        """상세 창을 진짜 클래스로 만들어 본다.
+
+        다른 테스트는 TrackerItemDetailDialog 를 통째로 patch 하므로 생성자가
+        한 번도 불리지 않는다. 그래서 parent 처럼 생성자에서만 드러나는 잘못된
+        인자를 잡지 못한다. 여기서는 exec 만 막고 실제로 만든다.
+        """
+        self.page.activate()
+        self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
+        self._app.processEvents()
+        detail = self.page._current_detail
+        self.assertIsNotNone(detail)
+
+        opened: list[TrackerItemDetailDialog] = []
+
+        class _NonModalDialog(TrackerItemDetailDialog):
+            def exec(self) -> int:
+                opened.append(self)
+                return 0
+
+        with patch(
+            "src.gui.tracker_detail_dialog.TrackerItemDetailDialog", _NonModalDialog
+        ):
+            self.page.detail_dialog.open_dialog()
+
+        self.assertEqual(len(opened), 1)
+        try:
+            self.assertIn(str(detail.item_id), opened[0].windowTitle())
+            self.assertIs(opened[0].parent(), self.page)
+        finally:
+            # 진짜 창이라 닫아 둔다. 파괴는 부모인 page 가 맡는다.
+            opened[0].close()
+            self._app.processEvents()
+
     def test_related_detail_failure_keeps_dialog_session_and_context_usable(self) -> None:
         detail = _detail(1205, "Current", version=3)
         dialog = TrackerItemDetailDialog(detail, description_html="<p>Current</p>")

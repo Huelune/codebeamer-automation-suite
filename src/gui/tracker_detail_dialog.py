@@ -59,7 +59,7 @@ class DetailDialogController:
             attachments=self.page._attachments,
             image_resources=tuple(self.page._attachment_preview_resources.values()),
             baseline_id=self.page._detail_baseline_id,
-            parent=self,
+            parent=self.page,
         )
         session = TrackerItemDetailSession(detail.item_id, detail.version)
         dialog.comments_requested.connect(
