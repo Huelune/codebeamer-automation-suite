@@ -58,10 +58,10 @@ from .tracker_bulk_update import TrackerBulkUpdateService
 from .tracker_bulk_update_dialog import BulkUpdateProgressDialog
 from .tracker_bulk_update_dialog import BulkUpdateRequest
 from .tracker_bulk_update_dialog import TrackerBulkUpdateDialog
-from .tracker_comment_models import ItemComment
-from .tracker_comment_models import ItemCommentsSnapshot
 from .tracker_comment_service import TrackerCommentService
 from .tracker_condition_builder import TrackerConditionDialog
+from .tracker_content_models import ATTACHMENT_IMAGE_MIME_TYPES
+from .tracker_content_models import ATTACHMENT_IMAGE_SUFFIXES
 from .tracker_content_models import AttachmentResource
 from .tracker_content_models import AttachmentSummary
 from .tracker_content_models import WikiRenderContext
@@ -70,6 +70,7 @@ from .tracker_content_models import WikiResourceReference
 from .tracker_content_service import MAX_INLINE_IMAGE_BYTES
 from .tracker_content_service import MAX_ITEM_INLINE_IMAGE_BYTES
 from .tracker_content_service import TrackerContentService
+from .tracker_detail_dialog import DetailDialogController
 from .tracker_hierarchy import TrackerHierarchySnapshot
 from .tracker_hierarchy_export import TrackerHierarchyExportError
 from .tracker_hierarchy_export import build_tracker_hierarchy_export_snapshot
@@ -79,8 +80,6 @@ from .tracker_hierarchy_export_dialog import TrackerHierarchyExportFieldDialog
 from .tracker_item_context_service import TrackerItemContextService
 from .tracker_item_create_dialog import TrackerItemCreateDialog
 from .tracker_item_create_dialog import TrackerItemCreateRequest
-from .tracker_item_detail_dialog import TrackerItemDetailDialog
-from .tracker_item_detail_session import TrackerItemDetailSession
 from .tracker_item_editor import EditableTrackerField
 from .tracker_item_editor import EditableTrackerSchema
 from .tracker_item_editor import TrackerItemEditorService
@@ -121,14 +120,6 @@ CHILDREN_LOADED_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 BASELINE_COMPARISON_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 HIERARCHY_FETCH_PAGE_SIZE = 500
 DEFAULT_SEARCH_PAGE_SIZE = 50
-ATTACHMENT_IMAGE_MIME_TYPES = {
-    "image/bmp",
-    "image/gif",
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-}
-ATTACHMENT_IMAGE_SUFFIXES = (".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp")
 
 REQUEST_BUSY_MESSAGES = {
     "projects": "프로젝트 목록을 불러오는 중입니다.",
@@ -258,6 +249,8 @@ class TrackerWorkspacePage(QWidget):
         self._editor_dialog: TrackerItemEditorDialog | None = None
         self._bulk_worker: BulkUpdateWorker | None = None
         self._bulk_progress_dialog: BulkUpdateProgressDialog | None = None
+        # 상세 창 배선은 _build_ui 안에서 참조하므로 그 전에 만든다.
+        self.detail_dialog = DetailDialogController(self)
 
         self._build_ui()
         self._reset_workspace("프로젝트와 트래커를 불러오면 조회를 시작할 수 있습니다.")
@@ -389,7 +382,7 @@ class TrackerWorkspacePage(QWidget):
         detail_heading.addWidget(self.detail_title, 1)
         self.detail_open_button = QPushButton("상세 크게 보기", detail_panel)
         self.detail_open_button.setEnabled(False)
-        self.detail_open_button.clicked.connect(self._open_detail_dialog)
+        self.detail_open_button.clicked.connect(self.detail_dialog.open_dialog)
         detail_heading.addWidget(self.detail_open_button)
         self.detail_refresh_button = QPushButton("상세 새로고침", detail_panel)
         self.detail_refresh_button.setToolTip("현재 아이템의 최신 version과 필드를 다시 조회합니다.")
@@ -3899,428 +3892,13 @@ class TrackerWorkspacePage(QWidget):
             dialog.view.add_attachment_resource(resource)
         dialog.exec()
 
-    def _open_detail_dialog(self, _checked: bool = False) -> None:
-        detail = self._current_detail
-        if detail is None:
-            return
-        if self._description_uses_wiki:
-            description_html = (
-                self._description_render_result.html
-                if self._description_render_result is not None
-                else codebeamer_wiki_to_html(self._description_text)
-            )
-        else:
-            description_html = (
-                "<p>" + escape(self._description_text).replace("\n", "<br>") + "</p>"
-            )
-        dialog = TrackerItemDetailDialog(
-            detail,
-            description_html=description_html,
-            attachments=self._attachments,
-            image_resources=tuple(self._attachment_preview_resources.values()),
-            baseline_id=self._detail_baseline_id,
-            parent=self,
-        )
-        session = TrackerItemDetailSession(detail.item_id, detail.version)
-        dialog.comments_requested.connect(
-            lambda force=False: self._load_detail_dialog_comments(
-                dialog,
-                session,
-                force=force,
-            )
-        )
-        dialog.comment_attachment_save_requested.connect(self._save_attachment)
-        dialog.set_navigation_state(can_go_back=False, can_go_forward=False)
-        dialog.context_tab_requested.connect(
-            lambda kind, force=False: self._load_detail_dialog_context(
-                dialog, session, kind, force=force
-            )
-        )
-        dialog.related_item_requested.connect(
-            lambda item_id: self._navigate_detail_dialog(dialog, session, item_id)
-        )
-        dialog.navigate_back_requested.connect(
-            lambda: self._navigate_detail_dialog_history(dialog, session, back=True)
-        )
-        dialog.navigate_forward_requested.connect(
-            lambda: self._navigate_detail_dialog_history(dialog, session, back=False)
-        )
-        dialog.finished.connect(lambda _result: session.invalidate())
-        dialog.exec()
 
-    def _load_detail_dialog_context(
-        self,
-        dialog: TrackerItemDetailDialog,
-        session: TrackerItemDetailSession,
-        kind: str,
-        *,
-        force: bool = False,
-    ) -> None:
-        if dialog.baseline_id is not None or kind not in {"relations", "history"}:
-            return
-        detail = dialog.detail
-        generation = session.generation
-        dialog.set_context_loading(kind)
-        settings = self.settings_provider()
 
-        def current() -> bool:
-            return (
-                dialog.isVisible()
-                and session.generation == generation
-                and session.current.item_id == detail.item_id
-            )
 
-        def loaded(result) -> None:
-            if not current():
-                return
-            if kind == "relations":
-                dialog.set_relations(result)
-            else:
-                dialog.set_history(result)
 
-        def failed(exc: Exception) -> None:
-            if current():
-                dialog.set_context_error(kind, str(exc))
 
-        load_context = (
-            self.context_service.load_relations
-            if kind == "relations"
-            else self.context_service.load_history
-        )
 
-        def operation():
-            return load_context(
-                settings,
-                detail.item_id,
-                detail.version,
-                force=force,
-            )
 
-        self._submit(f"detail_dialog_{kind}", operation, loaded, failed)
-
-    def _navigate_detail_dialog(
-        self,
-        dialog: TrackerItemDetailDialog,
-        session: TrackerItemDetailSession,
-        item_id: int,
-    ) -> None:
-        target_item_id = int(item_id)
-        if target_item_id == session.current.item_id:
-            return
-
-        def commit(detail: TrackerItemDetail) -> None:
-            session.navigate(detail.item_id, detail.version)
-
-        self._load_detail_dialog_item(
-            dialog,
-            session,
-            target_item_id,
-            commit,
-        )
-
-    def _navigate_detail_dialog_history(
-        self,
-        dialog: TrackerItemDetailDialog,
-        session: TrackerItemDetailSession,
-        *,
-        back: bool,
-    ) -> None:
-        target = session.peek_back() if back else session.peek_forward()
-        if target is None:
-            return
-
-        def commit(_detail: TrackerItemDetail) -> None:
-            if back:
-                session.back()
-            else:
-                session.forward()
-
-        self._load_detail_dialog_item(
-            dialog,
-            session,
-            target.item_id,
-            commit,
-        )
-
-    def _load_detail_dialog_item(
-        self,
-        dialog: TrackerItemDetailDialog,
-        session: TrackerItemDetailSession,
-        item_id: int,
-        commit: Callable[[TrackerItemDetail], None],
-    ) -> None:
-        source_generation = session.generation
-        source_item_id = session.current.item_id
-        settings = self.settings_provider()
-        dialog.set_navigation_state(
-            can_go_back=False,
-            can_go_forward=False,
-        )
-
-        def is_pending() -> bool:
-            return (
-                dialog.isVisible()
-                and session.generation == source_generation
-                and session.current.item_id == source_item_id
-                and dialog.detail.item_id == source_item_id
-            )
-
-        def loaded(detail: TrackerItemDetail) -> None:
-            if not is_pending():
-                return
-            commit(detail)
-            generation = session.generation
-            description_html = (
-                codebeamer_wiki_to_html(detail.description)
-                if is_explicit_wiki_type(detail.description_format)
-                else "<p>" + escape(detail.description).replace("\n", "<br>") + "</p>"
-            )
-            dialog.replace_detail(detail, description_html=description_html)
-            dialog.set_navigation_state(
-                can_go_back=session.can_go_back,
-                can_go_forward=session.can_go_forward,
-            )
-            self._hydrate_detail_dialog(dialog, session, detail, generation)
-
-        def failed(exc: Exception) -> None:
-            if not is_pending():
-                return
-            dialog.set_navigation_state(
-                can_go_back=session.can_go_back,
-                can_go_forward=session.can_go_forward,
-            )
-            self._show_error(exc, prefix="관련 아이템 상세 조회 실패")
-
-        self._submit(
-            "detail_dialog_item",
-            lambda: self.service.load_detail(settings, item_id),
-            loaded,
-            failed,
-        )
-
-    def _hydrate_detail_dialog(
-        self,
-        dialog: TrackerItemDetailDialog,
-        session: TrackerItemDetailSession,
-        detail: TrackerItemDetail,
-        generation: int,
-    ) -> None:
-        settings = self.settings_provider()
-
-        def current() -> bool:
-            return dialog.isVisible() and session.generation == generation and dialog.detail.item_id == detail.item_id
-
-        if is_explicit_wiki_type(detail.description_format):
-            self._submit(
-                "detail_dialog_wiki",
-                lambda: self.content_service.render_wiki(
-                    settings, self._wiki_context(detail, None), detail.description
-                ),
-                lambda result: dialog.set_description_html(result.html) if current() else None,
-                lambda _exc: None,
-            )
-
-        def attachments_loaded(attachments: tuple[AttachmentSummary, ...]) -> None:
-            if not current():
-                return
-            images = tuple(
-                value
-                for value in attachments
-                if self._is_attachment_image(value) and (value.size is None or value.size <= MAX_INLINE_IMAGE_BYTES)
-            )
-            if not images:
-                dialog.set_images(attachments, ())
-                return
-
-            def resources_loaded(resources: tuple[AttachmentResource, ...]) -> None:
-                if current():
-                    dialog.set_images(attachments, resources)
-
-            self._submit(
-                "detail_dialog_images",
-                lambda: tuple(
-                    self.content_service.download_attachment(settings, image, max_bytes=MAX_INLINE_IMAGE_BYTES)
-                    for image in images[: max(1, MAX_ITEM_INLINE_IMAGE_BYTES // MAX_INLINE_IMAGE_BYTES)]
-                ),
-                resources_loaded,
-                lambda _exc: dialog.set_images(attachments, ()) if current() else None,
-            )
-
-        self._submit(
-            "detail_dialog_attachments",
-            lambda: self.content_service.load_attachments(settings, detail.item_id, raw_payload=detail.raw_payload),
-            attachments_loaded,
-            lambda _exc: None,
-        )
-
-    def _load_detail_dialog_comments(
-        self,
-        dialog: TrackerItemDetailDialog,
-        session: TrackerItemDetailSession,
-        *,
-        force: bool = False,
-    ) -> None:
-        if dialog.baseline_id is not None:
-            return
-        detail = dialog.detail
-        item_id = detail.item_id
-        version = detail.version
-        generation = session.generation
-        settings = self.settings_provider()
-        dialog.set_comments_loading()
-
-        def current() -> bool:
-            return (
-                dialog.isVisible()
-                and session.generation == generation
-                and session.current.item_id == item_id
-                and dialog.detail.item_id == item_id
-                and dialog.detail.version == version
-            )
-
-        def loaded(snapshot: ItemCommentsSnapshot) -> None:
-            if not current():
-                return
-            dialog.set_comments(snapshot)
-            self._hydrate_detail_dialog_comments(
-                dialog,
-                session,
-                detail,
-                snapshot,
-                generation,
-            )
-
-        self._submit(
-            "detail_dialog_comments",
-            lambda: self.comment_service.load_comments(settings, item_id, version, force=force),
-            loaded,
-            lambda exc: dialog.set_comments_error(str(exc)) if current() else None,
-        )
-
-    def _hydrate_detail_dialog_comments(
-        self,
-        dialog: TrackerItemDetailDialog,
-        session: TrackerItemDetailSession,
-        detail: TrackerItemDetail,
-        snapshot: ItemCommentsSnapshot,
-        generation: int,
-    ) -> None:
-        settings = self.settings_provider()
-        item_id = detail.item_id
-        version = detail.version
-        loaded_bytes = {"value": 0}
-        reserved = {"value": 0}
-
-        def current() -> bool:
-            return (
-                dialog.isVisible()
-                and session.generation == generation
-                and session.current.item_id == item_id
-                and dialog.detail.item_id == item_id
-                and dialog.detail.version == version
-            )
-
-        def apply_resource(comment_id: str, resource: AttachmentResource) -> None:
-            reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
-            if not current() or loaded_bytes["value"] + len(resource.data) > MAX_ITEM_INLINE_IMAGE_BYTES:
-                return
-            if dialog.add_comment_resource(comment_id, resource):
-                loaded_bytes["value"] += len(resource.data)
-
-        def reserve() -> bool:
-            if loaded_bytes["value"] + reserved["value"] + MAX_INLINE_IMAGE_BYTES > MAX_ITEM_INLINE_IMAGE_BYTES:
-                return False
-            reserved["value"] += MAX_INLINE_IMAGE_BYTES
-            return True
-
-        for comment in snapshot.comments:
-            if is_explicit_wiki_type(comment.format_name):
-                def rendered(result: WikiRenderResult, *, selected=comment) -> None:
-                    if not current():
-                        return
-                    dialog.set_comment_html(selected.comment_id, result.html)
-                    for reference in result.resources:
-                        if not reserve():
-                            break
-
-                        def inline_loaded(resource: AttachmentResource, *, comment_id=selected.comment_id) -> None:
-                            apply_resource(comment_id, resource)
-
-                        def inline_failed(_exc: Exception) -> None:
-                            reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
-
-                        def download_inline(
-                            value: WikiResourceReference = reference,
-                        ) -> AttachmentResource:
-                            return self.content_service.download_resource(
-                                settings,
-                                resource_key=value.resource_key,
-                                source_url=value.source_url,
-                            )
-
-                        self._submit(
-                            f"comment_inline:{selected.comment_id}:{reference.resource_key}",
-                            download_inline,
-                            inline_loaded,
-                            inline_failed,
-                        )
-
-                def render_comment(selected: ItemComment = comment) -> WikiRenderResult:
-                    return self.content_service.render_wiki(
-                        settings,
-                        self._wiki_context(detail, None),
-                        selected.body,
-                    )
-
-                self._submit(
-                    f"comment_wiki:{comment.comment_id}",
-                    render_comment,
-                    rendered,
-                    lambda _exc: None,
-                )
-
-            for attachment in comment.attachments:
-                if not self._is_attachment_image(attachment):
-                    continue
-                if attachment.size is not None and attachment.size > MAX_INLINE_IMAGE_BYTES:
-                    continue
-                if not reserve():
-                    break
-                resource_key = f"comment-{comment.comment_id}-attachment-{attachment.attachment_id}"
-
-                def attachment_loaded(
-                    resource: AttachmentResource,
-                    *,
-                    comment_id=comment.comment_id,
-                    alias=resource_key,
-                ) -> None:
-                    normalized_mime = str(resource.mime_type or "").split(";", 1)[0].strip().casefold()
-                    if normalized_mime not in ATTACHMENT_IMAGE_MIME_TYPES:
-                        reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
-                        return
-                    apply_resource(
-                        comment_id,
-                        AttachmentResource(alias, resource.mime_type, resource.data),
-                    )
-
-                def attachment_failed(_exc: Exception) -> None:
-                    reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
-
-                def download_comment_attachment(
-                    selected: AttachmentSummary = attachment,
-                ) -> AttachmentResource:
-                    return self.content_service.download_attachment(
-                        settings,
-                        selected,
-                        max_bytes=MAX_INLINE_IMAGE_BYTES,
-                    )
-
-                self._submit(
-                    f"comment_attachment:{comment.comment_id}:{attachment.attachment_id}",
-                    download_comment_attachment,
-                    attachment_loaded,
-                    attachment_failed,
-                )
 
     def _save_attachment(self, attachment: AttachmentSummary) -> None:
         output_path, _selected_filter = QFileDialog.getSaveFileName(

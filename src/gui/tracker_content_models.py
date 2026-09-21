@@ -28,6 +28,17 @@ class WikiRenderResult:
     warning: str = ""
 
 
+# 인라인으로 그릴 수 있는 이미지 첨부를 가려낼 때 쓴다.
+ATTACHMENT_IMAGE_MIME_TYPES = {
+    "image/bmp",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
+ATTACHMENT_IMAGE_SUFFIXES = (".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp")
+
+
 @dataclass(frozen=True)
 class AttachmentSummary:
     attachment_id: int
