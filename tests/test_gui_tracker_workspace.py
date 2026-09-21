@@ -1298,8 +1298,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         dialog_class.return_value.exec.assert_called_once()
         self.assertEqual(calls, [(28, 10 * 1024 * 1024)])
 
-        with patch("src.gui.tracker_workspace.TrackerItemDetailDialog") as detail_dialog:
-            self.page._open_detail_dialog()
+        with patch("src.gui.tracker_detail_dialog.TrackerItemDetailDialog") as detail_dialog:
+            self.page.detail_dialog.open_dialog()
 
         detail_dialog.assert_called_once()
         detail_kwargs = detail_dialog.call_args.kwargs
@@ -1325,7 +1325,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         ) or tasks[-1]
         self.page.error_notifier = lambda title, message: alerts.append((title, message))
 
-        self.page._navigate_detail_dialog(dialog, session, 1206)
+        self.page.detail_dialog.navigate(dialog, session, 1206)
 
         self.assertEqual(session.current.item_id, 1205)
         self.assertEqual(dialog.detail.item_id, 1205)
@@ -1357,7 +1357,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 }
             )
         )
-        self.page._load_detail_dialog_context(dialog, session, "relations")
+        self.page.detail_dialog.load_context(dialog, session, "relations")
         self.assertEqual(dialog.relations_table.rowCount(), 1)
         dialog.close()
 
@@ -1377,7 +1377,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             _DeferredTask(operation)
         ) or tasks[-1]
 
-        self.page._navigate_detail_dialog_history(dialog, session, back=True)
+        self.page.detail_dialog.navigate_history(dialog, session, back=True)
         tasks[0].emit_failure(ValueError("not found"))
 
         self.assertEqual(session.current.item_id, 1205)
@@ -1394,8 +1394,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         session = TrackerItemDetailSession(current.item_id, current.version)
         self.page.service.load_detail = lambda *_args, **_kwargs: target
 
-        with patch.object(self.page, "_hydrate_detail_dialog") as hydrate:
-            self.page._navigate_detail_dialog(dialog, session, target.item_id)
+        with patch.object(self.page.detail_dialog, "hydrate") as hydrate:
+            self.page.detail_dialog.navigate(dialog, session, target.item_id)
 
         self.assertEqual(session.current.item_id, target.item_id)
         self.assertEqual(dialog.detail.item_id, target.item_id)
@@ -1418,7 +1418,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         ) or tasks[-1]
         self.page.comment_service.load_comments = lambda *_args, **_kwargs: snapshot
 
-        self.page._load_detail_dialog_comments(dialog, session)
+        self.page.detail_dialog.load_comments(dialog, session)
         session.navigate(other.item_id, other.version)
         dialog.replace_detail(other, description_html="<p>Other</p>")
         session.back()
@@ -1428,7 +1428,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(dialog.comment_views, {})
         self.assertEqual(dialog._comments_state, "idle")
 
-        self.page._load_detail_dialog_comments(dialog, session)
+        self.page.detail_dialog.load_comments(dialog, session)
         tasks[1].finish()
         self.assertEqual(set(dialog.comment_views), {"1"})
         dialog.close()
@@ -1470,7 +1470,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             )
         )
 
-        self.page._load_detail_dialog_comments(dialog, session)
+        self.page.detail_dialog.load_comments(dialog, session)
         tasks[0].finish()
         self.assertEqual(len(tasks), 2)
 
