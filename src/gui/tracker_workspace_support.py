@@ -11,6 +11,7 @@ from typing import Any
 
 
 try:
+    from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor
     from PySide6.QtWidgets import QTableWidgetItem
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
@@ -18,6 +19,15 @@ except ImportError as exc:  # pragma: no cover - GUI dependency guard
 
 from .tracker_query_models import TrackerItemContext
 from .tracker_query_models import TrackerItemSummary
+
+
+# 트리·표 항목에 붙이는 사용자 역할. 여러 화면이 같은 값을 읽는다.
+ITEM_SUMMARY_ROLE = int(Qt.ItemDataRole.UserRole) + 1
+PLACEHOLDER_ROLE = int(Qt.ItemDataRole.UserRole) + 2
+CHILDREN_LOADED_ROLE = int(Qt.ItemDataRole.UserRole) + 3
+BASELINE_COMPARISON_ROLE = int(Qt.ItemDataRole.UserRole) + 4
+HIERARCHY_FETCH_PAGE_SIZE = 500
+DEFAULT_SEARCH_PAGE_SIZE = 50
 
 
 @dataclass(frozen=True)

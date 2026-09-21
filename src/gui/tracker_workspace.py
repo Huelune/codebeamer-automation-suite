@@ -7,23 +7,14 @@ from typing import Any
 
 try:
     from PySide6.QtCore import Qt
-    from PySide6.QtGui import QBrush
-    from PySide6.QtWidgets import QAbstractItemView
     from PySide6.QtWidgets import QComboBox
-    from PySide6.QtWidgets import QDialog
-    from PySide6.QtWidgets import QFileDialog
     from PySide6.QtWidgets import QFrame
     from PySide6.QtWidgets import QHBoxLayout
-    from PySide6.QtWidgets import QHeaderView
     from PySide6.QtWidgets import QLabel
     from PySide6.QtWidgets import QLineEdit
-    from PySide6.QtWidgets import QMessageBox
     from PySide6.QtWidgets import QPushButton
     from PySide6.QtWidgets import QSplitter
-    from PySide6.QtWidgets import QTableWidget
-    from PySide6.QtWidgets import QTableWidgetItem
     from PySide6.QtWidgets import QTabWidget
-    from PySide6.QtWidgets import QTreeWidget
     from PySide6.QtWidgets import QTreeWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
@@ -38,66 +29,46 @@ from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
 from .settings_store import GuiSettings
-from .tracker_baseline_compare import BaselineComparisonKind
-from .tracker_baseline_compare import BaselineComparisonResult
 from .tracker_baseline_compare import BaselineComparisonSource
 from .tracker_baseline_compare import TrackerBaseline
 from .tracker_baseline_export import BaselineExportError
-from .tracker_baseline_export import baseline_export_fields
-from .tracker_baseline_export import export_baseline_comparison_xlsx
-from .tracker_baseline_export_dialog import BaselineExportFieldDialog
-from .tracker_baseline_panel import BASELINE_KIND_ACCENTS
-from .tracker_baseline_panel import BASELINE_KIND_BADGES
-from .tracker_baseline_panel import BaselineComparisonPanel
+from .tracker_baseline_workspace import BaselineWorkspaceHost
+from .tracker_baseline_workspace import BaselineWorkspacePanel
 from .tracker_bulk_update import BulkUpdateRunStore
 from .tracker_bulk_update import TrackerBulkUpdateService
-from .tracker_bulk_update_dialog import BulkUpdateProgressDialog
 from .tracker_bulk_update_dialog import BulkUpdateRequest
-from .tracker_bulk_update_dialog import TrackerBulkUpdateDialog
 from .tracker_comment_service import TrackerCommentService
-from .tracker_condition_builder import TrackerConditionDialog
-from .tracker_content_models import AttachmentResource
-from .tracker_content_models import AttachmentSummary
-from .tracker_content_models import WikiRenderResult
 from .tracker_content_service import TrackerContentService
 from .tracker_detail_dialog import DetailDialogController
 from .tracker_detail_panel import DetailPanelHost
 from .tracker_detail_panel import TrackerDetailPanel
-from .tracker_hierarchy import TrackerHierarchySnapshot
 from .tracker_hierarchy_export import TrackerHierarchyExportError
-from .tracker_hierarchy_export import build_tracker_hierarchy_export_snapshot
-from .tracker_hierarchy_export import export_tracker_hierarchy_xlsx
-from .tracker_hierarchy_export import hierarchy_export_fields_from_schema
-from .tracker_hierarchy_export_dialog import TrackerHierarchyExportFieldDialog
+from .tracker_hierarchy_panel import HierarchyPanelHost
+from .tracker_hierarchy_panel import TrackerHierarchyPanel
 from .tracker_item_context_service import TrackerItemContextService
 from .tracker_item_create_dialog import TrackerItemCreateDialog
 from .tracker_item_create_dialog import TrackerItemCreateRequest
 from .tracker_item_editor import EditableTrackerSchema
 from .tracker_item_editor import TrackerItemEditorService
 from .tracker_item_editor import TrackerItemWriteError
-from .tracker_query_models import PageResult
 from .tracker_query_models import ProjectSummary
 from .tracker_query_models import TrackerItemContext
 from .tracker_query_models import TrackerItemDetail
 from .tracker_query_models import TrackerItemSummary
-from .tracker_query_models import TrackerQuery
 from .tracker_query_models import TrackerQueryServiceError
 from .tracker_query_models import TrackerSearchMode
 from .tracker_query_models import TrackerSummary
 from .tracker_query_service import TrackerQueryService
+from .tracker_search_panel import SearchPanelHost
+from .tracker_search_panel import TrackerSearchPanel
+from .tracker_workspace_support import CHILDREN_LOADED_ROLE
+from .tracker_workspace_support import DEFAULT_SEARCH_PAGE_SIZE
+from .tracker_workspace_support import HIERARCHY_FETCH_PAGE_SIZE
+from .tracker_workspace_support import ITEM_SUMMARY_ROLE
+from .tracker_workspace_support import PLACEHOLDER_ROLE
 from .tracker_workspace_support import DirectItemResult
-from .tracker_workspace_support import SortableTableItem
-from .tracker_workspace_support import blend_colors
 from .worker import BackgroundTask
-from .worker import BulkUpdateWorker
 
-
-ITEM_SUMMARY_ROLE = int(Qt.ItemDataRole.UserRole) + 1
-PLACEHOLDER_ROLE = int(Qt.ItemDataRole.UserRole) + 2
-CHILDREN_LOADED_ROLE = int(Qt.ItemDataRole.UserRole) + 3
-BASELINE_COMPARISON_ROLE = int(Qt.ItemDataRole.UserRole) + 4
-HIERARCHY_FETCH_PAGE_SIZE = 500
-DEFAULT_SEARCH_PAGE_SIZE = 50
 
 REQUEST_BUSY_MESSAGES = {
     "projects": "프로젝트 목록을 불러오는 중입니다.",
@@ -187,42 +158,13 @@ class TrackerWorkspacePage(QWidget):
         self._trackers: tuple[TrackerSummary, ...] = ()
         self._current_project: ProjectSummary | None = None
         self._current_tracker: TrackerSummary | None = None
-        self._root_cache: dict[int, tuple[TrackerItemSummary, ...]] = {}
-        self._child_cache: dict[int, tuple[TrackerItemSummary, ...]] = {}
         self._request_tokens: dict[str, int] = {}
         self._tasks: set[Any] = set()
-        self._search_page = 1
-        self._last_search_query: TrackerQuery | None = None
-        self._last_search_result: PageResult[TrackerItemSummary] | None = None
-        self._search_schema: EditableTrackerSchema | None = None
-        self._selected_search_ids: set[int] = set()
-        self._all_search_selected = False
-        self._excluded_search_ids: set[int] = set()
-        self._baseline_selected_item_id: int | None = None
+        # Baseline 목록 조회는 계층 탭 소스 선택과 비교 탭 양쪽에 결과를 넘긴다.
         self._baseline_loaded_tracker_id: int | None = None
         self._baseline_loading_tracker_id: int | None = None
-        self._baseline_comparison_result: BaselineComparisonResult | None = None
-        self._baseline_comparison_cache_key: tuple[int, int | None, int | None] | None = None
-        self._baseline_comparison_loading_key: tuple[int, int | None, int | None] | None = None
-        self._baseline_export_in_progress = False
-        self._hierarchy_export_in_progress = False
-        self._baseline_hierarchy_cache: dict[
-            tuple[int, int], TrackerHierarchySnapshot
-        ] = {}
-        self._baseline_hierarchy_loading_key: tuple[int, int] | None = None
-        self._description_text = ""
-        self._description_uses_wiki = False
-        self._description_render_result: WikiRenderResult | None = None
-        self._attachments: tuple[AttachmentSummary, ...] = ()
-        self._attachment_preview_resources: dict[str, AttachmentResource] = {}
-        self._inline_image_bytes = 0
-        self._wiki_resource_generation = 0
-        self._inline_resource_reservations: set[tuple[int, str, int]] = set()
-        self._loaded_inline_resources: set[tuple[int, str, int]] = set()
         self._pre_editor_splitter_sizes: list[int] | None = None
         self._create_busy = False
-        self._bulk_worker: BulkUpdateWorker | None = None
-        self._bulk_progress_dialog: BulkUpdateProgressDialog | None = None
         # 상세 창 배선은 _build_ui 안에서 참조하므로 그 전에 만든다.
         self.detail_dialog = DetailDialogController(self)
 
@@ -339,8 +281,10 @@ class TrackerWorkspacePage(QWidget):
 
         self.browser_tabs = QTabWidget(browser_panel)
         self.browser_tabs.setObjectName("tracker_browser_tabs")
-        self.browser_tabs.addTab(self._build_hierarchy_tab(), "계층")
-        self.browser_tabs.addTab(self._build_search_tab(), "트래커 검색")
+        self.hierarchy_panel = self._build_hierarchy_panel()
+        self.browser_tabs.addTab(self.hierarchy_panel, "계층")
+        self.search_panel = self._build_search_panel()
+        self.browser_tabs.addTab(self.search_panel, "트래커 검색")
         browser_layout.addWidget(self.browser_tabs, 1)
 
         self.detail_panel = self._build_detail_panel(splitter)
@@ -352,11 +296,36 @@ class TrackerWorkspacePage(QWidget):
         splitter.setSizes([560, 470])
         browse_page_layout.addWidget(splitter, 1)
         self.workspace_mode_tabs.addTab(browse_page, "트래커 조회")
+        self.baseline_workspace = self._build_baseline_workspace()
         self.baseline_mode_index = self.workspace_mode_tabs.addTab(
-            self._build_baseline_workspace(), "Baseline 비교"
+            self.baseline_workspace, "Baseline 비교"
         )
         self.workspace_mode_tabs.currentChanged.connect(self._on_workspace_mode_changed)
         root_layout.addWidget(self.workspace_mode_tabs, 1)
+
+    def _build_hierarchy_panel(self) -> TrackerHierarchyPanel:
+        """계층 탭을 만들고 화면 쪽 동작을 콜백으로 넘긴다."""
+        host = HierarchyPanelHost(
+            submit=self._submit,
+            show_error=self._show_error,
+            set_workspace_status=self._set_workspace_status,
+            set_available=self._set_available,
+            record_activity=self._record_activity,
+            next_token=self._next_token,
+            invalidate_tracker_cache=self._invalidate_tracker_cache,
+            current_tracker=lambda: self._current_tracker,
+            current_project=lambda: self._current_project,
+            detail_panel=lambda: self.detail_panel,
+            search_panel=lambda: self.search_panel,
+            baseline_workspace=lambda: self.baseline_workspace,
+            browser_tabs=lambda: self.browser_tabs,
+        )
+        return TrackerHierarchyPanel(
+            self,
+            host=host,
+            settings_provider=self.settings_provider,
+            service=self.service,
+        )
 
     def _build_detail_panel(self, parent: QWidget) -> TrackerDetailPanel:
         """상세 영역을 만들고 화면 쪽 동작을 콜백으로 넘긴다."""
@@ -369,7 +338,7 @@ class TrackerWorkspacePage(QWidget):
             remove_visible_item=self._remove_visible_item,
             invalidate_tracker_cache=self._invalidate_tracker_cache,
             is_historical_read_only=self._is_historical_read_only,
-            selected_hierarchy_baseline_id=self._selected_hierarchy_baseline_id,
+            selected_hierarchy_baseline_id=self.hierarchy_panel.selected_baseline_id,
             reload_current_detail=self._reload_current_detail,
             open_detail_dialog=self.detail_dialog.open_dialog,
             set_editor_expanded=self._set_editor_expanded,
@@ -402,306 +371,70 @@ class TrackerWorkspacePage(QWidget):
             detail_width = max(300, available_width - browser_width)
             self.workspace_splitter.setSizes([browser_width, detail_width])
 
-    def _build_hierarchy_tab(self) -> QWidget:
-        tab = QWidget(self)
-        tab.setObjectName("tracker_hierarchy_tab")
-        layout = QVBoxLayout(tab)
-        layout.setContentsMargins(6, 8, 6, 6)
-        layout.setSpacing(6)
+    def _build_baseline_workspace(self) -> BaselineWorkspacePanel:
+        """Baseline 비교 탭을 만들고 화면 쪽 동작을 콜백으로 넘긴다."""
+        host = BaselineWorkspaceHost(
+            submit=self._submit,
+            show_error=self._show_error,
+            set_workspace_status=self._set_workspace_status,
+            record_activity=self._record_activity,
+            load_roots=self.hierarchy_panel.load_roots,
+            placeholder_item=self.hierarchy_panel.placeholder_item,
+            tree_item=self.hierarchy_panel.tree_item,
+            replace_tree_children=self.hierarchy_panel.replace_tree_children,
+            refresh_baselines=self._refresh_baseline_comparison,
+            current_tracker=lambda: self._current_tracker,
+            current_project=lambda: self._current_project,
+            child_cache=lambda: self.hierarchy_panel.child_cache(),
+            compare_confirmer=lambda: self.baseline_compare_confirmer,
+        )
+        return BaselineWorkspacePanel(
+            self,
+            host=host,
+            settings_provider=self.settings_provider,
+            service=self.service,
+        )
 
-        source_toolbar = QHBoxLayout()
-        source_toolbar.addWidget(QLabel("조회 기준", tab))
-        self.hierarchy_source_combo = QComboBox(tab)
-        self.hierarchy_source_combo.setObjectName("tracker_hierarchy_source_combo")
-        self.hierarchy_source_combo.addItem("현재 상태", None)
-        self.hierarchy_source_combo.currentIndexChanged.connect(
-            self._on_hierarchy_source_changed
-        )
-        source_toolbar.addWidget(self.hierarchy_source_combo, 1)
-        self.reload_roots_button = QPushButton("현재 계층 다시 불러오기", tab)
-        self.reload_roots_button.clicked.connect(self._reload_selected_hierarchy)
-        source_toolbar.addWidget(self.reload_roots_button)
-        layout.addLayout(source_toolbar)
+    def _reset_baseline_state(self, message: str) -> None:
+        """Baseline 탭과 목록 조회 상태를 함께 되돌린다.
 
-        action_toolbar = QHBoxLayout()
-        self.tree_status_label = QLabel("트래커를 선택하세요.")
-        self.tree_status_label.setObjectName("tracker_panel_status")
-        action_toolbar.addWidget(self.tree_status_label, 1)
-        self.hierarchy_export_button = QPushButton("계층 Excel 내보내기", tab)
-        self.hierarchy_export_button.setObjectName("tracker_hierarchy_export_button")
-        self.hierarchy_export_button.clicked.connect(self._start_hierarchy_export)
-        action_toolbar.addWidget(self.hierarchy_export_button)
-        layout.addLayout(action_toolbar)
+        목록 조회는 계층 탭의 Baseline 선택과도 이어져 있어 화면이 들고 있다.
+        """
+        self._baseline_loaded_tracker_id = None
+        self._baseline_loading_tracker_id = None
+        self.baseline_workspace.reset_state(message)
 
-        self.item_tree = QTreeWidget(tab)
-        self.item_tree.setObjectName("tracker_item_tree")
-        self.item_tree.setColumnCount(2)
-        self.item_tree.setHeaderLabels(["ID", "요약"])
-        self.item_tree.setAlternatingRowColors(True)
-        self.item_tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.item_tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.item_tree.setUniformRowHeights(True)
-        self.item_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.item_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.item_tree.itemExpanded.connect(self._on_tree_item_expanded)
-        self.item_tree.itemSelectionChanged.connect(self._on_tree_selection_changed)
-        layout.addWidget(self.item_tree, 1)
-        return tab
+    def _build_search_panel(self) -> TrackerSearchPanel:
+        """검색 탭을 만들고 화면 쪽 동작을 콜백으로 넘긴다."""
+        host = SearchPanelHost(
+            submit=self._submit,
+            show_error=self._show_error,
+            set_workspace_status=self._set_workspace_status,
+            open_baseline_comparison=self._open_baseline_comparison,
+            selected_hierarchy_baseline_id=self.hierarchy_panel.selected_baseline_id,
+            current_tracker=lambda: self._current_tracker,
+            current_project=lambda: self._current_project,
+            detail_panel=lambda: self.detail_panel,
+        )
+        return TrackerSearchPanel(
+            self,
+            host=host,
+            settings_provider=self.settings_provider,
+            service=self.service,
+            editor_service=self.editor_service,
+            bulk_update_service=self.bulk_update_service,
+            bulk_run_store=self.bulk_run_store,
+            bulk_request_provider=self.bulk_request_provider,
+            bulk_chunk_size_saver=self.bulk_chunk_size_saver,
+            activity_recorder=self.activity_recorder,
+        )
 
-    def _build_search_tab(self) -> QWidget:
-        tab = QWidget(self)
-        tab.setObjectName("tracker_search_tab")
-        layout = QVBoxLayout(tab)
-        layout.setContentsMargins(6, 8, 6, 6)
-        layout.setSpacing(6)
+    def open_bulk_retry(self, run_id: str) -> None:
+        """실행 기록 화면에서 고른 일괄 수정을 다시 연다."""
+        self.search_panel.open_bulk_retry(run_id)
 
-        mode_row = QHBoxLayout()
-        mode_row.addWidget(QLabel("검색 방식", tab))
-        self.search_mode_combo = QComboBox(tab)
-        self.search_mode_combo.addItem("간편 검색", TrackerSearchMode.SIMPLE.value)
-        self.search_mode_combo.addItem("상세 조건 검색", TrackerSearchMode.CONDITIONS.value)
-        self.search_mode_combo.currentIndexChanged.connect(self._on_search_mode_changed)
-        mode_row.addWidget(self.search_mode_combo)
-        mode_row.addStretch(1)
-        self.search_button = QPushButton("현재 트래커 검색", tab)
-        self.search_button.setObjectName("primary_button")
-        self.search_button.clicked.connect(self._run_search)
-        mode_row.addWidget(self.search_button)
-        self.baseline_compare_button = QPushButton("Baseline 비교", tab)
-        self.baseline_compare_button.setObjectName("tracker_baseline_compare_button")
-        self.baseline_compare_button.setToolTip("Baseline 비교 탭으로 이동합니다.")
-        self.baseline_compare_button.clicked.connect(self._open_baseline_comparison)
-        self.baseline_compare_button.hide()
-        layout.addLayout(mode_row)
 
-        self.simple_search_host = QWidget(tab)
-        first_row = QHBoxLayout(self.simple_search_host)
-        first_row.setContentsMargins(0, 0, 0, 0)
-        self.search_text_input = QLineEdit(self.simple_search_host)
-        self.search_text_input.setObjectName("tracker_search_text")
-        self.search_text_input.setPlaceholderText("ID 또는 요약")
-        self.search_text_input.returnPressed.connect(self._run_search)
-        first_row.addWidget(self.search_text_input, 2)
-        self.search_status_input = QLineEdit(self.simple_search_host)
-        self.search_status_input.setObjectName("tracker_search_status")
-        self.search_status_input.setPlaceholderText("상태")
-        self.search_status_input.returnPressed.connect(self._run_search)
-        first_row.addWidget(self.search_status_input, 1)
-        self.search_assignee_input = QLineEdit(self.simple_search_host)
-        self.search_assignee_input.setObjectName("tracker_search_assignee")
-        self.search_assignee_input.setPlaceholderText("담당자")
-        self.search_assignee_input.returnPressed.connect(self._run_search)
-        first_row.addWidget(self.search_assignee_input, 1)
-        layout.addWidget(self.simple_search_host)
 
-        self.condition_dialog = TrackerConditionDialog(self)
-        self.condition_builder = self.condition_dialog.builder
-        self.condition_builder.changed.connect(self._update_condition_summary)
-        self.condition_search_host = QWidget(tab)
-        condition_row = QHBoxLayout(self.condition_search_host)
-        condition_row.setContentsMargins(0, 0, 0, 0)
-        condition_row.setSpacing(8)
-        self.condition_summary_label = QLabel(
-            "상세 검색 조건을 설정하세요.", self.condition_search_host
-        )
-        self.condition_summary_label.setObjectName("tracker_panel_status")
-        self.condition_summary_label.setWordWrap(True)
-        condition_row.addWidget(self.condition_summary_label, 1)
-        self.condition_open_button = QPushButton(
-            "상세 조건 설정", self.condition_search_host
-        )
-        self.condition_open_button.clicked.connect(self._open_condition_dialog)
-        condition_row.addWidget(self.condition_open_button)
-        self.condition_search_host.hide()
-        layout.addWidget(self.condition_search_host)
-
-        self.search_scope_label = QLabel("프로젝트와 트래커를 먼저 선택하세요.")
-        self.search_scope_label.setObjectName("tracker_panel_status")
-        self.search_scope_label.setWordWrap(True)
-        layout.addWidget(self.search_scope_label)
-
-        selection_row = QHBoxLayout()
-        self.search_selection_label = QLabel("선택 0개", tab)
-        self.search_selection_label.setObjectName("tracker_panel_status")
-        selection_row.addWidget(self.search_selection_label)
-        selection_row.addStretch(1)
-        self.select_page_button = QPushButton("현재 페이지 선택", tab)
-        self.select_page_button.clicked.connect(self._select_current_search_page)
-        selection_row.addWidget(self.select_page_button)
-        self.select_all_results_button = QPushButton("검색 결과 전체 선택", tab)
-        self.select_all_results_button.clicked.connect(self._select_all_search_results)
-        selection_row.addWidget(self.select_all_results_button)
-        self.clear_search_selection_button = QPushButton("선택 해제", tab)
-        self.clear_search_selection_button.clicked.connect(self._clear_search_selection)
-        selection_row.addWidget(self.clear_search_selection_button)
-        self.bulk_update_button = QPushButton("선택 항목 일괄 수정", tab)
-        self.bulk_update_button.setObjectName("primary_button")
-        self.bulk_update_button.clicked.connect(self._start_bulk_update)
-        selection_row.addWidget(self.bulk_update_button)
-        layout.addLayout(selection_row)
-
-        self.search_table = QTableWidget(0, 5, tab)
-        self.search_table.setObjectName("tracker_search_results")
-        self.search_table.setHorizontalHeaderLabels(["선택", "ID", "요약", "상태", "담당자"])
-        self.search_table.setAlternatingRowColors(True)
-        self.search_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.search_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.search_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.search_table.verticalHeader().setVisible(False)
-        self.search_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.search_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
-        )
-        self.search_table.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.search_table.horizontalHeader().setSectionResizeMode(
-            4, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.search_table.itemChanged.connect(self._on_search_check_changed)
-        self.search_table.itemSelectionChanged.connect(self._on_search_selection_changed)
-        layout.addWidget(self.search_table, 1)
-
-        page_row = QHBoxLayout()
-        self.search_previous_button = QPushButton("이전", tab)
-        self.search_previous_button.clicked.connect(
-            lambda: self._run_search(page=max(self._search_page - 1, 1), reuse=True)
-        )
-        self.search_page_label = QLabel("1 페이지")
-        self.search_page_label.setObjectName("tracker_page_label")
-        self.search_next_button = QPushButton("다음", tab)
-        self.search_next_button.clicked.connect(
-            lambda: self._run_search(page=self._search_page + 1, reuse=True)
-        )
-        page_row.addStretch(1)
-        page_row.addWidget(self.search_previous_button)
-        page_row.addWidget(self.search_page_label)
-        page_row.addWidget(self.search_next_button)
-        layout.addLayout(page_row)
-        return tab
-
-    def _build_baseline_workspace(self) -> QWidget:
-        page = QWidget(self)
-        page.setObjectName("tracker_baseline_comparison_page")
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(6, 8, 6, 6)
-
-        splitter = QSplitter(Qt.Orientation.Horizontal, page)
-        splitter.setChildrenCollapsible(False)
-
-        browser_panel = QFrame(splitter)
-        browser_layout = QVBoxLayout(browser_panel)
-        tree_toolbar = QHBoxLayout()
-        self.baseline_tree_status_label = QLabel("트래커를 선택하세요.", browser_panel)
-        tree_toolbar.addWidget(self.baseline_tree_status_label, 1)
-        self.baseline_reload_button = QPushButton("다시 불러오기", browser_panel)
-        self.baseline_reload_button.clicked.connect(self._reload_baseline_workspace)
-        tree_toolbar.addWidget(self.baseline_reload_button)
-        browser_layout.addLayout(tree_toolbar)
-
-        self.baseline_browser_tabs = QTabWidget(browser_panel)
-        self.baseline_browser_tabs.setObjectName("baseline_browser_tabs")
-        hierarchy_tab = QWidget(self.baseline_browser_tabs)
-        hierarchy_layout = QVBoxLayout(hierarchy_tab)
-        hierarchy_layout.setContentsMargins(0, 0, 0, 0)
-        self.baseline_item_tree = QTreeWidget(hierarchy_tab)
-        self.baseline_item_tree.setColumnCount(2)
-        self.baseline_item_tree.setHeaderLabels(["ID", "요약"])
-        self.baseline_item_tree.setAlternatingRowColors(True)
-        self.baseline_item_tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.baseline_item_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.baseline_item_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.baseline_item_tree.itemExpanded.connect(self._on_baseline_tree_item_expanded)
-        self.baseline_item_tree.itemSelectionChanged.connect(self._on_baseline_tree_selection_changed)
-        hierarchy_layout.addWidget(self.baseline_item_tree, 1)
-        self.baseline_browser_tabs.addTab(hierarchy_tab, "현재 계층")
-
-        results_tab = QWidget(self.baseline_browser_tabs)
-        results_layout = QVBoxLayout(results_tab)
-        results_layout.setContentsMargins(0, 0, 0, 0)
-        filter_row = QHBoxLayout()
-        self.baseline_result_filter = QComboBox(results_tab)
-        self.baseline_result_filter.setObjectName("baseline_result_filter")
-        self.baseline_result_filter.addItem("전체 결과", "")
-        self.baseline_result_filter.addItem("신규", BaselineComparisonKind.ADDED.value)
-        self.baseline_result_filter.addItem("삭제", BaselineComparisonKind.REMOVED.value)
-        self.baseline_result_filter.addItem("변경", BaselineComparisonKind.CHANGED.value)
-        self.baseline_result_filter.addItem("변경 없음", BaselineComparisonKind.UNCHANGED.value)
-        self.baseline_result_filter.currentIndexChanged.connect(
-            self._render_baseline_comparison_results
-        )
-        filter_row.addWidget(self.baseline_result_filter)
-        self.baseline_field_filter = QComboBox(results_tab)
-        self.baseline_field_filter.setObjectName("baseline_field_filter")
-        self.baseline_field_filter.addItem("전체 변경 필드", "")
-        self.baseline_field_filter.currentIndexChanged.connect(
-            self._render_baseline_comparison_results
-        )
-        filter_row.addWidget(self.baseline_field_filter)
-        self.baseline_result_search = QLineEdit(results_tab)
-        self.baseline_result_search.setObjectName("baseline_result_search")
-        self.baseline_result_search.setPlaceholderText("ID 또는 아이템명 검색")
-        self.baseline_result_search.textChanged.connect(
-            self._render_baseline_comparison_results
-        )
-        filter_row.addWidget(self.baseline_result_search, 1)
-        results_layout.addLayout(filter_row)
-        self.baseline_result_table = QTableWidget(0, 5, results_tab)
-        self.baseline_result_table.setObjectName("baseline_result_table")
-        self.baseline_result_table.setHorizontalHeaderLabels(
-            ["결과", "ID", "요약", "변경 필드", "전체 필드"]
-        )
-        self.baseline_result_table.setAlternatingRowColors(True)
-        self.baseline_result_table.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
-        self.baseline_result_table.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        self.baseline_result_table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        self.baseline_result_table.verticalHeader().setVisible(False)
-        self.baseline_result_table.setSortingEnabled(True)
-        self.baseline_result_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.baseline_result_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.baseline_result_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
-        )
-        self.baseline_result_table.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.baseline_result_table.horizontalHeader().setSectionResizeMode(
-            4, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.baseline_result_table.itemSelectionChanged.connect(
-            self._on_baseline_result_selection_changed
-        )
-        results_layout.addWidget(self.baseline_result_table, 1)
-        self.baseline_browser_tabs.addTab(results_tab, "전체 비교 결과")
-        browser_layout.addWidget(self.baseline_browser_tabs, 1)
-
-        panel = BaselineComparisonPanel(
-            self._request_baseline_comparison,
-            self._on_baseline_sources_changed,
-            self._export_baseline_comparison,
-            splitter,
-        )
-        panel.setObjectName("tracker_baseline_comparison_panel")
-        self.baseline_comparison_panel = panel
-        splitter.addWidget(browser_panel)
-        splitter.addWidget(panel)
-        splitter.setStretchFactor(0, 4)
-        splitter.setStretchFactor(1, 6)
-        splitter.setSizes([420, 620])
-        layout.addWidget(splitter, 1)
-        return page
 
     @staticmethod
     def _settings_key(settings: GuiSettings) -> tuple[Any, ...]:
@@ -771,105 +504,50 @@ class TrackerWorkspacePage(QWidget):
         self._trackers = ()
         self._current_project = None
         self._current_tracker = None
-        self._root_cache.clear()
-        self._child_cache.clear()
+        self.hierarchy_panel.root_cache().clear()
+        self.hierarchy_panel.child_cache().clear()
         self.project_combo.clear()
         self.tracker_combo.clear()
-        self.search_table.setRowCount(0)
-        self._last_search_query = None
-        self._last_search_result = None
-        self._reset_condition_search("트래커를 선택하면 상세 조건을 설정할 수 있습니다.")
-        self._clear_search_selection()
-        self._search_page = 1
+        self.search_panel.reset_results("트래커를 선택하면 상세 조건을 설정할 수 있습니다.")
         self._baseline_loaded_tracker_id = None
         self._baseline_loading_tracker_id = None
-        self._baseline_hierarchy_cache.clear()
-        self._baseline_hierarchy_loading_key = None
-        self._reset_hierarchy_source()
+        self.hierarchy_panel.clear_baseline_cache()
+        self.hierarchy_panel.reset_source()
         self.detail_panel.reset_detail()
         self._reset_workspace("프로젝트와 트래커를 불러오는 중입니다.")
 
     def _reset_workspace(self, message: str) -> None:
-        self.item_tree.clear()
-        self.baseline_item_tree.clear()
-        self.baseline_result_table.setRowCount(0)
-        self.baseline_result_filter.setCurrentIndex(0)
-        self._reset_baseline_field_filter()
-        self.baseline_result_search.clear()
-        self._baseline_selected_item_id = None
-        self._baseline_loaded_tracker_id = None
-        self._baseline_loading_tracker_id = None
-        self._baseline_comparison_result = None
-        self._baseline_comparison_cache_key = None
-        self._baseline_comparison_loading_key = None
-        self._baseline_hierarchy_loading_key = None
-        self.tree_status_label.setText(message)
-        self.baseline_tree_status_label.setText(message)
-        self.baseline_comparison_panel.reset_state(message)
-        self.search_scope_label.setText("프로젝트와 트래커를 먼저 선택하세요.")
-        self.search_previous_button.setEnabled(False)
-        self.search_next_button.setEnabled(False)
+        self.hierarchy_panel.item_tree.clear()
+        self.hierarchy_panel.tree_status_label.setText(message)
+        self._reset_baseline_state(message)
+        self.search_panel.reset_scope()
 
-    def _reset_baseline_state(self, message: str) -> None:
-        self._baseline_selected_item_id = None
-        self._baseline_loaded_tracker_id = None
-        self._baseline_loading_tracker_id = None
-        self._baseline_comparison_result = None
-        self._baseline_comparison_cache_key = None
-        self._baseline_comparison_loading_key = None
-        self.baseline_item_tree.clear()
-        self.baseline_result_table.setRowCount(0)
-        self.baseline_result_filter.setCurrentIndex(0)
-        self._reset_baseline_field_filter()
-        self.baseline_result_search.clear()
-        self.baseline_tree_status_label.setText(message)
-        self.baseline_comparison_panel.reset_state(message)
 
     def _set_available(self, available: bool) -> None:
         settings = self.settings_provider()
-        historical = self._selected_hierarchy_baseline_id() is not None
+        historical = self.hierarchy_panel.selected_baseline_id() is not None
         self.direct_id_input.setEnabled(available)
         self.direct_open_button.setEnabled(available)
         self.refresh_context_button.setEnabled(available)
         self.project_combo.setEnabled(available and bool(self._projects))
         self.tracker_combo.setEnabled(available and bool(self._trackers))
-        self.reload_roots_button.setEnabled(available and self._current_tracker is not None)
-        self.hierarchy_source_combo.setEnabled(
+        self.hierarchy_panel.reload_roots_button.setEnabled(available and self._current_tracker is not None)
+        self.hierarchy_panel.hierarchy_source_combo.setEnabled(
             available and self._current_tracker is not None
         )
-        self.hierarchy_export_button.setEnabled(
-            available
-            and self._current_tracker is not None
-            and not self._hierarchy_export_in_progress
-            and (
-                not historical
-                or (
-                    self._current_tracker.tracker_id,
-                    self._selected_hierarchy_baseline_id(),
-                )
-                in self._baseline_hierarchy_cache
-            )
+        self.hierarchy_panel.set_export_available(
+            available and self._current_tracker is not None,
+            tracker_id=None if self._current_tracker is None else self._current_tracker.tracker_id,
+            historical=historical,
         )
-        self.baseline_reload_button.setEnabled(
+        self.baseline_workspace.set_available(
             available and self._current_tracker is not None
         )
-        self.search_text_input.setEnabled(available and self._current_tracker is not None)
-        self.search_status_input.setEnabled(available and self._current_tracker is not None)
-        self.search_assignee_input.setEnabled(available and self._current_tracker is not None)
-        self.search_button.setEnabled(available and self._current_tracker is not None)
-        self.baseline_compare_button.setEnabled(
-            available and self._current_tracker is not None and self._last_search_query is not None
-        )
-        self.search_mode_combo.setEnabled(available and self._current_tracker is not None)
-        self.condition_open_button.setEnabled(
-            available and self._current_tracker is not None
-        )
-        self.bulk_update_button.setEnabled(
-            available
-            and self._current_tracker is not None
-            and not bool(settings.offline_mode)
-            and not historical
-            and self._selected_search_count() > 0
+        self.search_panel.set_available(
+            available,
+            has_tracker=self._current_tracker is not None,
+            offline=bool(settings.offline_mode),
+            historical=historical,
         )
         self.create_item_button.setEnabled(
             available
@@ -1142,10 +820,9 @@ class TrackerWorkspacePage(QWidget):
             return
         self._current_project = project
         self._current_tracker = None
-        self._baseline_hierarchy_cache.clear()
-        self._baseline_hierarchy_loading_key = None
-        self._reset_hierarchy_source()
-        self._reset_condition_search("트래커를 불러오는 중입니다.")
+        self.hierarchy_panel.clear_baseline_cache()
+        self.hierarchy_panel.reset_source()
+        self.search_panel.reset_condition_search("트래커를 불러오는 중입니다.")
         self._reset_baseline_state("트래커를 불러오는 중입니다.")
         self.detail_panel.reset_detail()
         self._load_trackers(project)
@@ -1154,8 +831,8 @@ class TrackerWorkspacePage(QWidget):
         settings = self.settings_provider()
         project_id = project.project_id
         self.tracker_combo.setEnabled(False)
-        self.reload_roots_button.setEnabled(False)
-        self.search_button.setEnabled(False)
+        self.hierarchy_panel.reload_roots_button.setEnabled(False)
+        self.search_panel.set_available(False, has_tracker=False, offline=False, historical=False)
         self._set_workspace_status(
             f"'{project.name}' 프로젝트의 트래커를 불러오는 중입니다.",
             tone="loading",
@@ -1190,19 +867,18 @@ class TrackerWorkspacePage(QWidget):
                 self._reset_workspace("조회 가능한 트래커가 없습니다.")
                 return
             self._current_tracker = self._trackers[index]
-            self._baseline_hierarchy_cache.clear()
-            self._baseline_hierarchy_loading_key = None
-            self._reset_hierarchy_source()
+            self.hierarchy_panel.clear_baseline_cache()
+            self.hierarchy_panel.reset_source()
             self._reset_baseline_state("Baseline 목록을 불러오는 중입니다.")
             self._set_available(True)
-            self._update_search_scope()
+            self.search_panel.update_scope()
             self._set_workspace_status(
                 f"'{self._current_tracker.name}' 트래커의 최상위 아이템을 조회합니다."
             )
-            self._load_roots()
+            self.hierarchy_panel.load_roots()
             self._refresh_baseline_comparison()
-            if self.search_mode_combo.currentData() == TrackerSearchMode.CONDITIONS.value:
-                self._load_search_schema()
+            if self.search_panel.search_mode_combo.currentData() == TrackerSearchMode.CONDITIONS.value:
+                self.search_panel.load_schema()
 
         def failed(exc: Exception) -> None:
             self._trackers = ()
@@ -1230,72 +906,27 @@ class TrackerWorkspacePage(QWidget):
         if self._current_tracker == tracker:
             return
         self._current_tracker = tracker
-        self._baseline_hierarchy_cache.clear()
-        self._baseline_hierarchy_loading_key = None
-        self._reset_hierarchy_source()
+        self.hierarchy_panel.clear_baseline_cache()
+        self.hierarchy_panel.reset_source()
         self._reset_baseline_state("Baseline 목록을 불러오는 중입니다.")
-        self._last_search_query = None
-        self._last_search_result = None
-        self._reset_condition_search("상세 검색 필드 정보를 불러오는 중입니다.")
-        self._clear_search_selection()
-        self.search_table.setRowCount(0)
+        self.search_panel.reset_results("상세 검색 필드 정보를 불러오는 중입니다.")
         self.detail_panel.reset_detail()
-        self._update_search_scope()
+        self.search_panel.update_scope()
         self._set_available(True)
-        self._load_roots()
-        if self.search_mode_combo.currentData() == TrackerSearchMode.CONDITIONS.value:
-            self._load_search_schema()
+        self.hierarchy_panel.load_roots()
+        if self.search_panel.search_mode_combo.currentData() == TrackerSearchMode.CONDITIONS.value:
+            self.search_panel.load_schema()
         self._refresh_baseline_comparison()
 
-    def _update_search_scope(self) -> None:
-        if self._current_tracker is None:
-            self.search_scope_label.setText("프로젝트와 트래커를 먼저 선택하세요.")
-            return
-        self.search_scope_label.setText(
-            f"검색 범위: {self._current_tracker.name} ({self._current_tracker.tracker_id}) · "
-            "ID 바로 열기와 달리 이 트래커 밖의 아이템은 검색하지 않습니다."
-        )
 
-    def _selected_hierarchy_baseline_id(self) -> int | None:
-        value = self.hierarchy_source_combo.currentData()
-        return None if value is None else int(value)
 
     def _is_historical_read_only(self) -> bool:
         return (
             self.detail_panel.baseline_id is not None
-            or self._selected_hierarchy_baseline_id() is not None
+            or self.hierarchy_panel.selected_baseline_id() is not None
         )
 
-    def _reset_hierarchy_source(self) -> None:
-        self.hierarchy_source_combo.blockSignals(True)
-        self.hierarchy_source_combo.clear()
-        self.hierarchy_source_combo.addItem("현재 상태", None)
-        self.hierarchy_source_combo.setCurrentIndex(0)
-        self.hierarchy_source_combo.blockSignals(False)
-        self.reload_roots_button.setText("현재 계층 다시 불러오기")
 
-    def _set_hierarchy_baselines(
-        self,
-        baselines: tuple[TrackerBaseline, ...],
-    ) -> None:
-        selected = self._selected_hierarchy_baseline_id()
-        self.hierarchy_source_combo.blockSignals(True)
-        self.hierarchy_source_combo.clear()
-        self.hierarchy_source_combo.addItem("현재 상태", None)
-        for baseline in baselines:
-            label = baseline.name
-            if baseline.created_at:
-                label = f"{label} ({baseline.created_at})"
-            self.hierarchy_source_combo.addItem(label, baseline.baseline_id)
-        selected_index = (
-            self.hierarchy_source_combo.findData(selected)
-            if selected is not None
-            else 0
-        )
-        self.hierarchy_source_combo.setCurrentIndex(max(selected_index, 0))
-        self.hierarchy_source_combo.blockSignals(False)
-        if selected is not None and selected_index < 0:
-            self._on_hierarchy_source_changed()
 
     @staticmethod
     def _tracker_combo_text(tracker: TrackerSummary) -> str:
@@ -1308,708 +939,28 @@ class TrackerWorkspacePage(QWidget):
             suffix = f" · {type_name}"
         return f"{tracker.name}  ·  {tracker.tracker_id}{suffix}"
 
-    def _load_roots(self, *, force: bool = False) -> None:
-        tracker = self._current_tracker
-        project = self._current_project
-        if tracker is None:
-            self._set_workspace_status("트래커를 먼저 선택하세요.", tone="warning")
-            return
-        cache_key = tracker.tracker_id
-        if cache_key in self._root_cache and not force:
-            self._render_roots(self._root_cache[cache_key])
-            return
-        if force:
-            self._root_cache.pop(tracker.tracker_id, None)
-            self._child_cache.clear()
 
-        settings = self.settings_provider()
-        tracker_id = tracker.tracker_id
-        self.tree_status_label.setText("최상위 아이템을 불러오는 중입니다.")
-        self.reload_roots_button.setEnabled(False)
 
-        def loaded(items: tuple[TrackerItemSummary, ...]) -> None:
-            if self._current_tracker is None or self._current_tracker.tracker_id != tracker_id:
-                return
-            self._root_cache[cache_key] = items
-            self.reload_roots_button.setEnabled(True)
-            self._render_roots(items)
-            if self._selected_hierarchy_baseline_id() is None:
-                self._set_workspace_status(
-                    f"'{tracker.name}' 트래커의 계층을 조회할 수 있습니다."
-                )
 
-        def failed(exc: Exception) -> None:
-            self.reload_roots_button.setEnabled(True)
-            if self._selected_hierarchy_baseline_id() is None:
-                self.item_tree.clear()
-                self.tree_status_label.setText("최상위 아이템을 불러오지 못했습니다.")
-            self._show_error(exc, prefix="계층 조회 실패")
 
-        self._submit(
-            "roots",
-            lambda: self.service.load_all_top_level_items(
-                settings,
-                tracker_id,
-                tracker_name=tracker.name,
-                project_id=project.project_id if project else tracker.project_id,
-                project_name=project.name if project else tracker.project_name,
-                page_size=HIERARCHY_FETCH_PAGE_SIZE,
-            ),
-            loaded,
-            failed,
-        )
 
-    def _on_hierarchy_source_changed(self, *_args) -> None:
-        self._next_token("detail")
-        self.detail_panel.reset_detail()
-        baseline_id = self._selected_hierarchy_baseline_id()
-        historical = baseline_id is not None
-        self.detail_panel.set_historical_read_only(historical)
-        self._set_available(True)
-        if baseline_id is None:
-            self.reload_roots_button.setText("현재 계층 다시 불러오기")
-            self._load_roots()
-            return
-        self.reload_roots_button.setText("Baseline 계층 조회")
-        tracker = self._current_tracker
-        if tracker is None:
-            return
-        cached = self._baseline_hierarchy_cache.get((tracker.tracker_id, baseline_id))
-        if cached is not None:
-            self._render_baseline_hierarchy(cached)
-            self.reload_roots_button.setText("Baseline 계층 다시 불러오기")
-            return
-        self.item_tree.clear()
-        self.tree_status_label.setText(
-            "선택한 Baseline의 전체 계층을 보려면 'Baseline 계층 조회'를 누르세요."
-        )
 
-    def _reload_selected_hierarchy(self) -> None:
-        baseline_id = self._selected_hierarchy_baseline_id()
-        if baseline_id is None:
-            self._load_roots(force=True)
-            return
-        self._load_baseline_hierarchy(baseline_id, force=True)
 
-    def _load_baseline_hierarchy(
-        self,
-        baseline_id: int,
-        *,
-        force: bool = False,
-    ) -> None:
-        tracker = self._current_tracker
-        if tracker is None:
-            self._set_workspace_status("트래커를 먼저 선택하세요.", tone="warning")
-            return
-        key = (tracker.tracker_id, int(baseline_id))
-        cached = self._baseline_hierarchy_cache.get(key)
-        if cached is not None and not force:
-            self._render_baseline_hierarchy(cached)
-            return
-        if self._baseline_hierarchy_loading_key == key:
-            return
-        settings = self.settings_provider()
-        self._baseline_hierarchy_loading_key = key
-        self.reload_roots_button.setEnabled(False)
-        self.item_tree.clear()
-        self.tree_status_label.setText("Baseline 전체 아이템과 계층을 불러오는 중입니다.")
 
-        def loaded(snapshot: TrackerHierarchySnapshot) -> None:
-            self._baseline_hierarchy_loading_key = None
-            current = self._current_tracker
-            if (
-                current is None
-                or current.tracker_id != key[0]
-                or self._selected_hierarchy_baseline_id() != key[1]
-            ):
-                return
-            self._baseline_hierarchy_cache[key] = snapshot
-            self.reload_roots_button.setEnabled(True)
-            self.reload_roots_button.setText("Baseline 계층 다시 불러오기")
-            self._set_available(True)
-            self._render_baseline_hierarchy(snapshot)
-            self._set_workspace_status(
-                f"Baseline #{key[1]}의 계층 {len(snapshot.nodes):,}개 아이템을 불러왔습니다."
-            )
 
-        def failed(exc: Exception) -> None:
-            if self._baseline_hierarchy_loading_key == key:
-                self._baseline_hierarchy_loading_key = None
-            current = self._current_tracker
-            if (
-                current is None
-                or current.tracker_id != key[0]
-                or self._selected_hierarchy_baseline_id() != key[1]
-            ):
-                return
-            self.reload_roots_button.setEnabled(True)
-            self.item_tree.clear()
-            self.tree_status_label.setText("Baseline 계층을 불러오지 못했습니다.")
-            self._show_error(exc, prefix="Baseline 계층 조회 실패")
 
-        self._submit(
-            "baseline_hierarchy",
-            lambda: self.service.load_baseline_hierarchy_snapshot(
-                settings,
-                key[0],
-                key[1],
-                page_size=HIERARCHY_FETCH_PAGE_SIZE,
-            ),
-            loaded,
-            failed,
-        )
 
-    def _render_baseline_hierarchy(
-        self,
-        snapshot: TrackerHierarchySnapshot,
-    ) -> None:
-        self.item_tree.blockSignals(True)
-        self.item_tree.clear()
-        tree_items: dict[int, QTreeWidgetItem] = {}
-        root_count = 0
-        for node in snapshot.nodes:
-            tree_item = self._tree_item(node.item)
-            tree_item.takeChildren()
-            tree_item.setData(0, CHILDREN_LOADED_ROLE, True)
-            tree_items[node.item.item_id] = tree_item
-            if node.parent_id is None:
-                self.item_tree.addTopLevelItem(tree_item)
-                root_count += 1
-            else:
-                tree_items[node.parent_id].addChild(tree_item)
-        self.item_tree.blockSignals(False)
-        self.tree_status_label.setText(
-            f"Baseline 계층 · 최상위 {root_count}개 · 전체 {len(snapshot.nodes):,}개"
-            if snapshot.nodes
-            else "선택한 Baseline에 아이템이 없습니다."
-        )
 
-    def _render_roots(self, items: tuple[TrackerItemSummary, ...]) -> None:
-        if self._selected_hierarchy_baseline_id() is None:
-            self.item_tree.blockSignals(True)
-            self.item_tree.clear()
-            for summary in items:
-                self.item_tree.addTopLevelItem(self._tree_item(summary))
-            self.item_tree.blockSignals(False)
-            if items:
-                self.tree_status_label.setText(f"최상위 아이템 {len(items)}개 · 전체 표시")
-            else:
-                self.tree_status_label.setText("최상위 아이템이 없습니다.")
-        self._render_baseline_roots(items)
 
-    def _start_hierarchy_export(self) -> None:
-        if self._hierarchy_export_in_progress:
-            return
-        tracker = self._current_tracker
-        if tracker is None:
-            self._set_workspace_status("트래커를 먼저 선택하세요.", tone="warning")
-            return
-        baseline_id = self._selected_hierarchy_baseline_id()
-        baseline_snapshot = None
-        baseline_name = ""
-        if baseline_id is not None:
-            baseline_snapshot = self._baseline_hierarchy_cache.get(
-                (tracker.tracker_id, baseline_id)
-            )
-            if baseline_snapshot is None:
-                self._set_workspace_status(
-                    "Baseline 계층을 먼저 조회한 뒤 Excel로 내보내세요.",
-                    tone="warning",
-                )
-                return
-            baseline_name = self.hierarchy_source_combo.currentText().strip()
-        tracker_id = tracker.tracker_id
-        settings = self.settings_provider()
-        self.hierarchy_export_button.setEnabled(False)
-        self.tree_status_label.setText("내보낼 필드 정보를 확인하는 중입니다.")
 
-        def loaded(schema: dict[str, Any]) -> None:
-            current = self._current_tracker
-            if (
-                current is None
-                or current.tracker_id != tracker_id
-                or self._selected_hierarchy_baseline_id() != baseline_id
-            ):
-                return
-            self.hierarchy_export_button.setEnabled(True)
-            fields = hierarchy_export_fields_from_schema(schema)
-            dialog = TrackerHierarchyExportFieldDialog(fields, self)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                self.tree_status_label.setText("계층 Excel 내보내기를 취소했습니다.")
-                return
-            default_name = (
-                f"tracker_hierarchy_{tracker_id}_baseline_{baseline_id}.xlsx"
-                if baseline_id is not None
-                else f"tracker_hierarchy_{tracker_id}.xlsx"
-            )
-            output_path, _selected_filter = QFileDialog.getSaveFileName(
-                self,
-                "트래커 계층 Excel 저장",
-                default_name,
-                "Excel 통합 문서 (*.xlsx)",
-            )
-            if not output_path:
-                self.tree_status_label.setText("계층 Excel 내보내기를 취소했습니다.")
-                return
-            self._run_hierarchy_export(
-                tracker,
-                selected_field_keys=dialog.selected_field_keys(),
-                output_path=output_path,
-                tracker_schema=schema,
-                baseline_id=baseline_id,
-                baseline_name=baseline_name,
-                baseline_snapshot=baseline_snapshot,
-            )
 
-        def failed(exc: Exception) -> None:
-            current = self._current_tracker
-            if current is None or current.tracker_id != tracker_id:
-                return
-            self.hierarchy_export_button.setEnabled(True)
-            self.tree_status_label.setText("내보낼 필드 정보를 불러오지 못했습니다.")
-            self._show_error(exc, prefix="계층 내보내기 필드 조회 실패")
 
-        self._submit(
-            "hierarchy_export_fields",
-            lambda: self.service.load_tracker_schema(settings, tracker_id),
-            loaded,
-            failed,
-        )
 
-    def _run_hierarchy_export(
-        self,
-        tracker: TrackerSummary,
-        *,
-        selected_field_keys: tuple[str, ...],
-        output_path: str,
-        tracker_schema: dict[str, Any] | None = None,
-        baseline_id: int | None = None,
-        baseline_name: str = "",
-        baseline_snapshot: TrackerHierarchySnapshot | None = None,
-    ) -> None:
-        if self._hierarchy_export_in_progress:
-            return
-        tracker_id = tracker.tracker_id
-        project = self._current_project
-        project_id = project.project_id if project else tracker.project_id
-        project_name = project.name if project else tracker.project_name
-        settings = self.settings_provider()
 
-        def export():
-            if baseline_id is not None:
-                if baseline_snapshot is None or tracker_schema is None:
-                    raise TrackerHierarchyExportError(
-                        "Baseline 계층 조회 결과 또는 필드 정보가 없습니다."
-                    )
-                snapshot = build_tracker_hierarchy_export_snapshot(
-                    baseline_snapshot,
-                    tracker_schema,
-                )
-            else:
-                snapshot = self.service.load_tracker_hierarchy_export_snapshot(
-                    settings,
-                    tracker_id,
-                    tracker_name=tracker.name,
-                    project_id=project_id,
-                    project_name=project_name,
-                    page_size=HIERARCHY_FETCH_PAGE_SIZE,
-                )
-            return export_tracker_hierarchy_xlsx(
-                snapshot,
-                output_path,
-                tracker_name=f"{tracker.name} (ID {tracker_id})",
-                project_name=project_name,
-                selected_field_keys=selected_field_keys,
-                baseline_id=baseline_id,
-                baseline_name=baseline_name,
-            )
 
-        def failed(exc: Exception) -> None:
-            self._hierarchy_export_in_progress = False
-            self._set_available(True)
-            current = self._current_tracker
-            if current is not None and current.tracker_id == tracker_id:
-                self.tree_status_label.setText("트래커 계층 Excel 내보내기에 실패했습니다.")
-                self._show_error(exc, prefix="트래커 계층 Excel 내보내기 실패")
-            self._record_activity(
-                ActivityRecord.create(
-                    ActivityOperation.TRACKER_HIERARCHY_EXPORT,
-                    ActivityResult.FAILED,
-                    source="tracker_workspace",
-                    summary="트래커 계층 Excel 내보내기 실패",
-                    project_id=project_id,
-                    project_name=project_name,
-                    tracker_id=tracker_id,
-                    tracker_name=tracker.name,
-                    details={
-                        "selectedFieldCount": len(selected_field_keys),
-                        "baselineId": baseline_id,
-                    },
-                )
-            )
 
-        def completed(summary) -> None:
-            self._hierarchy_export_in_progress = False
-            self._set_available(True)
-            self._record_activity(
-                ActivityRecord.create(
-                    ActivityOperation.TRACKER_HIERARCHY_EXPORT,
-                    ActivityResult.SUCCESS,
-                    source="tracker_workspace",
-                    summary=(
-                        f"트래커 계층 {summary.item_count:,}개 아이템을 Excel로 내보냈습니다."
-                    ),
-                    project_id=project_id,
-                    project_name=project_name,
-                    tracker_id=tracker_id,
-                    tracker_name=tracker.name,
-                    details={
-                        "selectedFieldCount": summary.selected_field_count,
-                        "itemCount": summary.item_count,
-                        "dataRowCount": summary.data_row_count,
-                        "longValueCount": summary.long_value_count,
-                        "longValuePartCount": summary.long_value_part_count,
-                        "baselineId": baseline_id,
-                    },
-                )
-            )
-            if self._current_tracker is not None and self._current_tracker.tracker_id == tracker_id:
-                long_value_status = (
-                    f" · 긴 값 {summary.long_value_count}개 별도 시트 분할"
-                    if summary.long_value_count
-                    else ""
-                )
-                self.tree_status_label.setText(
-                    f"Excel 내보내기 완료 · 아이템 {summary.item_count:,}개 · "
-                    f"데이터 행 {summary.data_row_count:,}개{long_value_status}"
-                )
-                source_label = (
-                    "Baseline 계층"
-                    if baseline_id is not None
-                    else "트래커 전체 계층"
-                )
-                self._set_workspace_status(f"{source_label} Excel 파일을 저장했습니다.")
 
-        self._hierarchy_export_in_progress = True
-        self._set_available(True)
-        self.tree_status_label.setText(
-            "Baseline 계층 Excel 파일을 생성하는 중입니다."
-            if baseline_id is not None
-            else "트래커 전체 계층 Excel 파일을 생성하는 중입니다."
-        )
-        self._submit("hierarchy_export", export, completed, failed)
 
-    def _render_baseline_roots(self, items: tuple[TrackerItemSummary, ...]) -> None:
-        self.baseline_item_tree.blockSignals(True)
-        self.baseline_item_tree.clear()
-        for summary in items:
-            self.baseline_item_tree.addTopLevelItem(self._tree_item(summary))
-        self.baseline_item_tree.blockSignals(False)
-        self.baseline_tree_status_label.setText(
-            f"현재 최상위 아이템 {len(items)}개" if items else "현재 최상위 아이템이 없습니다."
-        )
-
-    def _tree_item(self, summary: TrackerItemSummary) -> QTreeWidgetItem:
-        item = QTreeWidgetItem(
-            [
-                str(summary.item_id),
-                summary.name,
-            ]
-        )
-        item.setData(0, ITEM_SUMMARY_ROLE, summary)
-        children_known = summary.child_count is not None or any(
-            key in summary.raw_reference for key in ("hasChildren", "leaf", "children")
-        )
-        children_may_exist = summary.has_children or not children_known
-        item.setData(0, CHILDREN_LOADED_ROLE, not children_may_exist)
-        if children_may_exist:
-            item.addChild(self._placeholder_item("펼치면 직접 하위 아이템을 불러옵니다."))
-        return item
-
-    @staticmethod
-    def _placeholder_item(text: str) -> QTreeWidgetItem:
-        placeholder = QTreeWidgetItem(["", text])
-        placeholder.setData(0, PLACEHOLDER_ROLE, True)
-        placeholder.setDisabled(True)
-        return placeholder
-
-    def _on_tree_item_expanded(self, item: QTreeWidgetItem) -> None:
-        if self._selected_hierarchy_baseline_id() is not None:
-            return
-        summary = item.data(0, ITEM_SUMMARY_ROLE)
-        if not isinstance(summary, TrackerItemSummary):
-            return
-        if bool(item.data(0, CHILDREN_LOADED_ROLE)):
-            return
-        cached = self._child_cache.get(summary.item_id)
-        if cached is not None:
-            self._replace_tree_children(item, cached)
-            return
-
-        tracker = self._current_tracker
-        project = self._current_project
-        if tracker is None:
-            return
-        tracker_id = tracker.tracker_id
-        settings = self.settings_provider()
-        item.takeChildren()
-        item.addChild(self._placeholder_item("하위 아이템을 불러오는 중입니다."))
-
-        def loaded(children: tuple[TrackerItemSummary, ...]) -> None:
-            if self._current_tracker is None or self._current_tracker.tracker_id != tracker_id:
-                return
-            self._child_cache[summary.item_id] = children
-            self._replace_tree_children(item, children)
-            self._set_workspace_status(
-                f"#{summary.item_id}의 직접 하위 아이템 {len(children)}개를 모두 불러왔습니다."
-            )
-
-        def failed(exc: Exception) -> None:
-            item.takeChildren()
-            item.addChild(self._placeholder_item("하위 조회 실패 · 접었다가 다시 펼쳐 재시도"))
-            item.setData(0, CHILDREN_LOADED_ROLE, False)
-            self._show_error(exc, prefix=f"#{summary.item_id} 하위 조회 실패")
-
-        self._submit(
-            f"children:{summary.item_id}",
-            lambda: self.service.load_all_child_items(
-                settings,
-                summary.item_id,
-                tracker_id=tracker_id,
-                tracker_name=tracker.name,
-                project_id=project.project_id if project else tracker.project_id,
-                project_name=project.name if project else tracker.project_name,
-                page_size=HIERARCHY_FETCH_PAGE_SIZE,
-            ),
-            loaded,
-            failed,
-        )
-
-    def _on_baseline_tree_item_expanded(self, item: QTreeWidgetItem) -> None:
-        summary = item.data(0, ITEM_SUMMARY_ROLE)
-        if not isinstance(summary, TrackerItemSummary):
-            return
-        if bool(item.data(0, CHILDREN_LOADED_ROLE)):
-            return
-        cached = self._child_cache.get(summary.item_id)
-        if cached is not None:
-            self._replace_tree_children(item, cached)
-            return
-        tracker = self._current_tracker
-        project = self._current_project
-        if tracker is None:
-            return
-        tracker_id = tracker.tracker_id
-        settings = self.settings_provider()
-        item.takeChildren()
-        item.addChild(self._placeholder_item("하위 아이템을 불러오는 중입니다."))
-
-        def loaded(children: tuple[TrackerItemSummary, ...]) -> None:
-            if self._current_tracker is None or self._current_tracker.tracker_id != tracker_id:
-                return
-            self._child_cache[summary.item_id] = children
-            self._replace_tree_children(item, children)
-
-        def failed(exc: Exception) -> None:
-            item.takeChildren()
-            item.addChild(self._placeholder_item("하위 조회 실패 · 다시 펼쳐 재시도"))
-            item.setData(0, CHILDREN_LOADED_ROLE, False)
-            self.baseline_comparison_panel.set_error(str(exc))
-            self._show_error(exc, prefix=f"#{summary.item_id} 하위 조회 실패")
-
-        self._submit(
-            f"baseline_children:{summary.item_id}",
-            lambda: self.service.load_all_child_items(
-                settings,
-                summary.item_id,
-                tracker_id=tracker_id,
-                tracker_name=tracker.name,
-                project_id=project.project_id if project else tracker.project_id,
-                project_name=project.name if project else tracker.project_name,
-                page_size=HIERARCHY_FETCH_PAGE_SIZE,
-            ),
-            loaded,
-            failed,
-        )
-
-    def _replace_tree_children(
-        self,
-        parent_item: QTreeWidgetItem,
-        children: tuple[TrackerItemSummary, ...] | list[TrackerItemSummary],
-    ) -> None:
-        parent_item.takeChildren()
-        for summary in children:
-            parent_item.addChild(self._tree_item(summary))
-        parent_item.setData(0, CHILDREN_LOADED_ROLE, True)
-
-    def _on_tree_selection_changed(self) -> None:
-        selected = self.item_tree.selectedItems()
-        if not selected:
-            return
-        summary = selected[0].data(0, ITEM_SUMMARY_ROLE)
-        if isinstance(summary, TrackerItemSummary):
-            self.detail_panel.load_detail(
-                summary.item_id,
-                baseline_id=self._selected_hierarchy_baseline_id(),
-            )
-
-    def _on_baseline_tree_selection_changed(self) -> None:
-        selected = self.baseline_item_tree.selectedItems()
-        if not selected:
-            return
-        summary = selected[0].data(0, ITEM_SUMMARY_ROLE)
-        if not isinstance(summary, TrackerItemSummary):
-            return
-        self._baseline_selected_item_id = summary.item_id
-        if self._baseline_comparison_result is not None:
-            self.baseline_comparison_panel.select_item(summary.item_id)
-        else:
-            self.baseline_comparison_panel.set_error(
-                f"#{summary.item_id}을(를) 선택했습니다. 전체 비교 데이터를 먼저 불러오세요."
-            )
-
-    def _on_baseline_result_selection_changed(self) -> None:
-        selected = self.baseline_result_table.selectedItems()
-        if not selected:
-            return
-        id_cell = self.baseline_result_table.item(selected[0].row(), 1)
-        comparison = (
-            id_cell.data(BASELINE_COMPARISON_ROLE) if id_cell is not None else None
-        )
-        if comparison is None:
-            return
-        self._baseline_selected_item_id = int(comparison.item_id)
-        self.baseline_comparison_panel.select_item(comparison.item_id)
-
-    def _render_baseline_comparison_results(self, *_args) -> None:
-        result = self._baseline_comparison_result
-        self.baseline_result_table.setSortingEnabled(False)
-        self.baseline_result_table.setRowCount(0)
-        if result is None:
-            self.baseline_result_table.setSortingEnabled(True)
-            return
-        visible = self._filtered_baseline_comparisons(result)
-        self.baseline_result_table.setRowCount(len(visible))
-        palette = self.baseline_result_table.palette()
-        base_color = palette.base().color()
-        for row, comparison in enumerate(visible):
-            changed_count = sum(field.is_changed for field in comparison.fields)
-            changed_count_text = (
-                "—"
-                if comparison.kind
-                in {BaselineComparisonKind.ADDED, BaselineComparisonKind.REMOVED}
-                else str(changed_count)
-            )
-            values = (
-                BASELINE_KIND_BADGES[comparison.kind],
-                str(comparison.item_id),
-                comparison.name,
-                changed_count_text,
-                str(len(comparison.fields)),
-            )
-            sort_values = (
-                comparison.kind.value,
-                comparison.item_id,
-                comparison.name.casefold(),
-                -1
-                if comparison.kind
-                in {BaselineComparisonKind.ADDED, BaselineComparisonKind.REMOVED}
-                else changed_count,
-                len(comparison.fields),
-            )
-            accent = BASELINE_KIND_ACCENTS[comparison.kind]
-            background = QBrush(blend_colors(base_color, accent, 0.16))
-            for column, value in enumerate(values):
-                cell = SortableTableItem(value, sort_values[column])
-                cell.setToolTip(value)
-                cell.setBackground(background)
-                if column == 1:
-                    cell.setData(BASELINE_COMPARISON_ROLE, comparison)
-                self.baseline_result_table.setItem(row, column, cell)
-        self.baseline_result_table.setSortingEnabled(True)
-        self.baseline_result_table.sortItems(1, Qt.SortOrder.AscendingOrder)
-        self.baseline_tree_status_label.setText(
-            f"전체 비교 {len(result.items)}개 · 현재 표시 {len(visible)}개"
-        )
-
-    def _filtered_baseline_comparisons(
-        self,
-        result: BaselineComparisonResult | None = None,
-    ) -> tuple:
-        source = result or self._baseline_comparison_result
-        if source is None:
-            return ()
-        kind_filter = str(self.baseline_result_filter.currentData() or "")
-        field_filter = str(self.baseline_field_filter.currentData() or "")
-        needle = self.baseline_result_search.text().strip().casefold()
-        visible = []
-        for comparison in source.items:
-            if kind_filter and comparison.kind.value != kind_filter:
-                continue
-            if (
-                needle
-                and needle not in str(comparison.item_id)
-                and needle not in comparison.name.casefold()
-            ):
-                continue
-            if field_filter and not any(
-                field.field_key == field_filter and field.is_changed
-                for field in comparison.fields
-            ):
-                continue
-            visible.append(comparison)
-        return tuple(visible)
-
-    def _populate_baseline_field_filter(
-        self,
-        result: BaselineComparisonResult,
-    ) -> None:
-        selected_key = str(self.baseline_field_filter.currentData() or "")
-        fields = baseline_export_fields(result)
-        self.baseline_field_filter.blockSignals(True)
-        self.baseline_field_filter.clear()
-        self.baseline_field_filter.addItem("전체 변경 필드", "")
-        for field in fields:
-            self.baseline_field_filter.addItem(field.label, field.field_key)
-        selected_index = self.baseline_field_filter.findData(selected_key)
-        self.baseline_field_filter.setCurrentIndex(max(selected_index, 0))
-        self.baseline_field_filter.blockSignals(False)
-
-    def _reset_baseline_field_filter(self) -> None:
-        self.baseline_field_filter.blockSignals(True)
-        self.baseline_field_filter.clear()
-        self.baseline_field_filter.addItem("전체 변경 필드", "")
-        self.baseline_field_filter.blockSignals(False)
-
-    def _on_search_selection_changed(self) -> None:
-        selected = self.search_table.selectedItems()
-        if not selected:
-            return
-        summary_cell = self.search_table.item(selected[0].row(), 1)
-        if summary_cell is None:
-            return
-        summary = summary_cell.data(ITEM_SUMMARY_ROLE)
-        if isinstance(summary, TrackerItemSummary):
-            self.detail_panel.load_detail(summary.item_id)
-
-    def _on_search_check_changed(self, item: QTableWidgetItem) -> None:
-        if item.column() != 0:
-            return
-        id_item = self.search_table.item(item.row(), 1)
-        summary = id_item.data(ITEM_SUMMARY_ROLE) if id_item is not None else None
-        if not isinstance(summary, TrackerItemSummary):
-            return
-        checked = item.checkState() == Qt.CheckState.Checked
-        if self._all_search_selected:
-            if checked:
-                self._excluded_search_ids.discard(summary.item_id)
-            else:
-                self._excluded_search_ids.add(summary.item_id)
-        elif checked:
-            self._selected_search_ids.add(summary.item_id)
-        else:
-            self._selected_search_ids.discard(summary.item_id)
-        self._update_search_selection_ui()
 
 
 
@@ -2034,7 +985,7 @@ class TrackerWorkspacePage(QWidget):
             )
 
     def _create_item(self) -> None:
-        if self._selected_hierarchy_baseline_id() is not None:
+        if self.hierarchy_panel.selected_baseline_id() is not None:
             self._set_workspace_status(
                 "Baseline 조회 중에는 아이템을 생성할 수 없습니다.",
                 tone="warning",
@@ -2125,7 +1076,7 @@ class TrackerWorkspacePage(QWidget):
                         ),
                     },
                 )
-                self._show_created_item(
+                self.hierarchy_panel.show_created_item(
                     detail,
                     parent_item_id=request.parent_item_id,
                     parent_detail=parent_detail,
@@ -2194,186 +1145,8 @@ class TrackerWorkspacePage(QWidget):
         available, _ = self._settings_available(self.settings_provider())
         self._set_available(available)
 
-    def _find_tree_item(self, item_id: int) -> QTreeWidgetItem | None:
-        def find_from(item: QTreeWidgetItem | None) -> QTreeWidgetItem | None:
-            if item is None:
-                return None
-            summary = item.data(0, ITEM_SUMMARY_ROLE)
-            if isinstance(summary, TrackerItemSummary) and summary.item_id == int(item_id):
-                return item
-            for child_index in range(item.childCount()):
-                found = find_from(item.child(child_index))
-                if found is not None:
-                    return found
-            return None
 
-        for top_index in range(self.item_tree.topLevelItemCount()):
-            found = find_from(self.item_tree.topLevelItem(top_index))
-            if found is not None:
-                return found
-        return None
 
-    def _show_created_item(
-        self,
-        detail: TrackerItemDetail,
-        *,
-        parent_item_id: int | None,
-        parent_detail: TrackerItemDetail | None,
-    ) -> None:
-        tracker_id = detail.summary.tracker_id
-        if tracker_id is not None:
-            self._invalidate_tracker_cache(tracker_id)
-
-        self.item_tree.blockSignals(True)
-        try:
-            created_item = self._tree_item(detail.summary)
-            if parent_item_id is None:
-                self.item_tree.insertTopLevelItem(0, created_item)
-            else:
-                parent_item = self._find_tree_item(parent_item_id)
-                if parent_item is None:
-                    parent_summary = (
-                        parent_detail.summary
-                        if parent_detail is not None
-                        else TrackerItemSummary(
-                            item_id=int(parent_item_id),
-                            name=(
-                                detail.parent.name
-                                if detail.parent is not None
-                                else str(parent_item_id)
-                            ),
-                            tracker_id=detail.summary.tracker_id,
-                            tracker_name=detail.summary.tracker_name,
-                            project_id=detail.summary.project_id,
-                            project_name=detail.summary.project_name,
-                            has_children=True,
-                        )
-                    )
-                    parent_item = self._tree_item(
-                        replace(parent_summary, has_children=True)
-                    )
-                    parent_item.takeChildren()
-                    parent_item.setData(0, CHILDREN_LOADED_ROLE, False)
-                    self.item_tree.clear()
-                    self.item_tree.addTopLevelItem(parent_item)
-                parent_summary = parent_item.data(0, ITEM_SUMMARY_ROLE)
-                if isinstance(parent_summary, TrackerItemSummary):
-                    current_count = parent_summary.child_count or 0
-                    parent_item.setData(
-                        0,
-                        ITEM_SUMMARY_ROLE,
-                        replace(
-                            parent_summary,
-                            has_children=True,
-                            child_count=max(current_count + 1, 1),
-                        ),
-                    )
-                placeholder_index = next(
-                    (
-                        index
-                        for index in range(parent_item.childCount())
-                        if bool(parent_item.child(index).data(0, PLACEHOLDER_ROLE))
-                    ),
-                    -1,
-                )
-                if placeholder_index >= 0:
-                    parent_item.insertChild(placeholder_index, created_item)
-                else:
-                    parent_item.addChild(created_item)
-                parent_item.setExpanded(True)
-            self.item_tree.clearSelection()
-            self.item_tree.setCurrentItem(created_item)
-            created_item.setSelected(True)
-            self.item_tree.scrollToItem(created_item)
-        finally:
-            self.item_tree.blockSignals(False)
-
-        self.browser_tabs.setCurrentIndex(0)
-        self.detail_panel.show_detail(detail)
-        position_text = (
-            "최상위"
-            if parent_item_id is None
-            else f"#{parent_item_id}의 하위"
-        )
-        self.tree_status_label.setText(
-            f"새 아이템 #{detail.item_id} · {position_text} · 전체 목록은 다시 불러오기로 갱신"
-        )
-        self._set_workspace_status(
-            f"#{detail.item_id} '{detail.summary.name}' 아이템을 생성했습니다."
-        )
-
-    def _run_search(self, *, page: int = 1, reuse: bool = False) -> None:
-        tracker = self._current_tracker
-        if tracker is None:
-            self._set_workspace_status("검색할 트래커를 먼저 선택하세요.", tone="warning")
-            return
-        if reuse and self._last_search_query is not None:
-            query = replace(self._last_search_query, page=max(int(page), 1))
-        elif self.search_mode_combo.currentData() == TrackerSearchMode.CONDITIONS.value:
-            if self._search_schema is None:
-                self._load_search_schema(run_after=True)
-                return
-            try:
-                groups = self.condition_builder.values()
-                query = TrackerQuery(
-                    tracker_id=tracker.tracker_id,
-                    mode=TrackerSearchMode.CONDITIONS,
-                    groups=groups,
-                    page=max(int(page), 1),
-                    page_size=DEFAULT_SEARCH_PAGE_SIZE,
-                    sort="item.id ASC",
-                )
-                query.build_cbql()
-            except Exception as exc:
-                self._set_workspace_status(str(exc), tone="warning")
-                return
-        else:
-            text = self.search_text_input.text().strip()
-            status = self.search_status_input.text().strip()
-            assignee = self.search_assignee_input.text().strip()
-            if not any((text, status, assignee)):
-                self._set_workspace_status(
-                    "트래커 검색에는 ID/요약, 상태, 담당자 중 하나 이상을 입력하세요.",
-                    tone="warning",
-                )
-                return
-            query = TrackerQuery(
-                tracker_id=tracker.tracker_id,
-                mode=TrackerSearchMode.SIMPLE,
-                text=text,
-                status=status,
-                assignee=assignee,
-                page=max(int(page), 1),
-                page_size=DEFAULT_SEARCH_PAGE_SIZE,
-                sort="item.id ASC",
-            )
-        if not reuse:
-            self._clear_search_selection()
-        self._last_search_query = replace(query, page=1)
-        tracker_id = tracker.tracker_id
-        settings = self.settings_provider()
-        self.search_button.setEnabled(False)
-        self.search_scope_label.setText(
-            f"{tracker.name} ({tracker_id}) 안에서 검색하는 중입니다."
-        )
-
-        def loaded(result: PageResult[TrackerItemSummary]) -> None:
-            if self._current_tracker is None or self._current_tracker.tracker_id != tracker_id:
-                return
-            self.search_button.setEnabled(True)
-            self.baseline_compare_button.setEnabled(True)
-            self._render_search_results(result)
-            self._set_workspace_status(
-                f"현재 트래커에서 검색 결과 {result.total}개를 찾았습니다."
-            )
-
-        def failed(exc: Exception) -> None:
-            self.search_button.setEnabled(True)
-            self.baseline_compare_button.setEnabled(self._last_search_query is not None)
-            self._update_search_scope()
-            self._show_error(exc, prefix="트래커 검색 실패")
-
-        self._submit("search", lambda: self.service.search(settings, query), loaded, failed)
 
     def _open_baseline_comparison(self) -> None:
         if self.workspace_mode_tabs.currentIndex() == self.baseline_mode_index:
@@ -2385,88 +1158,14 @@ class TrackerWorkspacePage(QWidget):
         if int(index) == self.baseline_mode_index:
             self._refresh_baseline_comparison()
 
-    def _baseline_comparison_key(
-        self,
-        reference_source: BaselineComparisonSource,
-        comparison_source: BaselineComparisonSource,
-    ) -> tuple[int, int | None, int | None] | None:
-        tracker = self._current_tracker
-        if tracker is None:
-            return None
-        return (
-            tracker.tracker_id,
-            reference_source.baseline_id,
-            comparison_source.baseline_id,
-        )
 
-    def _on_baseline_sources_changed(self) -> None:
-        self._baseline_comparison_result = None
-        self._baseline_comparison_cache_key = None
-        self._baseline_comparison_loading_key = None
-        self.baseline_result_table.setRowCount(0)
-        self.baseline_result_filter.setCurrentIndex(0)
-        self._reset_baseline_field_filter()
-        self.baseline_result_search.clear()
-        self.baseline_comparison_panel.clear_result(
-            "비교 기준이 변경되었습니다. '전체 비교 실행'을 눌러 데이터를 불러오세요."
-        )
-        reference, comparison = self.baseline_comparison_panel.sources()
-        if reference is None or comparison is None:
-            self.baseline_comparison_panel.clear_result("비교할 두 기준을 선택하세요.")
-            return
-        if reference == comparison:
-            self.baseline_comparison_panel.clear_result(
-                "서로 다른 두 비교 기준을 선택하세요."
-            )
-            return
 
-    def _request_baseline_comparison(
-        self,
-        reference_source: BaselineComparisonSource,
-        comparison_source: BaselineComparisonSource,
-    ) -> None:
-        confirmer = self.baseline_compare_confirmer
-        if confirmer is not None:
-            confirmed = bool(confirmer(reference_source, comparison_source))
-        else:
-            reference_label, comparison_label = (
-                self.baseline_comparison_panel.source_labels()
-            )
-            answer = QMessageBox.warning(
-                self,
-                "Baseline 전체 비교",
-                (
-                    "현재 트래커의 전체 아이템을 두 기준에서 조회합니다.\n"
-                    "아이템 수에 따라 시간이 오래 걸리고 서버 요청이 여러 번 발생할 수 있습니다.\n\n"
-                    f"기준: {reference_label}\n"
-                    f"비교: {comparison_label}\n\n"
-                    "전체 비교를 실행하시겠습니까?"
-                ),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Cancel,
-            )
-            confirmed = answer == QMessageBox.StandardButton.Yes
-        if not confirmed:
-            return
-        self._run_baseline_comparison(
-            reference_source,
-            comparison_source,
-            force=True,
-        )
 
-    def _reload_baseline_workspace(self) -> None:
-        tracker = self._current_tracker
-        if tracker is None:
-            self.baseline_comparison_panel.set_error("비교할 트래커를 먼저 선택하세요.")
-            return
-        self._reset_baseline_state("현재 계층과 Baseline 목록을 다시 불러오는 중입니다.")
-        self._load_roots(force=True)
-        self._refresh_baseline_comparison(force=True)
 
     def _refresh_baseline_comparison(self, *, force: bool = False) -> None:
         tracker = self._current_tracker
         if tracker is None:
-            self.baseline_comparison_panel.set_error("비교할 트래커를 먼저 선택하세요.")
+            self.baseline_workspace.set_error("비교할 트래커를 먼저 선택하세요.")
             return
         if not force and tracker.tracker_id in {
             self._baseline_loaded_tracker_id,
@@ -2480,17 +1179,17 @@ class TrackerWorkspacePage(QWidget):
             if self._current_tracker is not None and self._current_tracker.tracker_id == tracker.tracker_id:
                 self._baseline_loading_tracker_id = None
                 self._baseline_loaded_tracker_id = tracker.tracker_id
-                self._set_hierarchy_baselines(baselines)
-                self.baseline_comparison_panel.set_baselines(baselines)
-                roots = self._root_cache.get(tracker.tracker_id)
+                self.hierarchy_panel.set_baselines(baselines)
+                self.baseline_workspace.set_baselines(baselines)
+                roots = self.hierarchy_panel.root_cache().get(tracker.tracker_id)
                 if roots is not None:
-                    self._render_baseline_roots(roots)
+                    self.baseline_workspace.render_roots(roots)
 
         def failed(exc: Exception) -> None:
             if self._baseline_loading_tracker_id == tracker.tracker_id:
                 self._baseline_loading_tracker_id = None
-            self._set_hierarchy_baselines(())
-            self.baseline_comparison_panel.set_error(f"Baseline 목록 조회 실패: {exc}")
+            self.hierarchy_panel.set_baselines(())
+            self.baseline_workspace.set_error(f"Baseline 목록 조회 실패: {exc}")
             self._show_error(exc, prefix="Baseline 목록 조회 실패")
 
         self._submit(
@@ -2500,609 +1199,25 @@ class TrackerWorkspacePage(QWidget):
             failed,
         )
 
-    def _run_baseline_comparison(
-        self,
-        reference_source: BaselineComparisonSource,
-        comparison_source: BaselineComparisonSource,
-        *,
-        force: bool = False,
-    ) -> None:
-        tracker = self._current_tracker
-        if tracker is None:
-            self.baseline_comparison_panel.set_error("비교할 트래커를 먼저 선택하세요.")
-            return
-        key = self._baseline_comparison_key(reference_source, comparison_source)
-        if key is None:
-            return
-        if not force and self._baseline_comparison_cache_key == key:
-            result = self._baseline_comparison_result
-            if result is not None:
-                self._populate_baseline_field_filter(result)
-                self.baseline_comparison_panel.set_result(
-                    result,
-                    selected_item_id=self._baseline_selected_item_id,
-                )
-                self._render_baseline_comparison_results()
-                return
-        if not force and self._baseline_comparison_loading_key == key:
-            return
-        settings = self.settings_provider()
-        self._baseline_comparison_loading_key = key
-        self.baseline_comparison_panel.set_loading(
-            "트래커 전체 아이템을 두 기준에서 조회하는 중입니다."
-        )
 
-        def loaded(result: BaselineComparisonResult) -> None:
-            current_reference, current_comparison = self.baseline_comparison_panel.sources()
-            current_key = (
-                self._baseline_comparison_key(current_reference, current_comparison)
-                if current_reference is not None and current_comparison is not None
-                else None
-            )
-            if current_key != key:
-                return
-            self._baseline_comparison_loading_key = None
-            self._baseline_comparison_result = result
-            self._baseline_comparison_cache_key = key
-            self._populate_baseline_field_filter(result)
-            self.baseline_comparison_panel.set_result(
-                result,
-                selected_item_id=self._baseline_selected_item_id,
-            )
-            self._render_baseline_comparison_results()
 
-        def failed(exc: Exception) -> None:
-            current_reference, current_comparison = self.baseline_comparison_panel.sources()
-            current_key = (
-                self._baseline_comparison_key(current_reference, current_comparison)
-                if current_reference is not None and current_comparison is not None
-                else None
-            )
-            if self._baseline_comparison_loading_key != key or current_key != key:
-                return
-            self._baseline_comparison_loading_key = None
-            self.baseline_comparison_panel.set_error(str(exc))
-            self._show_error(exc, prefix="Baseline 전체 비교 실패")
 
-        self._submit(
-            "baseline_compare",
-            lambda: self.service.compare_tracker_at_sources(
-                settings,
-                tracker.tracker_id,
-                reference_source=reference_source,
-                comparison_source=comparison_source,
-            ),
-            loaded,
-            failed,
-        )
 
-    def _export_baseline_comparison(self) -> None:
-        if self._baseline_export_in_progress:
-            return
-        result = self._baseline_comparison_result
-        tracker = self._current_tracker
-        export_key = self._baseline_comparison_cache_key
-        if result is None or tracker is None or export_key is None:
-            self.baseline_comparison_panel.set_error(
-                "전체 비교 데이터를 불러온 뒤 Excel로 내보낼 수 있습니다."
-            )
-            return
-        filtered_result = BaselineComparisonResult(
-            result.before_source,
-            result.after_source,
-            self._filtered_baseline_comparisons(result),
-        )
-        if not filtered_result.items:
-            self.baseline_comparison_panel.set_error(
-                "현재 필터에 표시된 아이템이 없어 내보낼 수 없습니다."
-            )
-            return
-        fields = baseline_export_fields(filtered_result)
-        if not fields:
-            self.baseline_comparison_panel.set_error("내보낼 비교 필드가 없습니다.")
-            return
-        field_dialog = BaselineExportFieldDialog(fields, self)
-        if field_dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        selected_keys = field_dialog.selected_field_keys()
-        default_name = f"baseline_comparison_{tracker.tracker_id}.xlsx"
-        output_path, _selected_filter = QFileDialog.getSaveFileName(
-            self,
-            "Baseline 비교 Excel 저장",
-            default_name,
-            "Excel 통합 문서 (*.xlsx)",
-        )
-        if not output_path:
-            return
-        reference_label, comparison_label = self.baseline_comparison_panel.source_labels()
-        project = self._current_project
 
-        def export():
-            return export_baseline_comparison_xlsx(
-                filtered_result,
-                output_path,
-                tracker_name=f"{tracker.name} (ID {tracker.tracker_id})",
-                reference_label=reference_label,
-                comparison_label=comparison_label,
-                selected_field_keys=selected_keys,
-            )
 
-        def failed(exc: Exception) -> None:
-            self._baseline_export_in_progress = False
-            self.baseline_comparison_panel.set_export_busy(False)
-            if self._baseline_comparison_cache_key == export_key:
-                self.baseline_comparison_panel.set_error(str(exc))
-            self._show_error(exc, prefix="Baseline Excel 내보내기 실패")
-            self._record_activity(
-                ActivityRecord.create(
-                    ActivityOperation.BASELINE_EXPORT,
-                    ActivityResult.FAILED,
-                    source="tracker_workspace",
-                    summary="Baseline 비교 Excel 내보내기 실패",
-                    project_id=project.project_id if project else tracker.project_id,
-                    project_name=project.name if project else tracker.project_name,
-                    tracker_id=tracker.tracker_id,
-                    tracker_name=tracker.name,
-                    details={
-                        "selectedFieldCount": len(selected_keys),
-                        "itemCount": len(filtered_result.items),
-                    },
-                )
-            )
 
-        def completed(summary) -> None:
-            self._baseline_export_in_progress = False
-            self.baseline_comparison_panel.set_export_busy(False)
-            self._record_activity(
-                ActivityRecord.create(
-                    ActivityOperation.BASELINE_EXPORT,
-                    ActivityResult.SUCCESS,
-                    source="tracker_workspace",
-                    summary=(
-                        f"Baseline 비교 {summary.item_count}개 아이템을 Excel로 내보냈습니다."
-                    ),
-                    project_id=project.project_id if project else tracker.project_id,
-                    project_name=project.name if project else tracker.project_name,
-                    tracker_id=tracker.tracker_id,
-                    tracker_name=tracker.name,
-                    details={
-                        "selectedFieldCount": summary.selected_field_count,
-                        "itemCount": summary.item_count,
-                        "dataRowCount": summary.data_row_count,
-                        "longValueCount": summary.long_value_count,
-                        "longValuePartCount": summary.long_value_part_count,
-                    },
-                )
-            )
-            if self._baseline_comparison_cache_key == export_key:
-                long_value_status = (
-                    f" · 긴 값 {summary.long_value_count}개 별도 시트 분할"
-                    if summary.long_value_count
-                    else ""
-                )
-                self.baseline_comparison_panel.status_label.setText(
-                    f"Excel 내보내기 완료 · 아이템 {summary.item_count}개 · "
-                    f"데이터 행 {summary.data_row_count}개{long_value_status}"
-                )
-            self._set_workspace_status("Baseline 비교 Excel 파일을 저장했습니다.")
 
-        self._baseline_export_in_progress = True
-        self.baseline_comparison_panel.set_export_busy(
-            True,
-            "Baseline 비교 Excel 파일을 생성하는 중입니다.",
-        )
-        self._submit("baseline_export", export, completed, failed)
 
-    def _render_search_results(self, result: PageResult[TrackerItemSummary]) -> None:
-        self.search_table.blockSignals(True)
-        self.search_table.setRowCount(len(result.items))
-        for row, summary in enumerate(result.items):
-            check_item = QTableWidgetItem("")
-            check_item.setFlags(
-                Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
-            )
-            selected = (
-                summary.item_id not in self._excluded_search_ids
-                if self._all_search_selected
-                else summary.item_id in self._selected_search_ids
-            )
-            check_item.setCheckState(
-                Qt.CheckState.Checked if selected else Qt.CheckState.Unchecked
-            )
-            self.search_table.setItem(row, 0, check_item)
-            values = (
-                str(summary.item_id),
-                summary.name,
-                summary.status or "-",
-                ", ".join(summary.assignees) or "-",
-            )
-            for column, value in enumerate(values, start=1):
-                cell = QTableWidgetItem(value)
-                if column == 1:
-                    cell.setData(ITEM_SUMMARY_ROLE, summary)
-                self.search_table.setItem(row, column, cell)
-        self.search_table.blockSignals(False)
-        self._last_search_result = result
-        self._search_page = result.page
-        visible_end = min(result.page * result.page_size, result.total)
-        visible_start = 0 if not result.items else ((result.page - 1) * result.page_size) + 1
-        tracker_text = (
-            "-"
-            if self._current_tracker is None
-            else f"{self._current_tracker.name} ({self._current_tracker.tracker_id})"
-        )
-        self.search_scope_label.setText(
-            f"검색 범위: {tracker_text} · {result.total}개 중 {visible_start}–{visible_end}개"
-        )
-        self.search_page_label.setText(f"{result.page} 페이지")
-        pagination_available = result.server_honored_pagination
-        self.search_previous_button.setEnabled(pagination_available and result.has_previous)
-        self.search_next_button.setEnabled(pagination_available and result.has_next)
-        self._update_search_selection_ui()
 
-    def _on_search_mode_changed(self, *args) -> None:
-        del args
-        condition_mode = (
-            self.search_mode_combo.currentData() == TrackerSearchMode.CONDITIONS.value
-        )
-        self.simple_search_host.setVisible(not condition_mode)
-        self.condition_search_host.setVisible(condition_mode)
-        self.search_button.setText(
-            "상세 조건으로 검색" if condition_mode else "현재 트래커 검색"
-        )
-        if not condition_mode:
-            self.condition_dialog.close()
-        self._last_search_query = None
-        self._last_search_result = None
-        self.search_table.setRowCount(0)
-        self._clear_search_selection()
-        if condition_mode and self._current_tracker is not None:
-            self._load_search_schema()
 
-    def _open_condition_dialog(self) -> None:
-        tracker = self._current_tracker
-        if tracker is None:
-            self._set_workspace_status(
-                "상세 검색 조건을 설정할 트래커를 먼저 선택하세요.",
-                tone="warning",
-            )
-            return
-        if self._search_schema is None or self._search_schema.tracker_id != tracker.tracker_id:
-            self.condition_summary_label.setText(
-                "상세 검색에 사용할 필드 정보를 불러오는 중입니다."
-            )
-            self._load_search_schema(open_after=True)
-            return
-        self.condition_dialog.show_editor()
 
-    def _update_condition_summary(self) -> None:
-        self.condition_dialog.refresh_summary()
-        self.condition_summary_label.setText(
-            f"{self.condition_builder.summary_text()} · 버튼을 눌러 조건을 편집할 수 있습니다."
-        )
 
-    def _reset_condition_search(self, message: str) -> None:
-        self._search_schema = None
-        self.condition_dialog.close()
-        self.condition_builder.clear_schema()
-        self.condition_summary_label.setText(message)
 
-    def _load_search_schema(
-        self,
-        *,
-        run_after: bool = False,
-        open_after: bool = False,
-    ) -> None:
-        tracker = self._current_tracker
-        if tracker is None:
-            return
-        if self._search_schema is not None and self._search_schema.tracker_id == tracker.tracker_id:
-            if run_after:
-                self._run_search()
-            if open_after:
-                self.condition_dialog.show_editor()
-            return
-        tracker_id = tracker.tracker_id
-        settings = self.settings_provider()
-        self.condition_summary_label.setText(
-            "상세 검색에 사용할 필드 정보를 불러오는 중입니다."
-        )
 
-        def loaded(schema: EditableTrackerSchema) -> None:
-            if self._current_tracker is None or self._current_tracker.tracker_id != tracker_id:
-                return
-            self._search_schema = schema
-            self.condition_builder.set_schema(schema)
-            self._update_condition_summary()
-            if run_after:
-                self._run_search()
-            if open_after:
-                self.condition_dialog.show_editor()
 
-        def failed(exc: Exception) -> None:
-            self.condition_summary_label.setText(
-                "상세 검색 필드 정보를 불러오지 못했습니다. 다시 시도하세요."
-            )
-            self._show_error(exc, prefix="검색 schema 조회 실패")
 
-        self._submit(
-            "search_schema",
-            lambda: self.editor_service.load_create_schema(settings, tracker_id),
-            loaded,
-            failed,
-        )
 
-    def _selected_search_count(self) -> int:
-        if self._all_search_selected and self._last_search_result is not None:
-            return max(self._last_search_result.total - len(self._excluded_search_ids), 0)
-        return len(self._selected_search_ids)
 
-    def _update_search_selection_ui(self) -> None:
-        count = self._selected_search_count()
-        suffix = " · 검색 결과 전체 기준" if self._all_search_selected else ""
-        self.search_selection_label.setText(f"선택 {count:,}개{suffix}")
-        has_result = self._last_search_result is not None and bool(
-            self._last_search_result.items
-        )
-        self.select_page_button.setEnabled(has_result)
-        self.select_all_results_button.setEnabled(has_result)
-        self.clear_search_selection_button.setEnabled(count > 0)
-        settings = self.settings_provider()
-        self.bulk_update_button.setEnabled(
-            count > 0
-            and self._current_tracker is not None
-            and not bool(settings.offline_mode)
-        )
-
-    def _select_current_search_page(self) -> None:
-        result = self._last_search_result
-        if result is None:
-            return
-        if self._all_search_selected:
-            self._excluded_search_ids.difference_update(
-                summary.item_id for summary in result.items
-            )
-        else:
-            self._selected_search_ids.update(summary.item_id for summary in result.items)
-        self._render_search_results(result)
-
-    def _select_all_search_results(self) -> None:
-        if self._last_search_result is None:
-            return
-        self._all_search_selected = True
-        self._selected_search_ids.clear()
-        self._excluded_search_ids.clear()
-        self._render_search_results(self._last_search_result)
-
-    def _clear_search_selection(self) -> None:
-        self._selected_search_ids.clear()
-        self._all_search_selected = False
-        self._excluded_search_ids.clear()
-        if hasattr(self, "search_table"):
-            self.search_table.blockSignals(True)
-            for row in range(self.search_table.rowCount()):
-                item = self.search_table.item(row, 0)
-                if item is not None:
-                    item.setCheckState(Qt.CheckState.Unchecked)
-            self.search_table.blockSignals(False)
-        if hasattr(self, "search_selection_label"):
-            self._update_search_selection_ui()
-
-    def _start_bulk_update(self) -> None:
-        if self._selected_hierarchy_baseline_id() is not None:
-            self._set_workspace_status(
-                "Baseline 조회 중에는 일괄 수정할 수 없습니다.",
-                tone="warning",
-            )
-            return
-        if self._selected_search_count() <= 0:
-            return
-        if self._all_search_selected:
-            query = self._last_search_query
-            if query is None:
-                return
-            settings = self.settings_provider()
-            exclusions = set(self._excluded_search_ids)
-
-            def loaded(items: tuple[TrackerItemSummary, ...]) -> None:
-                item_ids = tuple(
-                    item.item_id for item in items if item.item_id not in exclusions
-                )
-                self._prepare_bulk_update(item_ids)
-
-            self._submit(
-                "search_all",
-                lambda: self.service.load_all_search_items(settings, query),
-                loaded,
-                lambda exc: self._show_error(exc, prefix="전체 검색 결과 조회 실패"),
-            )
-            return
-        self._prepare_bulk_update(tuple(sorted(self._selected_search_ids)))
-
-    def _prepare_bulk_update(
-        self,
-        item_ids: tuple[int, ...],
-        *,
-        initial_field_ids: tuple[int, ...] = (),
-        initial_clear_field_ids: tuple[int, ...] = (),
-        initial_atomic: bool = True,
-        initial_chunk_size: int | None = None,
-    ) -> None:
-        if self._selected_hierarchy_baseline_id() is not None:
-            self._set_workspace_status(
-                "Baseline 조회 중에는 일괄 수정할 수 없습니다.",
-                tone="warning",
-            )
-            return
-        tracker = self._current_tracker
-        if tracker is None or not item_ids:
-            return
-        settings = self.settings_provider()
-        if bool(settings.offline_mode):
-            self._set_workspace_status(
-                "테스트 모드에서는 일괄 수정할 수 없습니다.", tone="warning"
-            )
-            return
-        tracker_id = tracker.tracker_id
-
-        def loaded(schema: EditableTrackerSchema) -> None:
-            if self._current_tracker is None or self._current_tracker.tracker_id != tracker_id:
-                return
-            kwargs = {
-                "tracker_name": tracker.name,
-                "target_count": len(item_ids),
-                "initial_chunk_size": (
-                    initial_chunk_size
-                    if initial_chunk_size is not None
-                    else int(getattr(settings, "bulk_update_chunk_size", 1000) or 1000)
-                ),
-                "initial_field_ids": initial_field_ids,
-                "initial_clear_field_ids": initial_clear_field_ids,
-                "initial_atomic": initial_atomic,
-                "parent": self,
-            }
-            request = (
-                self.bulk_request_provider(schema, **kwargs)
-                if self.bulk_request_provider is not None
-                else TrackerBulkUpdateDialog.request(schema, **kwargs)
-            )
-            if request is None:
-                return
-            if callable(self.bulk_chunk_size_saver):
-                self.bulk_chunk_size_saver(request.chunk_size)
-            self._execute_bulk_update(item_ids, schema, request)
-
-        self._submit(
-            "editor_schema",
-            lambda: self.editor_service.load_create_schema(settings, tracker_id),
-            loaded,
-            lambda exc: self._show_error(exc, prefix="일괄 수정 schema 조회 실패"),
-        )
-
-    def _execute_bulk_update(
-        self,
-        item_ids: tuple[int, ...],
-        schema: EditableTrackerSchema,
-        request: BulkUpdateRequest,
-    ) -> None:
-        tracker = self._current_tracker
-        if tracker is None:
-            return
-        settings = self.settings_provider()
-        progress = BulkUpdateProgressDialog(len(item_ids), self)
-        worker = BulkUpdateWorker(
-            self.bulk_update_service,
-            settings,
-            tracker_id=tracker.tracker_id,
-            item_ids=item_ids,
-            schema=schema,
-            changes=request.changes,
-            atomic=request.atomic,
-            chunk_size=request.chunk_size,
-        )
-        self._bulk_progress_dialog = progress
-        self._bulk_worker = worker
-        progress.cancel_button.clicked.connect(worker.request_cancel)
-        progress.cancel_button.clicked.connect(
-            lambda _checked=False: progress.cancel_button.setEnabled(False)
-        )
-        worker.progress_changed.connect(progress.update_event)
-        worker.completed.connect(self._finish_bulk_update)
-        worker.failed.connect(self._fail_bulk_update)
-        worker.finished.connect(self._cleanup_bulk_worker)
-        progress.show()
-        try:
-            worker.start()
-        except Exception as exc:
-            progress.reject()
-            self._bulk_progress_dialog = None
-            self._cleanup_bulk_worker()
-            self._show_error(exc, prefix="일괄 수정 시작 실패")
-
-    def _finish_bulk_update(self, result) -> None:
-        progress = self._bulk_progress_dialog
-        if progress is not None:
-            progress.accept()
-        self._bulk_progress_dialog = None
-        if self.bulk_run_store is not None:
-            self.bulk_run_store.append(result)
-        success_count = len(result.successful_item_ids)
-        retry_count = len(result.retry_item_ids)
-        if result.cancelled:
-            activity_result = ActivityResult.CANCELLED
-        elif retry_count and success_count:
-            activity_result = ActivityResult.PARTIAL
-        elif retry_count:
-            activity_result = ActivityResult.FAILED
-        else:
-            activity_result = ActivityResult.SUCCESS
-        tracker = self._current_tracker
-        project = self._current_project
-        if callable(self.activity_recorder):
-            self.activity_recorder(
-                ActivityRecord.create(
-                    ActivityOperation.BULK_UPDATE,
-                    activity_result,
-                    source="tracker_workspace",
-                    summary=(
-                        f"일괄 수정 성공 {success_count:,}건, 재시도 대상 {retry_count:,}건"
-                    ),
-                    project_id=project.project_id if project else None,
-                    project_name=project.name if project else "",
-                    tracker_id=tracker.tracker_id if tracker else result.tracker_id,
-                    tracker_name=tracker.name if tracker else "",
-                    details={
-                        "run_id": result.run_id,
-                        "target_count": len(result.target_item_ids),
-                        "success_count": success_count,
-                        "failed_count": len(result.failed_item_ids),
-                        "rolled_back_count": len(result.rolled_back_item_ids),
-                        "unattempted_count": len(result.unattempted_item_ids),
-                        "atomic": result.atomic,
-                        "chunk_size": result.chunk_size,
-                    },
-                )
-            )
-        self._set_workspace_status(
-            f"일괄 수정 완료: 성공 {success_count:,}건, 재시도 대상 {retry_count:,}건.",
-            tone="warning" if retry_count else "info",
-        )
-        self._clear_search_selection()
-
-    def _fail_bulk_update(self, exc: Exception) -> None:
-        if self._bulk_progress_dialog is not None:
-            self._bulk_progress_dialog.reject()
-        self._bulk_progress_dialog = None
-        self._show_error(exc, prefix="일괄 수정 실패")
-
-    def _cleanup_bulk_worker(self) -> None:
-        worker = self._bulk_worker
-        self._bulk_worker = None
-        if worker is not None:
-            worker.deleteLater()
-
-    def open_bulk_retry(self, run_id: str) -> None:
-        if self.bulk_run_store is None:
-            return
-        record = self.bulk_run_store.get(run_id)
-        if record is None:
-            self._set_workspace_status("재시도 실행 기록을 찾지 못했습니다.", tone="warning")
-            return
-        if self._current_tracker is None or self._current_tracker.tracker_id != record.tracker_id:
-            self._set_workspace_status(
-                f"트래커 {record.tracker_id}을 선택한 뒤 재시도하세요.", tone="warning"
-            )
-            return
-        if not record.retry_item_ids:
-            self._set_workspace_status("이 실행 기록에는 재시도 대상이 없습니다.")
-            return
-        self._prepare_bulk_update(
-            record.retry_item_ids,
-            initial_field_ids=record.field_ids,
-            initial_clear_field_ids=record.clear_field_ids,
-            initial_atomic=record.atomic,
-            initial_chunk_size=record.chunk_size,
-        )
 
     def _open_direct_item(self) -> None:
         raw_id = self.direct_id_input.text().strip()
@@ -3150,13 +1265,12 @@ class TrackerWorkspacePage(QWidget):
         self._current_project = project
         self._current_tracker = tracker
         if previous_tracker_id != tracker.tracker_id:
-            self._reset_condition_search(
+            self.search_panel.reset_condition_search(
                 "트래커가 변경되었습니다. 상세 검색 조건을 다시 설정하세요."
             )
             self._reset_baseline_state("Baseline 비교 기준을 다시 불러오세요.")
-            self._baseline_hierarchy_cache.clear()
-            self._baseline_hierarchy_loading_key = None
-            self._reset_hierarchy_source()
+            self.hierarchy_panel.clear_baseline_cache()
+            self.hierarchy_panel.reset_source()
         self.project_combo.setCurrentIndex(
             -1
             if project is None
@@ -3165,7 +1279,7 @@ class TrackerWorkspacePage(QWidget):
         self.tracker_combo.setCurrentIndex(
             self._combo_index_for_id(self.tracker_combo, tracker.tracker_id)
         )
-        self._update_search_scope()
+        self.search_panel.update_scope()
         self._set_available(True)
         self.browser_tabs.setCurrentIndex(0)
         self._render_ancestor_path(result.ancestor_path)
@@ -3233,16 +1347,16 @@ class TrackerWorkspacePage(QWidget):
         self.tracker_combo.blockSignals(False)
 
     def _render_ancestor_path(self, path: tuple[TrackerItemSummary, ...]) -> None:
-        self.item_tree.blockSignals(True)
-        self.item_tree.clear()
+        self.hierarchy_panel.item_tree.blockSignals(True)
+        self.hierarchy_panel.item_tree.clear()
         parent_item: QTreeWidgetItem | None = None
         target_item: QTreeWidgetItem | None = None
         for summary in path:
-            tree_item = self._tree_item(summary)
+            tree_item = self.hierarchy_panel.tree_item(summary)
             tree_item.takeChildren()
             tree_item.setData(0, CHILDREN_LOADED_ROLE, True)
             if parent_item is None:
-                self.item_tree.addTopLevelItem(tree_item)
+                self.hierarchy_panel.item_tree.addTopLevelItem(tree_item)
             else:
                 parent_item.addChild(tree_item)
                 parent_item.setExpanded(True)
@@ -3250,9 +1364,9 @@ class TrackerWorkspacePage(QWidget):
             target_item = tree_item
         if target_item is not None:
             target_item.setSelected(True)
-            self.item_tree.scrollToItem(target_item)
-        self.item_tree.blockSignals(False)
-        self.tree_status_label.setText(
+            self.hierarchy_panel.item_tree.scrollToItem(target_item)
+        self.hierarchy_panel.item_tree.blockSignals(False)
+        self.hierarchy_panel.tree_status_label.setText(
             f"ID 직접 접근 경로 · {len(path)}단계 · 전체 형제 노드는 '최상위 다시 불러오기'로 조회"
         )
 
@@ -3287,8 +1401,8 @@ class TrackerWorkspacePage(QWidget):
 
 
     def _invalidate_tracker_cache(self, tracker_id: int) -> None:
-        self._root_cache.pop(int(tracker_id), None)
-        self._child_cache.clear()
+        self.hierarchy_panel.root_cache().pop(int(tracker_id), None)
+        self.hierarchy_panel.child_cache().clear()
 
     def _refresh_visible_item(self, detail: TrackerItemDetail) -> None:
         summary = detail.summary
@@ -3313,41 +1427,17 @@ class TrackerWorkspacePage(QWidget):
             for child_index in range(item.childCount()):
                 update_tree_item(item.child(child_index))
 
-        for top_index in range(self.item_tree.topLevelItemCount()):
-            update_tree_item(self.item_tree.topLevelItem(top_index))
+        for top_index in range(self.hierarchy_panel.item_tree.topLevelItemCount()):
+            update_tree_item(self.hierarchy_panel.item_tree.topLevelItem(top_index))
 
-        for row in range(self.search_table.rowCount()):
-            id_item = self.search_table.item(row, 0)
-            if id_item is None:
-                continue
-            existing = id_item.data(ITEM_SUMMARY_ROLE)
-            if not isinstance(existing, TrackerItemSummary) or existing.item_id != detail.item_id:
-                continue
-            updated = replace(
-                existing,
-                name=summary.name,
-                status=summary.status,
-                assignees=summary.assignees,
-                modified_at=summary.modified_at,
-                version=summary.version,
-            )
-            id_item.setData(ITEM_SUMMARY_ROLE, updated)
-            # 셀이 아직 만들어지지 않았으면 갱신할 대상이 없다.
-            for column, text in (
-                (1, updated.name),
-                (2, updated.status or "-"),
-                (3, ", ".join(updated.assignees) or "-"),
-            ):
-                cell = self.search_table.item(row, column)
-                if cell is not None:
-                    cell.setText(text)
+        self.search_panel.refresh_item(detail)
 
     def _remove_visible_item(self, item_id: int) -> None:
         def remove_from(parent: QTreeWidgetItem | None) -> bool:
-            count = self.item_tree.topLevelItemCount() if parent is None else parent.childCount()
+            count = self.hierarchy_panel.item_tree.topLevelItemCount() if parent is None else parent.childCount()
             for index in range(count - 1, -1, -1):
                 item = (
-                    self.item_tree.topLevelItem(index)
+                    self.hierarchy_panel.item_tree.topLevelItem(index)
                     if parent is None
                     else parent.child(index)
                 )
@@ -3356,7 +1446,7 @@ class TrackerWorkspacePage(QWidget):
                 summary = item.data(0, ITEM_SUMMARY_ROLE)
                 if isinstance(summary, TrackerItemSummary) and summary.item_id == int(item_id):
                     if parent is None:
-                        self.item_tree.takeTopLevelItem(index)
+                        self.hierarchy_panel.item_tree.takeTopLevelItem(index)
                     else:
                         parent.takeChild(index)
                     return True
@@ -3365,11 +1455,7 @@ class TrackerWorkspacePage(QWidget):
             return False
 
         remove_from(None)
-        for row in range(self.search_table.rowCount() - 1, -1, -1):
-            id_item = self.search_table.item(row, 0)
-            summary = id_item.data(ITEM_SUMMARY_ROLE) if id_item is not None else None
-            if isinstance(summary, TrackerItemSummary) and summary.item_id == int(item_id):
-                self.search_table.removeRow(row)
+        self.search_panel.remove_item(item_id)
 
     def shutdown(self) -> None:
         """창 종료 뒤 완료되는 요청이 화면 상태를 갱신하지 않도록 무효화한다."""
