@@ -58,6 +58,7 @@ from .tracker_bulk_update import TrackerBulkUpdateService
 from .tracker_bulk_update_dialog import BulkUpdateProgressDialog
 from .tracker_bulk_update_dialog import BulkUpdateRequest
 from .tracker_bulk_update_dialog import TrackerBulkUpdateDialog
+from .tracker_comment_models import ItemComment
 from .tracker_comment_models import ItemCommentsSnapshot
 from .tracker_comment_service import TrackerCommentService
 from .tracker_condition_builder import TrackerConditionDialog
@@ -65,6 +66,7 @@ from .tracker_content_models import AttachmentResource
 from .tracker_content_models import AttachmentSummary
 from .tracker_content_models import WikiRenderContext
 from .tracker_content_models import WikiRenderResult
+from .tracker_content_models import WikiResourceReference
 from .tracker_content_service import MAX_INLINE_IMAGE_BYTES
 from .tracker_content_service import MAX_ITEM_INLINE_IMAGE_BYTES
 from .tracker_content_service import TrackerContentService
@@ -3628,16 +3630,19 @@ class TrackerWorkspacePage(QWidget):
             def failed(_exc: Exception, *, reserved=reservation) -> None:
                 self._inline_resource_reservations.discard(reserved)
 
+            def download(selected: WikiResourceReference = reference) -> AttachmentResource:
+                return self.content_service.download_resource(
+                    settings,
+                    resource_key=selected.resource_key,
+                    source_url=selected.source_url,
+                )
+
             self._submit(
                 (
                     f"wiki_resource:{reservation[0]}:"
                     f"{reservation[2]}:{reference.resource_key}"
                 ),
-                lambda selected=reference: self.content_service.download_resource(
-                    settings,
-                    resource_key=selected.resource_key,
-                    source_url=selected.source_url,
-                ),
+                download,
                 loaded,
                 failed,
             )
@@ -3678,17 +3683,23 @@ class TrackerWorkspacePage(QWidget):
         def request(markup: str, completed: Callable[[WikiRenderResult], None]) -> None:
             nonlocal request_index
             request_index += 1
-            self._submit(
-                f"wiki_table:{detail.item_id}:{request_index}",
-                lambda source=markup: self.content_service.render_wiki(settings, context, source),
-                completed,
-                lambda _exc, source=markup: completed(
+            def render() -> WikiRenderResult:
+                return self.content_service.render_wiki(settings, context, markup)
+
+            def render_failed(_exc: Exception) -> None:
+                completed(
                     WikiRenderResult(
-                        html=codebeamer_wiki_to_html(source),
+                        html=codebeamer_wiki_to_html(markup),
                         used_fallback=True,
                         warning="서버 Wiki 렌더링에 실패했습니다.",
                     )
-                ),
+                )
+
+            self._submit(
+                f"wiki_table:{detail.item_id}:{request_index}",
+                render,
+                completed,
+                render_failed,
             )
 
         dialog = TrackerTableFieldDialog(
@@ -3864,13 +3875,16 @@ class TrackerWorkspacePage(QWidget):
             def failed(_exc: Exception, *, reserved=reservation) -> None:
                 self._inline_resource_reservations.discard(reserved)
 
-            self._submit(
-                f"attachment_preview:{self._wiki_resource_generation}:{attachment.attachment_id}",
-                lambda selected=attachment: self.content_service.download_attachment(
+            def download_preview(selected: AttachmentSummary = attachment) -> AttachmentResource:
+                return self.content_service.download_attachment(
                     settings,
                     selected,
                     max_bytes=MAX_INLINE_IMAGE_BYTES,
-                ),
+                )
+
+            self._submit(
+                f"attachment_preview:{self._wiki_resource_generation}:{attachment.attachment_id}",
+                download_preview,
                 loaded,
                 failed,
             )
@@ -4235,24 +4249,32 @@ class TrackerWorkspacePage(QWidget):
                         def inline_failed(_exc: Exception) -> None:
                             reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
 
-                        self._submit(
-                            f"comment_inline:{selected.comment_id}:{reference.resource_key}",
-                            lambda value=reference: self.content_service.download_resource(
+                        def download_inline(
+                            value: WikiResourceReference = reference,
+                        ) -> AttachmentResource:
+                            return self.content_service.download_resource(
                                 settings,
                                 resource_key=value.resource_key,
                                 source_url=value.source_url,
-                            ),
+                            )
+
+                        self._submit(
+                            f"comment_inline:{selected.comment_id}:{reference.resource_key}",
+                            download_inline,
                             inline_loaded,
                             inline_failed,
                         )
 
-                self._submit(
-                    f"comment_wiki:{comment.comment_id}",
-                    lambda selected=comment: self.content_service.render_wiki(
+                def render_comment(selected: ItemComment = comment) -> WikiRenderResult:
+                    return self.content_service.render_wiki(
                         settings,
                         self._wiki_context(detail, None),
                         selected.body,
-                    ),
+                    )
+
+                self._submit(
+                    f"comment_wiki:{comment.comment_id}",
+                    render_comment,
                     rendered,
                     lambda _exc: None,
                 )
@@ -4284,13 +4306,18 @@ class TrackerWorkspacePage(QWidget):
                 def attachment_failed(_exc: Exception) -> None:
                     reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
 
-                self._submit(
-                    f"comment_attachment:{comment.comment_id}:{attachment.attachment_id}",
-                    lambda selected=attachment: self.content_service.download_attachment(
+                def download_comment_attachment(
+                    selected: AttachmentSummary = attachment,
+                ) -> AttachmentResource:
+                    return self.content_service.download_attachment(
                         settings,
                         selected,
                         max_bytes=MAX_INLINE_IMAGE_BYTES,
-                    ),
+                    )
+
+                self._submit(
+                    f"comment_attachment:{comment.comment_id}:{attachment.attachment_id}",
+                    download_comment_attachment,
                     attachment_loaded,
                     attachment_failed,
                 )
