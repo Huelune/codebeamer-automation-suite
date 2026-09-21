@@ -106,9 +106,11 @@ git push origin v0.1.0
 
 ## GitHub Actions 동작
 
-Windows Release workflow는 pull request, 수동 실행과 `v*` 태그 push에서 실행됩니다. 모든 경우에
-Windows Server 2022 x64에서 전체 단위 테스트, PyInstaller `onedir` 빌드, 패키지의 `--version`과
-`--smoke-test`, ZIP 생성과 SHA-256 계산을 수행합니다.
+Windows Release workflow는 pull request, 수동 실행, `main` push와 `v*` 태그 push에서 실행됩니다.
+`main` push는 각각 통과한 PR이 병합 뒤에도 함께 통과하는지 확인하는 것이 목적이라 lint와 테스트만
+실행하고 빌드는 건너뜁니다. 나머지 경우에는 Windows Server 2022 x64에서 전체 단위 테스트,
+PyInstaller `onedir` 빌드, 패키지의 `--version`과 `--smoke-test`, ZIP 생성과 SHA-256 계산을
+수행합니다.
 
 재현 가능한 Release 빌드를 위해 다음 도구 체인을 고정합니다.
 
