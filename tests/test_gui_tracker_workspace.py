@@ -29,12 +29,14 @@ from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
 from src.gui.tracker_item_detail_session import TrackerItemDetailSession
 from src.gui.tracker_item_editor import TrackerItemEditorService
 from src.gui.tracker_item_editor import TrackerItemFieldChange
+from src.gui.tracker_query_models import TrackerFieldValue
 from src.gui.tracker_query_models import TrackerItemDetail
 from src.gui.tracker_query_models import TrackerItemSummary
 from src.gui.tracker_query_service import TrackerQueryService
 from src.gui.tracker_workspace import CHILDREN_LOADED_ROLE
 from src.gui.tracker_workspace import ITEM_SUMMARY_ROLE
 from src.gui.tracker_workspace import TrackerWorkspacePage
+from src.gui.wiki_content_view import WikiContentDialog
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
@@ -1339,6 +1341,55 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         finally:
             # 진짜 창이라 닫아 둔다. 파괴는 부모인 page 가 맡는다.
             opened[0].close()
+            self._app.processEvents()
+
+    def test_wiki_field_dialog_is_built_with_the_real_class(self) -> None:
+        """Wiki 필드 창도 진짜 클래스로 만들어 본다.
+
+        [[test_detail_dialog_is_built_with_the_real_class]] 와 같은 이유다.
+        이 창들은 지금까지 patch 로만 확인해서 생성자 인자가 검증된 적이 없다.
+        """
+        self.page.activate()
+        self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
+        self._app.processEvents()
+        field = TrackerFieldValue(
+            field_id=101,
+            name="Risk Level",
+            type_name="WikiTextFieldValue",
+            display_value="본문",
+        )
+        opened: list[WikiContentDialog] = []
+
+        class _NonModalDialog(WikiContentDialog):
+            def exec(self) -> int:
+                opened.append(self)
+                return 0
+
+        with patch("src.gui.tracker_workspace.WikiContentDialog", _NonModalDialog):
+            self.page._open_wiki_field(field)
+
+        self.assertEqual(len(opened), 1)
+        try:
+            self.assertIs(opened[0].parent(), self.page)
+        finally:
+            opened[0].close()
+            self._app.processEvents()
+
+    def test_popped_out_editor_window_is_built_with_the_real_class(self) -> None:
+        """수정 창 분리도 진짜 클래스로 만들어 본다."""
+        self.page.activate()
+        self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
+        self._app.processEvents()
+
+        self.page._show_editor_in_window()
+        self._app.processEvents()
+
+        dialog = self.page._editor_dialog
+        self.assertIsNotNone(dialog)
+        try:
+            self.assertIs(dialog.parent(), self.page)
+        finally:
+            self.page._restore_editor_panel()
             self._app.processEvents()
 
     def test_related_detail_failure_keeps_dialog_session_and_context_usable(self) -> None:
