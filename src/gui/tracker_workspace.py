@@ -254,7 +254,7 @@ class TrackerWorkspacePage(QWidget):
         self._pre_editor_splitter_sizes: list[int] | None = None
         self._create_busy = False
         self._editor_dialog: TrackerItemEditorDialog | None = None
-        self._bulk_worker = None
+        self._bulk_worker: BulkUpdateWorker | None = None
         self._bulk_progress_dialog: BulkUpdateProgressDialog | None = None
 
         self._build_ui()
@@ -1278,11 +1278,13 @@ class TrackerWorkspacePage(QWidget):
     @staticmethod
     def _preferred_id(primary: str, fallback: int | None) -> int | None:
         for value in (primary, fallback):
+            if value is None or value == "":
+                continue
             try:
-                normalized = int(value) if value not in (None, "") else None
+                normalized = int(value)
             except (TypeError, ValueError):
-                normalized = None
-            if normalized is not None and normalized > 0:
+                continue
+            if normalized > 0:
                 return normalized
         return None
 
@@ -2435,7 +2437,9 @@ class TrackerWorkspacePage(QWidget):
         self._set_available(available)
 
     def _find_tree_item(self, item_id: int) -> QTreeWidgetItem | None:
-        def find_from(item: QTreeWidgetItem) -> QTreeWidgetItem | None:
+        def find_from(item: QTreeWidgetItem | None) -> QTreeWidgetItem | None:
+            if item is None:
+                return None
             summary = item.data(0, ITEM_SUMMARY_ROLE)
             if isinstance(summary, TrackerItemSummary) and summary.item_id == int(item_id):
                 return item
@@ -2966,9 +2970,13 @@ class TrackerWorkspacePage(QWidget):
         self._search_page = result.page
         visible_end = min(result.page * result.page_size, result.total)
         visible_start = 0 if not result.items else ((result.page - 1) * result.page_size) + 1
+        tracker_text = (
+            "-"
+            if self._current_tracker is None
+            else f"{self._current_tracker.name} ({self._current_tracker.tracker_id})"
+        )
         self.search_scope_label.setText(
-            f"검색 범위: {self._current_tracker.name} ({self._current_tracker.tracker_id}) · "
-            f"{result.total}개 중 {visible_start}–{visible_end}개"
+            f"검색 범위: {tracker_text} · {result.total}개 중 {visible_start}–{visible_end}개"
         )
         self.search_page_label.setText(f"{result.page} 페이지")
         pagination_available = result.server_honored_pagination
@@ -4425,11 +4433,13 @@ class TrackerWorkspacePage(QWidget):
             self.detail_fields_table.setItem(row, 0, QTableWidgetItem(field.name))
             self.detail_fields_table.setItem(row, 2, QTableWidgetItem(field.type_name))
             if is_table_field(field):
-                summary = table_field_summary(field)
-                value_item = QTableWidgetItem(summary)
+                table_summary = table_field_summary(field)
+                value_item = QTableWidgetItem(table_summary)
                 value_item.setToolTip(f"{field.name}의 행·열 데이터를 엽니다.")
                 self.detail_fields_table.setItem(row, 1, value_item)
-                open_button = QPushButton(f"{summary} · 열어보기", self.detail_fields_table)
+                open_button = QPushButton(
+                    f"{table_summary} · 열어보기", self.detail_fields_table
+                )
                 open_button.clicked.connect(
                     lambda _checked=False, selected=field: self._open_table_field(selected)
                 )
@@ -4847,7 +4857,9 @@ class TrackerWorkspacePage(QWidget):
         if summary.tracker_id is not None:
             self._invalidate_tracker_cache(summary.tracker_id)
 
-        def update_tree_item(item: QTreeWidgetItem) -> None:
+        def update_tree_item(item: QTreeWidgetItem | None) -> None:
+            if item is None:
+                return
             existing = item.data(0, ITEM_SUMMARY_ROLE)
             if isinstance(existing, TrackerItemSummary) and existing.item_id == detail.item_id:
                 updated = replace(
@@ -4868,7 +4880,9 @@ class TrackerWorkspacePage(QWidget):
 
         for row in range(self.search_table.rowCount()):
             id_item = self.search_table.item(row, 0)
-            existing = id_item.data(ITEM_SUMMARY_ROLE) if id_item is not None else None
+            if id_item is None:
+                continue
+            existing = id_item.data(ITEM_SUMMARY_ROLE)
             if not isinstance(existing, TrackerItemSummary) or existing.item_id != detail.item_id:
                 continue
             updated = replace(
@@ -4899,6 +4913,8 @@ class TrackerWorkspacePage(QWidget):
                     if parent is None
                     else parent.child(index)
                 )
+                if item is None:
+                    continue
                 summary = item.data(0, ITEM_SUMMARY_ROLE)
                 if isinstance(summary, TrackerItemSummary) and summary.item_id == int(item_id):
                     if parent is None:
