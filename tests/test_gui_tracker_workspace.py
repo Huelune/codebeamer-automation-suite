@@ -348,7 +348,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.item_tree.topLevelItemCount(), 0)
         self.assertIn("Baseline 계층 조회", self.page.reload_roots_button.text())
         self.assertFalse(self.page.hierarchy_export_button.isEnabled())
-        self.assertFalse(self.page.detail_tabs.isTabEnabled(self.page.editor_tab_index))
+        self.assertFalse(self.page.detail_panel.detail_tabs.isTabEnabled(self.page.detail_panel.editor_tab_index))
         self.page._create_item()
         self.assertIn("Baseline 조회 중", self.page.workspace_status_label.text())
 
@@ -370,15 +370,15 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page.item_tree.setCurrentItem(child)
         self._app.processEvents()
 
-        self.assertEqual(self.page._detail_baseline_id, baseline_id)
-        self.assertEqual(self.page.detail_title.text(), "Brake system baseline · Baseline")
-        self.assertIn("읽기 전용", self.page.detail_warning.text())
-        self.assertFalse(self.page.detail_tabs.isTabEnabled(self.page.editor_tab_index))
+        self.assertEqual(self.page.detail_panel._detail_baseline_id, baseline_id)
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Brake system baseline · Baseline")
+        self.assertIn("읽기 전용", self.page.detail_panel.detail_warning.text())
+        self.assertFalse(self.page.detail_panel.detail_tabs.isTabEnabled(self.page.detail_panel.editor_tab_index))
 
         self.page.hierarchy_source_combo.setCurrentIndex(0)
         self._app.processEvents()
 
-        self.assertIsNone(self.page._detail_baseline_id)
+        self.assertIsNone(self.page.detail_panel._detail_baseline_id)
         self.assertEqual(self.page.item_tree.topLevelItemCount(), 2)
         self.assertTrue(self.page.hierarchy_export_button.isEnabled())
 
@@ -1104,12 +1104,12 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page.item_tree.setCurrentItem(root)
         self._app.processEvents()
 
-        self.assertEqual(self.page.detail_title.text(), "Vehicle requirements")
-        self.assertEqual(self.page.detail_id_badge.text(), "#9001001")
-        self.assertTrue(self.page.detail_refresh_button.isEnabled())
-        self.assertIn("Top-level sample requirement", self.page.detail_description.toPlainText())
-        self.assertGreaterEqual(self.page.detail_fields_table.rowCount(), 10)
-        self.assertIn('"Risk Level"', self.page.detail_raw_json.toPlainText())
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Vehicle requirements")
+        self.assertEqual(self.page.detail_panel.detail_id_badge.text(), "#9001001")
+        self.assertTrue(self.page.detail_panel.detail_refresh_button.isEnabled())
+        self.assertIn("Top-level sample requirement", self.page.detail_panel.detail_description.toPlainText())
+        self.assertGreaterEqual(self.page.detail_panel.detail_fields_table.rowCount(), 10)
+        self.assertIn('"Risk Level"', self.page.detail_panel.detail_raw_json.toPlainText())
 
     def test_detail_id_button_copies_numeric_id_only(self) -> None:
         self.page.activate()
@@ -1119,10 +1119,10 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         clipboard = self._app.clipboard()
         clipboard.clear()
 
-        self.page.detail_id_badge.click()
+        self.page.detail_panel.detail_id_badge.click()
         self._app.processEvents()
 
-        self.assertEqual(self.page.detail_id_badge.text(), "#9001001")
+        self.assertEqual(self.page.detail_panel.detail_id_badge.text(), "#9001001")
         self.assertEqual(clipboard.text(), "9001001")
         self.assertNotIn("#", clipboard.text())
         self.assertIn("9001001", self.page.workspace_status_label.text())
@@ -1168,21 +1168,21 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             }
         )
 
-        self.page._render_detail(detail)
+        self.page.detail_panel.render_detail(detail)
 
-        self.assertTrue(self.page.description_source_toggle.isVisible())
-        self.assertEqual(self.page.detail_description.toPlainText(), "설명")
-        self.assertIsNotNone(self.page.detail_fields_table.cellWidget(9, 1))
-        self.assertIsNone(self.page.detail_fields_table.cellWidget(10, 1))
+        self.assertTrue(self.page.detail_panel.description_source_toggle.isVisible())
+        self.assertEqual(self.page.detail_panel.detail_description.toPlainText(), "설명")
+        self.assertIsNotNone(self.page.detail_panel.detail_fields_table.cellWidget(9, 1))
+        self.assertIsNone(self.page.detail_panel.detail_fields_table.cellWidget(10, 1))
         self.assertEqual(
-            self.page.detail_fields_table.item(10, 1).text(),
+            self.page.detail_panel.detail_fields_table.item(10, 1).text(),
             "%%(color:blue)원문 유지%%",
         )
-        self.assertIsNotNone(self.page.detail_fields_table.cellWidget(11, 1))
+        self.assertIsNotNone(self.page.detail_panel.detail_fields_table.cellWidget(11, 1))
 
-        self.page.description_source_toggle.setChecked(True)
+        self.page.detail_panel.description_source_toggle.setChecked(True)
         self.assertEqual(
-            self.page.detail_description.toPlainText(),
+            self.page.detail_panel.detail_description.toPlainText(),
             "%%(color:red)__설명__%%",
         )
 
@@ -1197,11 +1197,11 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             }
         )
 
-        self.page._render_detail(detail)
+        self.page.detail_panel.render_detail(detail)
 
-        self.assertFalse(self.page.description_source_toggle.isVisible())
+        self.assertFalse(self.page.detail_panel.description_source_toggle.isVisible())
         self.assertEqual(
-            self.page.detail_description.toPlainText(),
+            self.page.detail_panel.detail_description.toPlainText(),
             "%%(color:red)원문%%",
         )
 
@@ -1229,12 +1229,12 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             }
         )
 
-        self.page._render_detail(detail)
+        self.page.detail_panel.render_detail(detail)
 
-        self.assertEqual(self.page.attachment_table.rowCount(), 1)
-        self.assertEqual(self.page.attachment_table.item(0, 0).text(), "sample.png")
-        self.assertEqual(self.page.attachment_table.item(0, 1).text(), "2.0 KB")
-        self.assertIsNotNone(self.page.attachment_table.cellWidget(0, 3))
+        self.assertEqual(self.page.detail_panel.attachment_table.rowCount(), 1)
+        self.assertEqual(self.page.detail_panel.attachment_table.item(0, 0).text(), "sample.png")
+        self.assertEqual(self.page.detail_panel.attachment_table.item(0, 1).text(), "2.0 KB")
+        self.assertIsNotNone(self.page.detail_panel.attachment_table.cellWidget(0, 3))
 
     def test_current_detail_automatically_renders_image_attachment_in_memory(self) -> None:
         self.settings.offline_mode = False
@@ -1282,17 +1282,17 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             }
         )
 
-        self.page._render_detail(detail)
+        self.page.detail_panel.render_detail(detail)
 
-        self.assertTrue(self.page.attachment_preview.isVisible())
-        self.assertIn("cb-attachment://attachment-28", self.page.attachment_preview.text())
-        self.assertTrue(self.page.attachment_preview_button.isVisible())
-        self.assertTrue(self.page.attachment_preview_button.isEnabled())
+        self.assertTrue(self.page.detail_panel.attachment_preview.isVisible())
+        self.assertIn("cb-attachment://attachment-28", self.page.detail_panel.attachment_preview.text())
+        self.assertTrue(self.page.detail_panel.attachment_preview_button.isVisible())
+        self.assertTrue(self.page.detail_panel.attachment_preview_button.isEnabled())
         self.assertEqual(calls, [(28, 10 * 1024 * 1024)])
-        self.assertEqual(self.page._inline_image_bytes, len(png))
+        self.assertEqual(self.page.detail_panel._inline_image_bytes, len(png))
 
-        with patch("src.gui.tracker_workspace.WikiContentDialog") as dialog_class:
-            self.page._open_attachment_preview()
+        with patch("src.gui.tracker_detail_panel.WikiContentDialog") as dialog_class:
+            self.page.detail_panel._open_attachment_preview()
 
         dialog_class.assert_called_once()
         dialog_class.return_value.resize.assert_called_once_with(1100, 760)
@@ -1305,7 +1305,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         detail_dialog.assert_called_once()
         detail_kwargs = detail_dialog.call_args.kwargs
-        self.assertEqual(detail_kwargs["attachments"], self.page._attachments)
+        self.assertEqual(detail_kwargs["attachments"], self.page.detail_panel._attachments)
         self.assertEqual(len(detail_kwargs["image_resources"]), 1)
         detail_dialog.return_value.exec.assert_called_once()
 
@@ -1319,7 +1319,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page.activate()
         self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
         self._app.processEvents()
-        detail = self.page._current_detail
+        detail = self.page.detail_panel._current_detail
         self.assertIsNotNone(detail)
 
         opened: list[TrackerItemDetailDialog] = []
@@ -1365,12 +1365,12 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 opened.append(self)
                 return 0
 
-        with patch("src.gui.tracker_workspace.WikiContentDialog", _NonModalDialog):
-            self.page._open_wiki_field(field)
+        with patch("src.gui.tracker_detail_panel.WikiContentDialog", _NonModalDialog):
+            self.page.detail_panel._open_wiki_field(field)
 
         self.assertEqual(len(opened), 1)
         try:
-            self.assertIs(opened[0].parent(), self.page)
+            self.assertIs(opened[0].parent(), self.page.detail_panel)
         finally:
             opened[0].close()
             self._app.processEvents()
@@ -1381,15 +1381,15 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
         self._app.processEvents()
 
-        self.page._show_editor_in_window()
+        self.page.detail_panel._show_editor_in_window()
         self._app.processEvents()
 
-        dialog = self.page._editor_dialog
+        dialog = self.page.detail_panel._editor_dialog
         self.assertIsNotNone(dialog)
         try:
-            self.assertIs(dialog.parent(), self.page)
+            self.assertIs(dialog.parent(), self.page.detail_panel)
         finally:
-            self.page._restore_editor_panel()
+            self.page.detail_panel._restore_editor_panel()
             self._app.processEvents()
 
     def test_related_detail_failure_keeps_dialog_session_and_context_usable(self) -> None:
@@ -1585,11 +1585,11 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             }
         )
 
-        self.page._render_detail(detail, baseline_id=24681001)
+        self.page.detail_panel.render_detail(detail, baseline_id=24681001)
 
-        self.assertEqual(self.page.attachment_table.rowCount(), 0)
-        self.assertIn("Baseline", self.page.attachment_status_label.text())
-        self.assertFalse(self.page.attachment_reload_button.isEnabled())
+        self.assertEqual(self.page.detail_panel.attachment_table.rowCount(), 0)
+        self.assertIn("Baseline", self.page.detail_panel.attachment_status_label.text())
+        self.assertFalse(self.page.detail_panel.attachment_reload_button.isEnabled())
 
     def test_inline_image_budget_limits_scheduled_downloads_to_five_images(self) -> None:
         detail = TrackerItemDetail.from_raw(
@@ -1604,7 +1604,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 },
             }
         )
-        self.page._render_detail(detail)
+        self.page.detail_panel.render_detail(detail)
         tasks: list[_DeferredTask] = []
         self.page.synchronous = False
         self.page.task_factory = lambda operation: tasks.append(
@@ -1623,10 +1623,10 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             ),
         )
 
-        self.page._load_inline_resources(result, self.page.detail_description, detail, None)
+        self.page.detail_panel._load_inline_resources(result, self.page.detail_panel.detail_description, detail, None)
 
         self.assertEqual(len(tasks), 5)
-        self.assertEqual(len(self.page._inline_resource_reservations), 5)
+        self.assertEqual(len(self.page.detail_panel._inline_resource_reservations), 5)
 
     def test_scheduled_inline_downloads_keep_their_own_resource(self) -> None:
         """예약된 다운로드가 각자의 참조를 들고 있는지 확인한다.
@@ -1646,7 +1646,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 },
             }
         )
-        self.page._render_detail(detail)
+        self.page.detail_panel.render_detail(detail)
         tasks: list[_DeferredTask] = []
         self.page.synchronous = False
         self.page.task_factory = lambda operation: tasks.append(
@@ -1667,7 +1667,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             ),
         )
 
-        self.page._load_inline_resources(result, self.page.detail_description, detail, None)
+        self.page.detail_panel._load_inline_resources(result, self.page.detail_panel.detail_description, detail, None)
         for task in tasks:
             task.operation()
 
@@ -1676,14 +1676,14 @@ class TrackerWorkspacePageTest(unittest.TestCase):
     def test_test_mode_editor_loads_schema_but_disables_write_actions(self) -> None:
         self.page.activate()
         self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
-        self.page.detail_tabs.setCurrentIndex(self.page.editor_tab_index)
+        self.page.detail_panel.detail_tabs.setCurrentIndex(self.page.detail_panel.editor_tab_index)
         self._app.processEvents()
 
-        self.assertGreater(self.page.editor_panel.field_table.rowCount(), 0)
-        self.assertFalse(self.page.editor_panel.save_button.isEnabled())
-        self.assertFalse(self.page.editor_panel.transition_button.isEnabled())
-        self.assertFalse(self.page.editor_panel.delete_button.isEnabled())
-        self.assertIn("테스트 모드", self.page.editor_panel.editor_status.text())
+        self.assertGreater(self.page.detail_panel.editor_panel.field_table.rowCount(), 0)
+        self.assertFalse(self.page.detail_panel.editor_panel.save_button.isEnabled())
+        self.assertFalse(self.page.detail_panel.editor_panel.transition_button.isEnabled())
+        self.assertFalse(self.page.detail_panel.editor_panel.delete_button.isEnabled())
+        self.assertIn("테스트 모드", self.page.detail_panel.editor_panel.editor_status.text())
 
     def test_tracker_search_is_scoped_to_selected_tracker(self) -> None:
         self.page.activate()
@@ -1779,8 +1779,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page._open_direct_item()
 
         self.assertEqual(self.page.tracker_combo.currentData(), 24680002)
-        self.assertEqual(self.page.detail_id_badge.text(), "#9101002")
-        self.assertEqual(self.page.detail_title.text(), "Steering response test")
+        self.assertEqual(self.page.detail_panel.detail_id_badge.text(), "#9101002")
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Steering response test")
         self.assertEqual(self.page.item_tree.topLevelItemCount(), 1)
         root = self.page.item_tree.topLevelItem(0)
         self.assertEqual(root.text(0), "9101001")
@@ -1932,7 +1932,7 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.page.activate()
         self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
         self._app.processEvents()
-        self.page.detail_tabs.setCurrentIndex(self.page.editor_tab_index)
+        self.page.detail_panel.detail_tabs.setCurrentIndex(self.page.detail_panel.editor_tab_index)
         self._app.processEvents()
 
     def tearDown(self) -> None:
@@ -1942,30 +1942,30 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
     def test_field_update_status_field_change_and_delete_refresh_visible_state(self) -> None:
         from PySide6.QtCore import Qt
 
-        summary_row = self.page.editor_panel.rows[3]
-        self.page.editor_panel.field_table.item(summary_row.row, 0).setCheckState(
+        summary_row = self.page.detail_panel.editor_panel.rows[3]
+        self.page.detail_panel.editor_panel.field_table.item(summary_row.row, 0).setCheckState(
             Qt.CheckState.Checked
         )
         summary_row.widget.setText("Changed summary")
-        self.page.editor_panel.save_button.click()
+        self.page.detail_panel.editor_panel.save_button.click()
 
-        self.assertEqual(self.page.detail_title.text(), "Changed summary")
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Changed summary")
         self.assertEqual(self.page.item_tree.topLevelItem(0).text(1), "Changed summary")
         update_calls = [call for call in EditableWorkspaceClient.calls if call[0] == "update"]
         self.assertEqual(update_calls[0][2][0]["fieldId"], 3)
 
-        target_index = self.page.editor_panel.status_combo.findData(2)
-        self.page.editor_panel.status_combo.setCurrentIndex(target_index)
-        self.page.editor_panel.transition_button.click()
+        target_index = self.page.detail_panel.editor_panel.status_combo.findData(2)
+        self.page.detail_panel.editor_panel.status_combo.setCurrentIndex(target_index)
+        self.page.detail_panel.editor_panel.transition_button.click()
 
         self.assertEqual(self.page.item_tree.columnCount(), 2)
-        self.assertEqual(self.page.detail_fields_table.item(3, 1).text(), "Review")
+        self.assertEqual(self.page.detail_panel.detail_fields_table.item(3, 1).text(), "Review")
 
-        self.page.editor_panel.delete_button.click()
+        self.page.detail_panel.editor_panel.delete_button.click()
 
         self.assertTrue(EditableWorkspaceClient.deleted)
         self.assertEqual(self.page.item_tree.topLevelItemCount(), 0)
-        self.assertEqual(self.page.detail_title.text(), "아이템 상세")
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "아이템 상세")
         self.assertIn(("delete", 1001), EditableWorkspaceClient.calls)
         self.assertEqual(
             [record.operation.value for record in self.activities],
@@ -1975,16 +1975,16 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
     def test_version_conflict_keeps_editor_and_visible_item_unchanged(self) -> None:
         from PySide6.QtCore import Qt
 
-        summary_row = self.page.editor_panel.rows[3]
-        self.page.editor_panel.field_table.item(summary_row.row, 0).setCheckState(
+        summary_row = self.page.detail_panel.editor_panel.rows[3]
+        self.page.detail_panel.editor_panel.field_table.item(summary_row.row, 0).setCheckState(
             Qt.CheckState.Checked
         )
         summary_row.widget.setText("Should not save")
         EditableWorkspaceClient.item["version"] = 9
 
-        self.page.editor_panel.save_button.click()
+        self.page.detail_panel.editor_panel.save_button.click()
 
-        self.assertEqual(self.page.detail_title.text(), "Original summary")
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Original summary")
         self.assertEqual(self.page.item_tree.topLevelItem(0).text(1), "Original summary")
         self.assertIn("다른 사용자가", self.page.workspace_status_label.text())
         self.assertFalse(
@@ -1996,18 +1996,18 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
     def test_editor_moves_to_large_window_without_losing_input_state(self) -> None:
         from PySide6.QtCore import Qt
 
-        summary_row = self.page.editor_panel.rows[3]
-        check_item = self.page.editor_panel.field_table.item(summary_row.row, 0)
+        summary_row = self.page.detail_panel.editor_panel.rows[3]
+        check_item = self.page.detail_panel.editor_panel.field_table.item(summary_row.row, 0)
         check_item.setCheckState(Qt.CheckState.Checked)
         summary_row.widget.setText("Unsaved detached value")
 
-        self.page.popout_editor_button.click()
+        self.page.detail_panel.popout_editor_button.click()
         self._app.processEvents()
 
-        dialog = self.page._editor_dialog
+        dialog = self.page.detail_panel._editor_dialog
         self.assertIsNotNone(dialog)
-        self.assertIs(self.page.editor_panel.parent(), dialog)
-        self.assertTrue(self.page.editor_placeholder.isVisible())
+        self.assertIs(self.page.detail_panel.editor_panel.parent(), dialog)
+        self.assertTrue(self.page.detail_panel.editor_placeholder.isVisible())
         self.assertEqual(summary_row.widget.text(), "Unsaved detached value")
         self.assertEqual(check_item.checkState(), Qt.CheckState.Checked)
 
@@ -2018,9 +2018,9 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         dialog.close()
         self._app.processEvents()
 
-        self.assertIsNone(self.page._editor_dialog)
-        self.assertIs(self.page.editor_panel.parent(), self.page.editor_host)
-        self.assertFalse(self.page.editor_placeholder.isVisible())
+        self.assertIsNone(self.page.detail_panel._editor_dialog)
+        self.assertIs(self.page.detail_panel.editor_panel.parent(), self.page.detail_panel.editor_host)
+        self.assertFalse(self.page.detail_panel.editor_placeholder.isVisible())
         self.assertEqual(summary_row.widget.text(), "Unsaved detached value")
         self.assertEqual(check_item.checkState(), Qt.CheckState.Checked)
 
@@ -2047,8 +2047,8 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         root = self.page.item_tree.topLevelItem(0)
         self.assertEqual(root.childCount(), 1)
         self.assertEqual(root.child(0).text(0), "1002")
-        self.assertEqual(self.page.detail_id_badge.text(), "#1002")
-        self.assertEqual(self.page.detail_title.text(), "Created child")
+        self.assertEqual(self.page.detail_panel.detail_id_badge.text(), "#1002")
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Created child")
         self.assertIn("생성했습니다", self.page.workspace_status_label.text())
         self.assertEqual(self.activities[-1].operation.value, "tracker_create")
         self.assertEqual(self.activities[-1].item_id, 1002)
