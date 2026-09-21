@@ -541,13 +541,13 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page.workspace_mode_tabs.setCurrentIndex(self.page.baseline_mode_index)
         self._app.processEvents()
 
-        self.assertEqual(self.page.baseline_item_tree.topLevelItemCount(), 2)
+        self.assertEqual(self.page.baseline_workspace.baseline_item_tree.topLevelItemCount(), 2)
         self.assertEqual(self.service.baseline_compare_count, 0)
         self.assertEqual(self.service.baseline_load_count, 1)
 
     def test_baseline_comparison_directly_shows_all_fields_without_result_filter(self) -> None:
         self.page.activate()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         comparison = TrackerItemSummary.from_raw(
             {
                 "id": 9001001,
@@ -624,7 +624,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
     def test_baseline_sources_require_explicit_confirmation_and_selection_reuses_cache(self) -> None:
         self.page.activate()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         comparison = TrackerItemSummary.from_raw(
             {"id": 9001001, "name": "Earlier", "status": {"id": 1, "name": "Draft"}}
         )
@@ -650,7 +650,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(len(calls), 0)
         self.assertEqual(len(self.baseline_compare_confirmations), 0)
-        self.assertIsNone(self.page._baseline_comparison_result)
+        self.assertIsNone(self.page.baseline_workspace._baseline_comparison_result)
         self.assertIn("전체 비교 실행", panel.status_label.text())
 
         panel.run_button.click()
@@ -658,21 +658,21 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(len(calls), 1)
         self.assertEqual(len(self.baseline_compare_confirmations), 1)
-        self.assertIs(self.page._baseline_comparison_result, result)
-        self.assertEqual(self.page.baseline_result_table.rowCount(), 1)
+        self.assertIs(self.page.baseline_workspace._baseline_comparison_result, result)
+        self.assertEqual(self.page.baseline_workspace.baseline_result_table.rowCount(), 1)
         self.assertTrue(panel.export_button.isEnabled())
         self.assertEqual(panel.run_button.text(), "전체 비교 다시 불러오기")
 
-        self.page.baseline_result_table.selectRow(0)
+        self.page.baseline_workspace.baseline_result_table.selectRow(0)
         self._app.processEvents()
 
-        self.assertEqual(self.page._baseline_selected_item_id, 9001001)
+        self.assertEqual(self.page.baseline_workspace._baseline_selected_item_id, 9001001)
         self.assertGreater(panel.detail.rowCount(), 0)
         self.assertEqual(len(calls), 1)
 
     def test_baseline_confirmation_cancel_does_not_call_full_compare(self) -> None:
         self.page.activate()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         calls = []
         self.service.compare_tracker_at_sources = lambda *args, **kwargs: calls.append(
             (args, kwargs)
@@ -682,7 +682,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         panel.after_combo.setCurrentIndex(panel.after_combo.count() - 1)
 
         with patch(
-            "src.gui.tracker_workspace.QMessageBox.warning",
+            "src.gui.tracker_baseline_workspace.QMessageBox.warning",
             return_value=QMessageBox.StandardButton.Cancel,
         ) as warning:
             panel.run_button.click()
@@ -690,13 +690,13 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         warning.assert_called_once()
         self.assertEqual(calls, [])
-        self.assertIsNone(self.page._baseline_comparison_result)
+        self.assertIsNone(self.page.baseline_workspace._baseline_comparison_result)
         self.assertTrue(panel.run_button.isEnabled())
         self.assertEqual(panel.run_button.text(), "전체 비교 실행")
 
     def test_failed_same_source_reload_preserves_cached_baseline_result(self) -> None:
         self.page.activate()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         result = compare_tracker_items(
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "Earlier"}),),
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "Current"}),),
@@ -708,7 +708,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         panel.after_combo.setCurrentIndex(panel.after_combo.count() - 1)
         panel.run_button.click()
         self._app.processEvents()
-        cached_key = self.page._baseline_comparison_cache_key
+        cached_key = self.page.baseline_workspace._baseline_comparison_cache_key
         detail_rows = panel.detail.rowCount()
 
         def fail_reload(*_args, **_kwargs):
@@ -718,8 +718,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         panel.run_button.click()
         self._app.processEvents()
 
-        self.assertIs(self.page._baseline_comparison_result, result)
-        self.assertEqual(self.page._baseline_comparison_cache_key, cached_key)
+        self.assertIs(self.page.baseline_workspace._baseline_comparison_result, result)
+        self.assertEqual(self.page.baseline_workspace._baseline_comparison_cache_key, cached_key)
         self.assertIs(panel._result, result)
         self.assertEqual(panel.detail.rowCount(), detail_rows)
         self.assertTrue(panel.export_button.isEnabled())
@@ -729,7 +729,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
     def test_stale_baseline_compare_failure_does_not_overwrite_new_sources(self) -> None:
         self.page.activate()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         tasks = []
         alerts = []
         self.page.synchronous = False
@@ -744,7 +744,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(len(tasks), 1)
         self.assertTrue(tasks[0].started)
-        self.assertIsNotNone(self.page._baseline_comparison_loading_key)
+        self.assertIsNotNone(self.page.baseline_workspace._baseline_comparison_loading_key)
 
         panel.after_combo.setCurrentIndex(panel.after_combo.findData(None))
         expected_status = panel.status_label.text()
@@ -753,11 +753,11 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(panel.status_label.text(), expected_status)
         self.assertIn("서로 다른", panel.status_label.text())
         self.assertEqual(alerts, [])
-        self.assertIsNone(self.page._baseline_comparison_loading_key)
+        self.assertIsNone(self.page.baseline_workspace._baseline_comparison_loading_key)
 
     def test_baseline_export_runs_in_background_and_restores_success_ui(self) -> None:
         self.page.activate()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         result = compare_tracker_items(
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "Earlier"}),),
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "Current"}),),
@@ -765,8 +765,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             after_source=BaselineComparisonSource(None),
         )
         cache_key = (self.page._current_tracker.tracker_id, 11, None)
-        self.page._baseline_comparison_result = result
-        self.page._baseline_comparison_cache_key = cache_key
+        self.page.baseline_workspace._baseline_comparison_result = result
+        self.page.baseline_workspace._baseline_comparison_cache_key = cache_key
         panel.set_result(result)
         tasks = []
         self.page.synchronous = False
@@ -783,53 +783,53 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         with (
             patch(
-                "src.gui.tracker_workspace.baseline_export_fields",
+                "src.gui.tracker_baseline_workspace.baseline_export_fields",
                 return_value=(object(),),
             ),
-            patch("src.gui.tracker_workspace.BaselineExportFieldDialog") as dialog_cls,
+            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
             patch(
                 "src.gui.tracker_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
             ),
             patch(
-                "src.gui.tracker_workspace.export_baseline_comparison_xlsx",
+                "src.gui.tracker_baseline_workspace.export_baseline_comparison_xlsx",
                 return_value=summary,
             ) as export_mock,
         ):
             dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
             dialog_cls.return_value.selected_field_keys.return_value = ("name",)
 
-            self.page._export_baseline_comparison()
+            self.page.baseline_workspace._export_baseline_comparison()
 
             self.assertEqual(len(tasks), 1)
             self.assertTrue(tasks[0].started)
             export_mock.assert_not_called()
-            self.assertTrue(self.page._baseline_export_in_progress)
+            self.assertTrue(self.page.baseline_workspace._baseline_export_in_progress)
             self.assertFalse(panel.export_button.isEnabled())
             self.assertIn("생성하는 중", panel.status_label.text())
 
-            self.page._export_baseline_comparison()
+            self.page.baseline_workspace._export_baseline_comparison()
             self.assertEqual(len(tasks), 1)
 
             tasks[0].finish()
 
         export_mock.assert_called_once()
-        self.assertFalse(self.page._baseline_export_in_progress)
+        self.assertFalse(self.page.baseline_workspace._baseline_export_in_progress)
         self.assertTrue(panel.export_button.isEnabled())
         self.assertIn("Excel 내보내기 완료", panel.status_label.text())
         self.assertTrue(tasks[0].deleted)
 
     def test_baseline_export_failure_restores_cached_result_actions(self) -> None:
         self.page.activate()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         result = compare_tracker_items(
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "Earlier"}),),
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "Current"}),),
             before_source=BaselineComparisonSource(11),
             after_source=BaselineComparisonSource(None),
         )
-        self.page._baseline_comparison_result = result
-        self.page._baseline_comparison_cache_key = (
+        self.page.baseline_workspace._baseline_comparison_result = result
+        self.page.baseline_workspace._baseline_comparison_cache_key = (
             self.page._current_tracker.tracker_id,
             11,
             None,
@@ -845,26 +845,26 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         with (
             patch(
-                "src.gui.tracker_workspace.baseline_export_fields",
+                "src.gui.tracker_baseline_workspace.baseline_export_fields",
                 return_value=(object(),),
             ),
-            patch("src.gui.tracker_workspace.BaselineExportFieldDialog") as dialog_cls,
+            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
             patch(
                 "src.gui.tracker_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
             ),
             patch(
-                "src.gui.tracker_workspace.export_baseline_comparison_xlsx",
+                "src.gui.tracker_baseline_workspace.export_baseline_comparison_xlsx",
                 side_effect=RuntimeError("save failed"),
             ),
         ):
             dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
             dialog_cls.return_value.selected_field_keys.return_value = ("name",)
 
-            self.page._export_baseline_comparison()
+            self.page.baseline_workspace._export_baseline_comparison()
             tasks[0].finish()
 
-        self.assertFalse(self.page._baseline_export_in_progress)
+        self.assertFalse(self.page.baseline_workspace._baseline_export_in_progress)
         self.assertTrue(panel.export_button.isEnabled())
         self.assertIn("save failed", panel.status_label.text())
         self.assertEqual(len(alerts), 1)
@@ -872,7 +872,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
     def test_new_and_deleted_items_do_not_show_fields_as_changed(self) -> None:
         self.page.activate()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         result = compare_tracker_items(
             (TrackerItemSummary.from_raw({"id": 9001002, "name": "Deleted"}),),
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "New"}),),
@@ -902,22 +902,22 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             )
         )
 
-        self.page._baseline_comparison_result = result
-        self.page._render_baseline_comparison_results()
+        self.page.baseline_workspace._baseline_comparison_result = result
+        self.page.baseline_workspace._render_baseline_comparison_results()
         result_rows = {
-            self.page.baseline_result_table.item(row, 1).text(): row
-            for row in range(self.page.baseline_result_table.rowCount())
+            self.page.baseline_workspace.baseline_result_table.item(row, 1).text(): row
+            for row in range(self.page.baseline_workspace.baseline_result_table.rowCount())
         }
         new_row = result_rows["9001001"]
         deleted_row = result_rows["9001002"]
         self.assertIn(
-            "신규", self.page.baseline_result_table.item(new_row, 0).text()
+            "신규", self.page.baseline_workspace.baseline_result_table.item(new_row, 0).text()
         )
         self.assertEqual(
-            self.page.baseline_result_table.item(new_row, 3).text(), "—"
+            self.page.baseline_workspace.baseline_result_table.item(new_row, 3).text(), "—"
         )
         self.assertEqual(
-            self.page.baseline_result_table.item(deleted_row, 3).text(), "—"
+            self.page.baseline_workspace.baseline_result_table.item(deleted_row, 3).text(), "—"
         )
 
     def test_baseline_field_filter_ands_with_kind_and_search_without_server_calls(self) -> None:
@@ -942,41 +942,41 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             before_source=BaselineComparisonSource(11),
             after_source=BaselineComparisonSource(None),
         )
-        self.page._baseline_comparison_result = result
-        self.page._populate_baseline_field_filter(result)
-        self.page.baseline_comparison_panel.set_result(result, selected_item_id=9001001)
-        detail_row_count = self.page.baseline_comparison_panel.detail.rowCount()
+        self.page.baseline_workspace._baseline_comparison_result = result
+        self.page.baseline_workspace._populate_baseline_field_filter(result)
+        self.page.baseline_workspace.baseline_comparison_panel.set_result(result, selected_item_id=9001001)
+        detail_row_count = self.page.baseline_workspace.baseline_comparison_panel.detail.rowCount()
         compare_calls = self.service.baseline_compare_count
 
-        self.page.baseline_field_filter.setCurrentIndex(
-            self.page.baseline_field_filter.findData("description")
+        self.page.baseline_workspace.baseline_field_filter.setCurrentIndex(
+            self.page.baseline_workspace.baseline_field_filter.findData("description")
         )
-        self.assertEqual(self.page.baseline_result_table.rowCount(), 3)
+        self.assertEqual(self.page.baseline_workspace.baseline_result_table.rowCount(), 3)
         self.assertEqual(
-            self.page.baseline_comparison_panel.detail.rowCount(), detail_row_count
+            self.page.baseline_workspace.baseline_comparison_panel.detail.rowCount(), detail_row_count
         )
 
-        self.page.baseline_result_filter.setCurrentIndex(
-            self.page.baseline_result_filter.findData(
+        self.page.baseline_workspace.baseline_result_filter.setCurrentIndex(
+            self.page.baseline_workspace.baseline_result_filter.findData(
                 BaselineComparisonKind.ADDED.value
             )
         )
-        self.assertEqual(self.page.baseline_result_table.rowCount(), 1)
-        self.assertEqual(self.page.baseline_result_table.item(0, 1).text(), "9001002")
+        self.assertEqual(self.page.baseline_workspace.baseline_result_table.rowCount(), 1)
+        self.assertEqual(self.page.baseline_workspace.baseline_result_table.item(0, 1).text(), "9001002")
 
-        self.page.baseline_result_search.setText("no match")
-        self.assertEqual(self.page.baseline_result_table.rowCount(), 0)
-        self.page.baseline_result_search.setText("Added")
-        self.assertEqual(self.page.baseline_result_table.rowCount(), 1)
+        self.page.baseline_workspace.baseline_result_search.setText("no match")
+        self.assertEqual(self.page.baseline_workspace.baseline_result_table.rowCount(), 0)
+        self.page.baseline_workspace.baseline_result_search.setText("Added")
+        self.assertEqual(self.page.baseline_workspace.baseline_result_table.rowCount(), 1)
         self.assertEqual(self.service.baseline_compare_count, compare_calls)
 
-        self.page._render_baseline_comparison_results()
-        self.assertEqual(self.page.baseline_field_filter.currentData(), "description")
+        self.page.baseline_workspace._render_baseline_comparison_results()
+        self.assertEqual(self.page.baseline_workspace.baseline_field_filter.currentData(), "description")
 
-        self.page._on_baseline_sources_changed()
-        self.assertEqual(self.page.baseline_result_filter.currentData(), "")
-        self.assertEqual(self.page.baseline_field_filter.currentData(), "")
-        self.assertEqual(self.page.baseline_result_search.text(), "")
+        self.page.baseline_workspace._on_baseline_sources_changed()
+        self.assertEqual(self.page.baseline_workspace.baseline_result_filter.currentData(), "")
+        self.assertEqual(self.page.baseline_workspace.baseline_field_filter.currentData(), "")
+        self.assertEqual(self.page.baseline_workspace.baseline_result_search.text(), "")
 
     def test_baseline_export_uses_only_current_filtered_items(self) -> None:
         self.page.activate()
@@ -992,14 +992,14 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             before_source=BaselineComparisonSource(11),
             after_source=BaselineComparisonSource(None),
         )
-        self.page._baseline_comparison_result = result
-        self.page._baseline_comparison_cache_key = (
+        self.page.baseline_workspace._baseline_comparison_result = result
+        self.page.baseline_workspace._baseline_comparison_cache_key = (
             self.page._current_tracker.tracker_id,
             11,
             None,
         )
-        self.page._populate_baseline_field_filter(result)
-        self.page.baseline_result_search.setText("After one")
+        self.page.baseline_workspace._populate_baseline_field_filter(result)
+        self.page.baseline_workspace.baseline_result_search.setText("After one")
         summary = SimpleNamespace(
             item_count=1,
             selected_field_count=1,
@@ -1009,19 +1009,19 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         )
 
         with (
-            patch("src.gui.tracker_workspace.BaselineExportFieldDialog") as dialog_cls,
+            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
             patch(
                 "src.gui.tracker_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
             ),
             patch(
-                "src.gui.tracker_workspace.export_baseline_comparison_xlsx",
+                "src.gui.tracker_baseline_workspace.export_baseline_comparison_xlsx",
                 return_value=summary,
             ) as export_mock,
         ):
             dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
             dialog_cls.return_value.selected_field_keys.return_value = ("name",)
-            self.page._export_baseline_comparison()
+            self.page.baseline_workspace._export_baseline_comparison()
 
         exported_result = export_mock.call_args.args[0]
         self.assertEqual([item.item_id for item in exported_result.items], [1])
@@ -1030,14 +1030,14 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page.activate()
         self.page.workspace_mode_tabs.setCurrentIndex(self.page.baseline_mode_index)
         self._app.processEvents()
-        panel = self.page.baseline_comparison_panel
+        panel = self.page.baseline_workspace.baseline_comparison_panel
         panel.after_combo.addItem("R1", 11)
         panel.after_combo.setCurrentIndex(panel.after_combo.count() - 1)
-        self.page._baseline_selected_item_id = 9001001
-        root = self.page.baseline_item_tree.topLevelItem(0)
-        self.page.baseline_item_tree.blockSignals(True)
-        self.page.baseline_item_tree.setCurrentItem(root)
-        self.page.baseline_item_tree.blockSignals(False)
+        self.page.baseline_workspace._baseline_selected_item_id = 9001001
+        root = self.page.baseline_workspace.baseline_item_tree.topLevelItem(0)
+        self.page.baseline_workspace.baseline_item_tree.blockSignals(True)
+        self.page.baseline_workspace.baseline_item_tree.setCurrentItem(root)
+        self.page.baseline_workspace.baseline_item_tree.blockSignals(False)
         result = compare_tracker_items(
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "Earlier"}),),
             (TrackerItemSummary.from_raw({"id": 9001001, "name": "Current"}),),
@@ -1053,15 +1053,15 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(self.service.baseline_load_count, 1)
         self.assertEqual(panel.after_combo.currentData(), 11)
-        self.assertEqual(self.page._baseline_selected_item_id, 9001001)
-        self.assertIs(self.page.baseline_item_tree.currentItem(), root)
+        self.assertEqual(self.page.baseline_workspace._baseline_selected_item_id, 9001001)
+        self.assertIs(self.page.baseline_workspace.baseline_item_tree.currentItem(), root)
         self.assertEqual(panel.detail.rowCount(), detail_rows)
 
-        self.page.baseline_reload_button.click()
+        self.page.baseline_workspace.baseline_reload_button.click()
         self._app.processEvents()
 
         self.assertEqual(self.service.baseline_load_count, 2)
-        self.assertIsNone(self.page._baseline_selected_item_id)
+        self.assertIsNone(self.page.baseline_workspace._baseline_selected_item_id)
         self.assertEqual(panel.after_combo.currentData(), "")
         self.assertEqual(panel.detail.rowCount(), 0)
 
