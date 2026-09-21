@@ -331,8 +331,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.item_tree.headerItem().text(1), "요약")
         self.assertEqual(self.page.item_tree.topLevelItem(0).text(0), "9001001")
         self.assertIn("전체 표시", self.page.tree_status_label.text())
-        self.assertIn("Offline Requirements", self.page.search_scope_label.text())
-        self.assertTrue(self.page.search_button.isEnabled())
+        self.assertIn("Offline Requirements", self.page.search_panel.search_scope_label.text())
+        self.assertTrue(self.page.search_panel.search_button.isEnabled())
         self.assertFalse(self.page.create_item_button.isEnabled())
 
     def test_baseline_source_loads_full_read_only_hierarchy_and_detail(self) -> None:
@@ -1688,88 +1688,88 @@ class TrackerWorkspacePageTest(unittest.TestCase):
     def test_tracker_search_is_scoped_to_selected_tracker(self) -> None:
         self.page.activate()
         self.page.browser_tabs.setCurrentIndex(1)
-        self.page.search_text_input.setText("Steering")
+        self.page.search_panel.search_text_input.setText("Steering")
 
-        self.page._run_search()
+        self.page.search_panel._run_search()
 
         requirement_ids = {
-            int(self.page.search_table.item(row, 1).text())
-            for row in range(self.page.search_table.rowCount())
+            int(self.page.search_panel.search_table.item(row, 1).text())
+            for row in range(self.page.search_panel.search_table.rowCount())
         }
         self.assertEqual(requirement_ids, {9001003, 9001004})
 
         self.page._on_tracker_activated(1)
-        self.page.search_text_input.setText("Steering")
-        self.page._run_search()
+        self.page.search_panel.search_text_input.setText("Steering")
+        self.page.search_panel._run_search()
 
         test_case_ids = {
-            int(self.page.search_table.item(row, 1).text())
-            for row in range(self.page.search_table.rowCount())
+            int(self.page.search_panel.search_table.item(row, 1).text())
+            for row in range(self.page.search_panel.search_table.rowCount())
         }
         self.assertEqual(test_case_ids, {9101002})
         self.assertNotIn(9001003, test_case_ids)
-        self.assertIn("Offline Test Cases", self.page.search_scope_label.text())
+        self.assertIn("Offline Test Cases", self.page.search_panel.search_scope_label.text())
 
     def test_search_result_selection_supports_page_and_all_query_modes(self) -> None:
         from PySide6.QtCore import Qt
 
         self.page.activate()
-        self.page.search_text_input.setText("Steering")
-        self.page._run_search()
+        self.page.search_panel.search_text_input.setText("Steering")
+        self.page.search_panel._run_search()
 
-        self.page._select_current_search_page()
-        self.assertEqual(self.page._selected_search_ids, {9001003, 9001004})
-        self.assertEqual(self.page._selected_search_count(), 2)
+        self.page.search_panel._select_current_search_page()
+        self.assertEqual(self.page.search_panel._selected_search_ids, {9001003, 9001004})
+        self.assertEqual(self.page.search_panel.selected_count(), 2)
 
-        self.page._select_all_search_results()
-        self.assertTrue(self.page._all_search_selected)
-        self.assertEqual(self.page._selected_search_count(), 2)
-        first_checkbox = self.page.search_table.item(0, 0)
+        self.page.search_panel._select_all_search_results()
+        self.assertTrue(self.page.search_panel._all_search_selected)
+        self.assertEqual(self.page.search_panel.selected_count(), 2)
+        first_checkbox = self.page.search_panel.search_table.item(0, 0)
         first_checkbox.setCheckState(Qt.CheckState.Unchecked)
-        self.assertEqual(self.page._selected_search_count(), 1)
-        self.assertEqual(len(self.page._excluded_search_ids), 1)
+        self.assertEqual(self.page.search_panel.selected_count(), 1)
+        self.assertEqual(len(self.page.search_panel._excluded_search_ids), 1)
 
     def test_condition_search_mode_loads_schema_and_builds_condition_query(self) -> None:
         self.page.activate()
         self.page.browser_tabs.setCurrentIndex(1)
-        mode_index = self.page.search_mode_combo.findData("conditions")
-        self.page.search_mode_combo.setCurrentIndex(mode_index)
-        self.assertTrue(self.page.condition_search_host.isVisible())
-        self.assertFalse(self.page.condition_dialog.isVisible())
-        self.assertEqual(self.page.search_button.text(), "상세 조건으로 검색")
-        self.assertIn("조건 묶음 1개", self.page.condition_summary_label.text())
+        mode_index = self.page.search_panel.search_mode_combo.findData("conditions")
+        self.page.search_panel.search_mode_combo.setCurrentIndex(mode_index)
+        self.assertTrue(self.page.search_panel.condition_search_host.isVisible())
+        self.assertFalse(self.page.search_panel.condition_dialog.isVisible())
+        self.assertEqual(self.page.search_panel.search_button.text(), "상세 조건으로 검색")
+        self.assertIn("조건 묶음 1개", self.page.search_panel.condition_summary_label.text())
 
-        self.page.condition_open_button.click()
+        self.page.search_panel.condition_open_button.click()
         self._app.processEvents()
-        self.assertTrue(self.page.condition_dialog.isVisible())
-        self.assertGreaterEqual(self.page.condition_dialog.width(), 860)
-        self.assertGreaterEqual(self.page.condition_dialog.height(), 600)
+        self.assertTrue(self.page.search_panel.condition_dialog.isVisible())
+        self.assertGreaterEqual(self.page.search_panel.condition_dialog.width(), 860)
+        self.assertGreaterEqual(self.page.search_panel.condition_dialog.height(), 600)
 
-        group = self.page.condition_builder.groups[0]
+        group = self.page.search_panel.condition_builder.groups[0]
         row = group.rows[0]
         summary_index = row.field_combo.findText("Summary")
         row.field_combo.setCurrentIndex(summary_index)
         contains_index = row.operator_combo.findData("contains")
         row.operator_combo.setCurrentIndex(contains_index)
         row.value_input.setText("Steering")
-        self.page.condition_dialog.close_button.click()
+        self.page.search_panel.condition_dialog.close_button.click()
         self._app.processEvents()
-        self.assertFalse(self.page.condition_dialog.isVisible())
+        self.assertFalse(self.page.search_panel.condition_dialog.isVisible())
         self.assertEqual(
-            self.page.condition_builder.groups[0].rows[0].value_input.text(),
+            self.page.search_panel.condition_builder.groups[0].rows[0].value_input.text(),
             "Steering",
         )
 
-        self.page._run_search()
+        self.page.search_panel._run_search()
 
-        self.assertIsNotNone(self.page._last_search_query)
-        self.assertEqual(self.page._last_search_query.mode.value, "conditions")
-        self.assertEqual(self.page.search_table.rowCount(), 2)
+        self.assertIsNotNone(self.page.search_panel._last_search_query)
+        self.assertEqual(self.page.search_panel._last_search_query.mode.value, "conditions")
+        self.assertEqual(self.page.search_panel.search_table.rowCount(), 2)
 
-        self.page.search_mode_combo.setCurrentIndex(0)
+        self.page.search_panel.search_mode_combo.setCurrentIndex(0)
         self._app.processEvents()
-        self.assertFalse(self.page.condition_dialog.isVisible())
-        self.assertEqual(self.page.search_button.text(), "현재 트래커 검색")
+        self.assertFalse(self.page.search_panel.condition_dialog.isVisible())
+        self.assertEqual(self.page.search_panel.search_button.text(), "현재 트래커 검색")
 
     def test_direct_id_open_resolves_other_tracker_and_builds_ancestor_path(self) -> None:
         self.page.activate()
@@ -1791,9 +1791,9 @@ class TrackerWorkspacePageTest(unittest.TestCase):
     def test_search_requires_filter_instead_of_loading_entire_tracker(self) -> None:
         self.page.activate()
 
-        self.page._run_search()
+        self.page.search_panel._run_search()
 
-        self.assertEqual(self.page.search_table.rowCount(), 0)
+        self.assertEqual(self.page.search_panel.search_table.rowCount(), 0)
         self.assertIn("하나 이상", self.page.workspace_status_label.text())
         self.assertEqual(self.page.workspace_status_label.property("tone"), "warning")
 
