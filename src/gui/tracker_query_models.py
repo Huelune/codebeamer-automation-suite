@@ -93,7 +93,7 @@ _TRAILING_ORDER_PATTERN = re.compile(r"\s+ORDER\s+BY\s+(.+?)\s*$", re.IGNORECASE
 def _positive_int(value: Any, *, label: str) -> int:
     try:
         normalized = int(value)
-    except Exception as exc:
+    except (TypeError, ValueError) as exc:
         raise ValueError(f"{label}은(는) 양의 정수여야 합니다.") from exc
     if normalized <= 0:
         raise ValueError(f"{label}은(는) 양의 정수여야 합니다.")

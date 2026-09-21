@@ -50,7 +50,7 @@ class WizardUserLookupMixin:
             return None
         try:
             return response.json()
-        except Exception:
+        except (AttributeError, ValueError):
             return None
 
     def _user_lookup_cache_key(self, value: Any) -> tuple[int | None, str]:
@@ -153,7 +153,7 @@ class WizardUserLookupMixin:
             if hasattr(exc, "response") and exc.response is not None:
                 try:
                     error_message = str(exc.response.json())
-                except Exception:
+                except (AttributeError, ValueError):
                     error_message = str(exc)
             else:
                 error_message = str(exc)

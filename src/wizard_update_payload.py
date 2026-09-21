@@ -201,7 +201,7 @@ class WizardUpdatePayloadService:
             if parent_row_id is not None and not pd.isna(parent_row_id):
                 try:
                     normalized_parent_id = int(parent_row_id)
-                except Exception:
+                except (TypeError, ValueError):
                     normalized_parent_id = None
             parent_by_row_id[row_id] = normalized_parent_id
 
@@ -278,7 +278,7 @@ class WizardUpdatePayloadService:
         if field_id is not None:
             try:
                 return ("fieldId", int(field_id))
-            except Exception:
+            except (TypeError, ValueError):
                 pass
         field_name = str(field_payload.get("name") or "").strip()
         if field_name:

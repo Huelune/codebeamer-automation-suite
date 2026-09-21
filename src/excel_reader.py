@@ -394,7 +394,7 @@ class ExcelReader:
             indent = getattr(alignment, "indent", None) if alignment is not None else None
             if indent is not None and indent != "":
                 return int(indent)
-        except Exception:
+        except (TypeError, ValueError):
             pass
         try:
             return int(cell.api.IndentLevel)

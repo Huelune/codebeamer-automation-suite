@@ -287,7 +287,7 @@ class ActivityHistoryStore:
                 return ()
             try:
                 payload = json.loads(self.path.read_text(encoding="utf-8"))
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 raise ActivityHistoryError(
                     "실행 기록 파일을 읽지 못했습니다. 파일 형식을 확인하세요."
                 ) from exc
