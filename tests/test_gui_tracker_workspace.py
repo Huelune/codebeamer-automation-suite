@@ -325,12 +325,12 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.project_combo.currentData(), 246800)
         self.assertEqual(self.page.tracker_combo.count(), 2)
         self.assertEqual(self.page.tracker_combo.currentData(), 24680001)
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 2)
-        self.assertEqual(self.page.item_tree.columnCount(), 2)
-        self.assertEqual(self.page.item_tree.headerItem().text(0), "ID")
-        self.assertEqual(self.page.item_tree.headerItem().text(1), "요약")
-        self.assertEqual(self.page.item_tree.topLevelItem(0).text(0), "9001001")
-        self.assertIn("전체 표시", self.page.tree_status_label.text())
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 2)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.columnCount(), 2)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.headerItem().text(0), "ID")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.headerItem().text(1), "요약")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(0), "9001001")
+        self.assertIn("전체 표시", self.page.hierarchy_panel.tree_status_label.text())
         self.assertIn("Offline Requirements", self.page.search_panel.search_scope_label.text())
         self.assertTrue(self.page.search_panel.search_button.isEnabled())
         self.assertFalse(self.page.create_item_button.isEnabled())
@@ -338,36 +338,36 @@ class TrackerWorkspacePageTest(unittest.TestCase):
     def test_baseline_source_loads_full_read_only_hierarchy_and_detail(self) -> None:
         self.page.activate()
 
-        self.assertEqual(self.page.hierarchy_source_combo.count(), 2)
+        self.assertEqual(self.page.hierarchy_panel.hierarchy_source_combo.count(), 2)
         baseline_id = 24681001
-        self.page.hierarchy_source_combo.setCurrentIndex(
-            self.page.hierarchy_source_combo.findData(baseline_id)
+        self.page.hierarchy_panel.hierarchy_source_combo.setCurrentIndex(
+            self.page.hierarchy_panel.hierarchy_source_combo.findData(baseline_id)
         )
         self._app.processEvents()
 
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 0)
-        self.assertIn("Baseline 계층 조회", self.page.reload_roots_button.text())
-        self.assertFalse(self.page.hierarchy_export_button.isEnabled())
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 0)
+        self.assertIn("Baseline 계층 조회", self.page.hierarchy_panel.reload_roots_button.text())
+        self.assertFalse(self.page.hierarchy_panel.hierarchy_export_button.isEnabled())
         self.assertFalse(self.page.detail_panel.detail_tabs.isTabEnabled(self.page.detail_panel.editor_tab_index))
         self.page._create_item()
         self.assertIn("Baseline 조회 중", self.page.workspace_status_label.text())
 
         child_loads_before = self.service.child_load_count
-        self.page.reload_roots_button.click()
+        self.page.hierarchy_panel.reload_roots_button.click()
         self._app.processEvents()
 
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 1)
-        self.assertTrue(self.page.hierarchy_export_button.isEnabled())
-        root = self.page.item_tree.topLevelItem(0)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 1)
+        self.assertTrue(self.page.hierarchy_panel.hierarchy_export_button.isEnabled())
+        root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
         self.assertEqual(root.text(0), "9001001")
         self.assertEqual(root.text(1), "Vehicle requirements baseline")
         self.assertEqual(root.childCount(), 2)
         self.assertTrue(root.data(0, CHILDREN_LOADED_ROLE))
-        self.page._on_tree_item_expanded(root)
+        self.page.hierarchy_panel._on_tree_item_expanded(root)
         self.assertEqual(self.service.child_load_count, child_loads_before)
 
         child = root.child(0)
-        self.page.item_tree.setCurrentItem(child)
+        self.page.hierarchy_panel.item_tree.setCurrentItem(child)
         self._app.processEvents()
 
         self.assertEqual(self.page.detail_panel._detail_baseline_id, baseline_id)
@@ -375,18 +375,18 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertIn("읽기 전용", self.page.detail_panel.detail_warning.text())
         self.assertFalse(self.page.detail_panel.detail_tabs.isTabEnabled(self.page.detail_panel.editor_tab_index))
 
-        self.page.hierarchy_source_combo.setCurrentIndex(0)
+        self.page.hierarchy_panel.hierarchy_source_combo.setCurrentIndex(0)
         self._app.processEvents()
 
         self.assertIsNone(self.page.detail_panel._detail_baseline_id)
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 2)
-        self.assertTrue(self.page.hierarchy_export_button.isEnabled())
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 2)
+        self.assertTrue(self.page.hierarchy_panel.hierarchy_export_button.isEnabled())
 
-        self.page.hierarchy_source_combo.setCurrentIndex(
-            self.page.hierarchy_source_combo.findData(baseline_id)
+        self.page.hierarchy_panel.hierarchy_source_combo.setCurrentIndex(
+            self.page.hierarchy_panel.hierarchy_source_combo.findData(baseline_id)
         )
         self._app.processEvents()
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 1)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 1)
         self.assertEqual(self.service.baseline_hierarchy_count, 1)
 
     def test_stale_baseline_hierarchy_does_not_replace_current_tree(self) -> None:
@@ -398,22 +398,22 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         ) or tasks[-1]
 
         baseline_id = 24681001
-        self.page.hierarchy_source_combo.setCurrentIndex(
-            self.page.hierarchy_source_combo.findData(baseline_id)
+        self.page.hierarchy_panel.hierarchy_source_combo.setCurrentIndex(
+            self.page.hierarchy_panel.hierarchy_source_combo.findData(baseline_id)
         )
-        self.page.reload_roots_button.click()
+        self.page.hierarchy_panel.reload_roots_button.click()
         self.assertEqual(len(tasks), 1)
 
-        self.page.hierarchy_source_combo.setCurrentIndex(0)
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 2)
+        self.page.hierarchy_panel.hierarchy_source_combo.setCurrentIndex(0)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 2)
 
         tasks[0].finish()
         self._app.processEvents()
 
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 2)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 2)
         self.assertNotIn(
             (24680001, baseline_id),
-            self.page._baseline_hierarchy_cache,
+            self.page.hierarchy_panel._baseline_hierarchy_cache,
         )
 
     def test_hierarchy_export_selects_fields_and_uses_bulk_snapshot_service(self) -> None:
@@ -429,10 +429,10 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         with (
             patch(
-                "src.gui.tracker_workspace.TrackerHierarchyExportFieldDialog"
+                "src.gui.tracker_hierarchy_panel.TrackerHierarchyExportFieldDialog"
             ) as dialog_cls,
             patch(
-                "src.gui.tracker_workspace.QFileDialog.getSaveFileName",
+                "src.gui.tracker_hierarchy_panel.QFileDialog.getSaveFileName",
                 return_value=("hierarchy.xlsx", "Excel 통합 문서 (*.xlsx)"),
             ),
             patch.object(
@@ -441,7 +441,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 return_value=snapshot,
             ) as snapshot_mock,
             patch(
-                "src.gui.tracker_workspace.export_tracker_hierarchy_xlsx",
+                "src.gui.tracker_hierarchy_panel.export_tracker_hierarchy_xlsx",
                 return_value=summary,
             ) as export_mock,
         ):
@@ -451,7 +451,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 "custom:101",
             )
 
-            self.page.hierarchy_export_button.click()
+            self.page.hierarchy_panel.hierarchy_export_button.click()
 
         snapshot_mock.assert_called_once()
         export_mock.assert_called_once_with(
@@ -463,19 +463,19 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             baseline_id=None,
             baseline_name="",
         )
-        self.assertFalse(self.page._hierarchy_export_in_progress)
-        self.assertTrue(self.page.hierarchy_export_button.isEnabled())
-        self.assertIn("아이템 5개", self.page.tree_status_label.text())
+        self.assertFalse(self.page.hierarchy_panel._hierarchy_export_in_progress)
+        self.assertTrue(self.page.hierarchy_panel.hierarchy_export_button.isEnabled())
+        self.assertIn("아이템 5개", self.page.hierarchy_panel.tree_status_label.text())
 
     def test_baseline_hierarchy_export_reuses_loaded_snapshot(self) -> None:
         self.page.activate()
         baseline_id = 24681001
-        self.page.hierarchy_source_combo.setCurrentIndex(
-            self.page.hierarchy_source_combo.findData(baseline_id)
+        self.page.hierarchy_panel.hierarchy_source_combo.setCurrentIndex(
+            self.page.hierarchy_panel.hierarchy_source_combo.findData(baseline_id)
         )
-        self.page.reload_roots_button.click()
+        self.page.hierarchy_panel.reload_roots_button.click()
         self._app.processEvents()
-        loaded_snapshot = self.page._baseline_hierarchy_cache[
+        loaded_snapshot = self.page.hierarchy_panel._baseline_hierarchy_cache[
             (24680001, baseline_id)
         ]
         export_snapshot = object()
@@ -489,14 +489,14 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         with (
             patch(
-                "src.gui.tracker_workspace.TrackerHierarchyExportFieldDialog"
+                "src.gui.tracker_hierarchy_panel.TrackerHierarchyExportFieldDialog"
             ) as dialog_cls,
             patch(
-                "src.gui.tracker_workspace.QFileDialog.getSaveFileName",
+                "src.gui.tracker_hierarchy_panel.QFileDialog.getSaveFileName",
                 return_value=("baseline-hierarchy.xlsx", "Excel 통합 문서 (*.xlsx)"),
             ) as file_dialog,
             patch(
-                "src.gui.tracker_workspace.build_tracker_hierarchy_export_snapshot",
+                "src.gui.tracker_hierarchy_panel.build_tracker_hierarchy_export_snapshot",
                 return_value=export_snapshot,
             ) as build_mock,
             patch.object(
@@ -504,14 +504,14 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 "load_tracker_hierarchy_export_snapshot",
             ) as current_snapshot_mock,
             patch(
-                "src.gui.tracker_workspace.export_tracker_hierarchy_xlsx",
+                "src.gui.tracker_hierarchy_panel.export_tracker_hierarchy_xlsx",
                 return_value=summary,
             ) as export_mock,
         ):
             dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
             dialog_cls.return_value.selected_field_keys.return_value = ("status",)
 
-            self.page.hierarchy_export_button.click()
+            self.page.hierarchy_panel.hierarchy_export_button.click()
 
         current_snapshot_mock.assert_not_called()
         self.assertEqual(self.service.baseline_hierarchy_count, 1)
@@ -529,9 +529,9 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             project_name="Offline Vehicle Project",
             selected_field_keys=("status",),
             baseline_id=baseline_id,
-            baseline_name=self.page.hierarchy_source_combo.currentText(),
+            baseline_name=self.page.hierarchy_panel.hierarchy_source_combo.currentText(),
         )
-        self.assertIn("아이템 3개", self.page.tree_status_label.text())
+        self.assertIn("아이템 3개", self.page.hierarchy_panel.tree_status_label.text())
 
     def test_baseline_compare_uses_separate_workspace_and_does_not_eagerly_fetch_details(self) -> None:
         self.page.activate()
@@ -788,7 +788,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             ),
             patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
             patch(
-                "src.gui.tracker_workspace.QFileDialog.getSaveFileName",
+                "src.gui.tracker_baseline_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
             ),
             patch(
@@ -850,7 +850,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             ),
             patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
             patch(
-                "src.gui.tracker_workspace.QFileDialog.getSaveFileName",
+                "src.gui.tracker_baseline_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
             ),
             patch(
@@ -1011,7 +1011,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         with (
             patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
             patch(
-                "src.gui.tracker_workspace.QFileDialog.getSaveFileName",
+                "src.gui.tracker_baseline_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
             ),
             patch(
@@ -1071,8 +1071,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             {"id": 2, "name": "Empty", "hasChildren": False}
         )
 
-        unknown_item = self.page._tree_item(unknown)
-        empty_item = self.page._tree_item(known_empty)
+        unknown_item = self.page.hierarchy_panel.tree_item(unknown)
+        empty_item = self.page.hierarchy_panel.tree_item(known_empty)
 
         self.assertFalse(bool(unknown_item.data(0, CHILDREN_LOADED_ROLE)))
         self.assertEqual(unknown_item.childCount(), 1)
@@ -1081,27 +1081,27 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
     def test_expanding_node_loads_direct_children_once_and_reuses_cache(self) -> None:
         self.page.activate()
-        root = self.page.item_tree.topLevelItem(0)
+        root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
 
-        self.page._on_tree_item_expanded(root)
+        self.page.hierarchy_panel._on_tree_item_expanded(root)
 
         self.assertEqual(self.service.child_load_count, 1)
         self.assertEqual(root.childCount(), 2)
         self.assertEqual(root.child(0).text(0), "9001002")
         self.assertEqual(root.child(1).text(0), "9001003")
 
-        self.page._on_tree_item_expanded(root)
+        self.page.hierarchy_panel._on_tree_item_expanded(root)
 
         self.assertEqual(self.service.child_load_count, 1)
         steering = root.child(1)
-        self.page._on_tree_item_expanded(steering)
+        self.page.hierarchy_panel._on_tree_item_expanded(steering)
         self.assertEqual(self.service.child_load_count, 2)
         self.assertEqual(steering.child(0).text(0), "9001004")
 
     def test_tree_selection_loads_read_only_detail_and_masked_raw_json(self) -> None:
         self.page.activate()
-        root = self.page.item_tree.topLevelItem(0)
-        self.page.item_tree.setCurrentItem(root)
+        root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
+        self.page.hierarchy_panel.item_tree.setCurrentItem(root)
         self._app.processEvents()
 
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Vehicle requirements")
@@ -1113,8 +1113,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
     def test_detail_id_button_copies_numeric_id_only(self) -> None:
         self.page.activate()
-        root = self.page.item_tree.topLevelItem(0)
-        self.page.item_tree.setCurrentItem(root)
+        root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
+        self.page.hierarchy_panel.item_tree.setCurrentItem(root)
         self._app.processEvents()
         clipboard = self._app.clipboard()
         clipboard.clear()
@@ -1317,7 +1317,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         인자를 잡지 못한다. 여기서는 exec 만 막고 실제로 만든다.
         """
         self.page.activate()
-        self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
+        self.page.hierarchy_panel.item_tree.setCurrentItem(self.page.hierarchy_panel.item_tree.topLevelItem(0))
         self._app.processEvents()
         detail = self.page.detail_panel._current_detail
         self.assertIsNotNone(detail)
@@ -1350,7 +1350,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         이 창들은 지금까지 patch 로만 확인해서 생성자 인자가 검증된 적이 없다.
         """
         self.page.activate()
-        self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
+        self.page.hierarchy_panel.item_tree.setCurrentItem(self.page.hierarchy_panel.item_tree.topLevelItem(0))
         self._app.processEvents()
         field = TrackerFieldValue(
             field_id=101,
@@ -1378,7 +1378,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
     def test_popped_out_editor_window_is_built_with_the_real_class(self) -> None:
         """수정 창 분리도 진짜 클래스로 만들어 본다."""
         self.page.activate()
-        self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
+        self.page.hierarchy_panel.item_tree.setCurrentItem(self.page.hierarchy_panel.item_tree.topLevelItem(0))
         self._app.processEvents()
 
         self.page.detail_panel._show_editor_in_window()
@@ -1675,7 +1675,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
     def test_test_mode_editor_loads_schema_but_disables_write_actions(self) -> None:
         self.page.activate()
-        self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
+        self.page.hierarchy_panel.item_tree.setCurrentItem(self.page.hierarchy_panel.item_tree.topLevelItem(0))
         self.page.detail_panel.detail_tabs.setCurrentIndex(self.page.detail_panel.editor_tab_index)
         self._app.processEvents()
 
@@ -1781,12 +1781,12 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.tracker_combo.currentData(), 24680002)
         self.assertEqual(self.page.detail_panel.detail_id_badge.text(), "#9101002")
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Steering response test")
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 1)
-        root = self.page.item_tree.topLevelItem(0)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 1)
+        root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
         self.assertEqual(root.text(0), "9101001")
         self.assertEqual(root.childCount(), 1)
         self.assertEqual(root.child(0).text(0), "9101002")
-        self.assertIn("ID 직접 접근 경로", self.page.tree_status_label.text())
+        self.assertIn("ID 직접 접근 경로", self.page.hierarchy_panel.tree_status_label.text())
 
     def test_search_requires_filter_instead_of_loading_entire_tracker(self) -> None:
         self.page.activate()
@@ -1893,7 +1893,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
     def test_tree_items_store_normalized_models_not_server_dicts(self) -> None:
         self.page.activate()
-        value = self.page.item_tree.topLevelItem(0).data(0, ITEM_SUMMARY_ROLE)
+        value = self.page.hierarchy_panel.item_tree.topLevelItem(0).data(0, ITEM_SUMMARY_ROLE)
 
         self.assertEqual(value.item_id, 9001001)
         self.assertEqual(value.tracker_id, 24680001)
@@ -1930,7 +1930,7 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         )
         self.page.show()
         self.page.activate()
-        self.page.item_tree.setCurrentItem(self.page.item_tree.topLevelItem(0))
+        self.page.hierarchy_panel.item_tree.setCurrentItem(self.page.hierarchy_panel.item_tree.topLevelItem(0))
         self._app.processEvents()
         self.page.detail_panel.detail_tabs.setCurrentIndex(self.page.detail_panel.editor_tab_index)
         self._app.processEvents()
@@ -1950,7 +1950,7 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.page.detail_panel.editor_panel.save_button.click()
 
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Changed summary")
-        self.assertEqual(self.page.item_tree.topLevelItem(0).text(1), "Changed summary")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(1), "Changed summary")
         update_calls = [call for call in EditableWorkspaceClient.calls if call[0] == "update"]
         self.assertEqual(update_calls[0][2][0]["fieldId"], 3)
 
@@ -1958,13 +1958,13 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.page.detail_panel.editor_panel.status_combo.setCurrentIndex(target_index)
         self.page.detail_panel.editor_panel.transition_button.click()
 
-        self.assertEqual(self.page.item_tree.columnCount(), 2)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.columnCount(), 2)
         self.assertEqual(self.page.detail_panel.detail_fields_table.item(3, 1).text(), "Review")
 
         self.page.detail_panel.editor_panel.delete_button.click()
 
         self.assertTrue(EditableWorkspaceClient.deleted)
-        self.assertEqual(self.page.item_tree.topLevelItemCount(), 0)
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 0)
         self.assertEqual(self.page.detail_panel.detail_title.text(), "아이템 상세")
         self.assertIn(("delete", 1001), EditableWorkspaceClient.calls)
         self.assertEqual(
@@ -1985,7 +1985,7 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.page.detail_panel.editor_panel.save_button.click()
 
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Original summary")
-        self.assertEqual(self.page.item_tree.topLevelItem(0).text(1), "Original summary")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(1), "Original summary")
         self.assertIn("다른 사용자가", self.page.workspace_status_label.text())
         self.assertFalse(
             any(call[0] == "update" for call in EditableWorkspaceClient.calls)
@@ -2044,7 +2044,7 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.assertEqual(create_call[1], 20)
         self.assertEqual(create_call[2], {"name": "Created child"})
         self.assertEqual(create_call[3], 1001)
-        root = self.page.item_tree.topLevelItem(0)
+        root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
         self.assertEqual(root.childCount(), 1)
         self.assertEqual(root.child(0).text(0), "1002")
         self.assertEqual(self.page.detail_panel.detail_id_badge.text(), "#1002")
