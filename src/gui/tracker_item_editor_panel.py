@@ -136,6 +136,90 @@ def tracker_field_single_reference_id(value: Any) -> int | None:
     return values[0] if values else None
 
 
+class TrackerReferenceWithTypeInput(QWidget):
+    """참조 대상 유형을 함께 고르는 입력 widget.
+
+    멤버 필드처럼 항목마다 사용자·역할·그룹이 섞이는 필드는 schema 만으로
+    유형을 정할 수 없다. 짐작해서 보내면 서버가 다른 대상을 참조할 수 있어
+    유형을 고르게 한다.
+    """
+
+    def __init__(
+        self,
+        field_value: EditableTrackerField,
+        parent: QWidget,
+        *,
+        initial_value: Any = _FIELD_CURRENT_VALUE,
+    ) -> None:
+        super().__init__(parent)
+        self.field_value = field_value
+        current = (
+            field_value.current_value
+            if initial_value is _FIELD_CURRENT_VALUE
+            else initial_value
+        )
+        reference_ids = tracker_field_reference_ids(current)
+
+        self.setObjectName("tracker_reference_type_input")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self.type_combo = QComboBox(self)
+        self.type_combo.setToolTip("이 값이 가리키는 대상의 종류입니다.")
+        for choice in field_value.reference_type_choices:
+            self.type_combo.addItem(_reference_type_label(choice), choice)
+        self.type_combo.setCurrentIndex(_current_type_index(field_value, current))
+        layout.addWidget(self.type_combo)
+
+        input_text = "\n".join(str(value) for value in reference_ids)
+        self.id_input: QPlainTextEdit | QLineEdit
+        if field_value.multiple_values:
+            multiline = QPlainTextEdit(self)
+            multiline.setPlaceholderText("한 줄에 참조 ID 하나")
+            multiline.setPlainText(input_text)
+            self.id_input = multiline
+        else:
+            line_edit = QLineEdit(self)
+            line_edit.setPlaceholderText("참조 ID")
+            line_edit.setText(input_text)
+            line_edit.setValidator(QIntValidator(1, 2_147_483_647, line_edit))
+            self.id_input = line_edit
+        layout.addWidget(self.id_input, 1)
+
+    def value(self) -> dict[str, Any]:
+        ids = (
+            self.id_input.toPlainText()
+            if isinstance(self.id_input, QPlainTextEdit)
+            else self.id_input.text()
+        )
+        return {"type": str(self.type_combo.currentData() or ""), "ids": ids}
+
+
+def _reference_type_label(reference_type: str) -> str:
+    """`UserReference` 같은 내부 이름을 고르기 쉬운 말로 바꾼다."""
+    return {
+        "UserReference": "사용자",
+        "RoleReference": "역할",
+        "GroupReference": "그룹",
+        "TrackerItemReference": "트래커 아이템",
+        "ProjectReference": "프로젝트",
+        "TrackerReference": "트래커",
+    }.get(reference_type, reference_type)
+
+
+def _current_type_index(field_value: EditableTrackerField, current: Any) -> int:
+    """지금 값이 쓰는 유형을 고른 상태로 시작한다."""
+    values = current if isinstance(current, (list, tuple)) else [current]
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        current_type = str(value.get("type") or "").strip()
+        if current_type in field_value.reference_type_choices:
+            return field_value.reference_type_choices.index(current_type)
+    return 0
+
+
 def create_tracker_field_input_widget(
     field_value: EditableTrackerField,
     parent: QWidget,
@@ -209,6 +293,12 @@ def create_tracker_field_input_widget(
         choice_combo.setCurrentIndex(index if index >= 0 else 0)
         return choice_combo
     if kind == FieldEditorKind.REFERENCE:
+        if field_value.reference_type_choices:
+            return TrackerReferenceWithTypeInput(
+                field_value,
+                parent,
+                initial_value=initial_value,
+            )
         reference_ids = tracker_field_reference_ids(current)
         input_text = "\n".join(str(value) for value in reference_ids)
         if field_value.multiple_values:
@@ -228,7 +318,7 @@ def tracker_field_input_value(
     field_value: EditableTrackerField,
     widget: QWidget,
 ) -> Any:
-    if isinstance(widget, TrackerTableFieldInput):
+    if isinstance(widget, (TrackerTableFieldInput, TrackerReferenceWithTypeInput)):
         return widget.value()
     if isinstance(widget, QPlainTextEdit):
         return widget.toPlainText()

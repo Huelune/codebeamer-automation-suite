@@ -95,6 +95,9 @@ class EditableTrackerField:
     value_model: str
     tracker_item_field: str = ""
     reference_type: str = ""
+    # schema 가 참조 대상 유형을 알려주지 않을 때 사용자가 고를 후보.
+    # 멤버 필드처럼 항목마다 유형이 다른 필드는 값 하나로 정할 수 없다.
+    reference_type_choices: tuple[str, ...] = field(default_factory=tuple)
     multiple_values: bool = False
     mandatory: bool = False
     editor_kind: FieldEditorKind = FieldEditorKind.UNSUPPORTED
@@ -145,6 +148,19 @@ class TrackerItemFieldChange:
 
 
 _REFERENCE_MODEL_PATTERN = re.compile(r"<\s*([^>]+?)\s*>")
+
+# 멤버 필드는 항목마다 사용자·역할·그룹이 섞일 수 있다.
+MEMBER_REFERENCE_TYPES = ("UserReference", "RoleReference", "GroupReference")
+
+# schema 가 참조 대상 유형을 알려주지 않을 때 고를 수 있는 후보.
+GENERIC_REFERENCE_TYPES = (
+    "TrackerItemReference",
+    "UserReference",
+    "RoleReference",
+    "GroupReference",
+    "ProjectReference",
+    "TrackerReference",
+)
 
 
 def _display_value(value: Any) -> str:
@@ -233,34 +249,33 @@ def _editor_kind(
     tracker_item_field: str,
     reference_type: str,
     options: tuple[EditableFieldOption, ...],
-) -> tuple[FieldEditorKind, str]:
+) -> tuple[FieldEditorKind, str, tuple[str, ...]]:
     lowered_type = type_name.casefold()
     lowered_model = value_model.casefold()
     if tracker_item_field == "status" or name.strip().casefold() == "status":
         if not options:
-            return FieldEditorKind.UNSUPPORTED, "상태 option을 schema에서 확인할 수 없습니다."
-        return FieldEditorKind.STATUS, ""
+            return FieldEditorKind.UNSUPPORTED, "상태 option을 schema에서 확인할 수 없습니다.", ()
+        return FieldEditorKind.STATUS, "", ()
     if "table" in lowered_type or "tablefieldvalue" in lowered_model:
-        return FieldEditorKind.TABLE, ""
+        return FieldEditorKind.TABLE, "", ()
     if "bool" in lowered_type or "boolfieldvalue" in lowered_model:
-        return FieldEditorKind.BOOLEAN, ""
+        return FieldEditorKind.BOOLEAN, "", ()
     if "integer" in lowered_type or "integerfieldvalue" in lowered_model:
-        return FieldEditorKind.INTEGER, ""
+        return FieldEditorKind.INTEGER, "", ()
     if any(token in lowered_type for token in ("decimal", "float", "number")) or any(
         token in lowered_model for token in ("decimalfieldvalue", "floatfieldvalue")
     ):
-        return FieldEditorKind.DECIMAL, ""
+        return FieldEditorKind.DECIMAL, "", ()
     if "datetime" in lowered_type or "datetimefieldvalue" in lowered_model:
-        return FieldEditorKind.DATETIME, ""
+        return FieldEditorKind.DATETIME, "", ()
     if "date" in lowered_type or "datefieldvalue" in lowered_model:
-        return FieldEditorKind.DATE, ""
+        return FieldEditorKind.DATE, "", ()
     if options and ("choice" in lowered_type or "choicefieldvalue" in lowered_model):
-        return FieldEditorKind.CHOICE, ""
+        return FieldEditorKind.CHOICE, "", ()
     if "memberfield" in lowered_type and not reference_type:
-        return (
-            FieldEditorKind.UNSUPPORTED,
-            "사용자·역할·그룹이 섞인 멤버 필드는 유형별 조회가 필요합니다.",
-        )
+        # 멤버 필드는 항목마다 사용자·역할·그룹이 섞일 수 있어 필드 단위로
+        # 유형을 정할 수 없다. 거부하는 대신 입력할 때 고르게 한다.
+        return FieldEditorKind.REFERENCE, "", MEMBER_REFERENCE_TYPES
     looks_like_reference = (
         "reference" in lowered_type
         or "trackeritemchoice" in lowered_type
@@ -270,18 +285,20 @@ def _editor_kind(
         )
     )
     if looks_like_reference and not reference_type:
-        return FieldEditorKind.UNSUPPORTED, "참조 대상 유형을 schema에서 확인할 수 없습니다."
+        # schema 가 대상 유형을 알려주지 않는다. 짐작하면 잘못된 참조를 보내게 되므로
+        # 후보를 주고 사용자가 고르게 한다.
+        return FieldEditorKind.REFERENCE, "", GENERIC_REFERENCE_TYPES
     if reference_type:
-        return FieldEditorKind.REFERENCE, ""
+        return FieldEditorKind.REFERENCE, "", ()
     if any(token in lowered_type for token in ("text", "wiki")) or any(
         token in lowered_model for token in ("textfieldvalue", "wikitextfieldvalue")
     ):
         if tracker_item_field == "description" or name.strip().casefold() == "description":
-            return FieldEditorKind.MULTILINE_TEXT, ""
-        return FieldEditorKind.TEXT, ""
+            return FieldEditorKind.MULTILINE_TEXT, "", ()
+        return FieldEditorKind.TEXT, "", ()
     if options:
-        return FieldEditorKind.CHOICE, ""
-    return FieldEditorKind.UNSUPPORTED, "현재 편집기가 이 필드 형식을 지원하지 않습니다."
+        return FieldEditorKind.CHOICE, "", ()
+    return FieldEditorKind.UNSUPPORTED, "현재 편집기가 이 필드 형식을 지원하지 않습니다.", ()
 
 
 def _field_options(raw_field: dict[str, Any]) -> tuple[EditableFieldOption, ...]:
@@ -328,7 +345,7 @@ def _table_column_fields(raw_field: dict[str, Any]) -> tuple[EditableTrackerFiel
                 if candidate.casefold() != "choiceoptionreference":
                     reference_type = candidate
         options = _field_options(raw_column)
-        editor_kind, unsupported_reason = _editor_kind(
+        editor_kind, unsupported_reason, _choices = _editor_kind(
             name=name,
             type_name=type_name,
             value_model=value_model,
@@ -397,7 +414,7 @@ def _build_tracker_schema(
                 if candidate.casefold() != "choiceoptionreference":
                     reference_type = candidate
         options = _field_options(raw_field)
-        editor_kind, unsupported_reason = _editor_kind(
+        editor_kind, unsupported_reason, reference_type_choices = _editor_kind(
             name=name,
             type_name=type_name,
             value_model=value_model,
@@ -444,6 +461,7 @@ def _build_tracker_schema(
             value_model=value_model,
             tracker_item_field=tracker_item_field,
             reference_type=reference_type,
+            reference_type_choices=reference_type_choices,
             multiple_values=bool(raw_field.get("multipleValues", False)),
             mandatory=bool(raw_field.get("mandatory", False)),
             editor_kind=editor_kind,
@@ -556,7 +574,36 @@ def _choice_references(
     return references
 
 
+def _chosen_reference_type(field_value: EditableTrackerField, raw_value: Any) -> str:
+    """이 참조 값에 붙일 유형 이름을 정한다.
+
+    schema 가 대상 유형을 알려주면 그것을 쓴다. 멤버 필드처럼 알려주지 않는
+    필드는 입력할 때 고른 유형이 값과 함께 온다. 둘 다 없으면 짐작하지 않고
+    막는다. 잘못된 유형으로 보내면 서버가 조용히 다른 대상을 참조할 수 있다.
+    """
+    if field_value.reference_type:
+        return field_value.reference_type
+    chosen = ""
+    if isinstance(raw_value, dict):
+        chosen = str(raw_value.get("type") or "").strip()
+    if chosen:
+        if field_value.reference_type_choices and chosen not in field_value.reference_type_choices:
+            raise ValueError(
+                f"'{field_value.label}'에 쓸 수 없는 참조 유형입니다: {chosen}"
+            )
+        return chosen
+    if field_value.reference_type_choices:
+        raise ValueError(
+            f"'{field_value.label}'의 참조 유형을 먼저 고르세요: "
+            + ", ".join(field_value.reference_type_choices)
+        )
+    return "Reference"
+
+
 def _reference_ids(raw_value: Any) -> list[int]:
+    # 유형을 함께 고르는 입력은 {"type": ..., "ids": ...} 로 온다.
+    if isinstance(raw_value, dict) and "ids" in raw_value:
+        raw_value = raw_value.get("ids")
     if isinstance(raw_value, str):
         values: Iterable[Any] = re.split(r"[;\n\r]+", raw_value)
     elif isinstance(raw_value, (list, tuple, set)):
@@ -669,7 +716,7 @@ def build_field_value(change: TrackerItemFieldChange) -> dict[str, Any]:
         reference_ids = _reference_ids(raw_value)
         if not field_value.multiple_values and len(reference_ids) > 1:
             raise ValueError(f"'{field_value.label}'은(는) 하나의 참조만 입력할 수 있습니다.")
-        reference_type = field_value.reference_type or "Reference"
+        reference_type = _chosen_reference_type(field_value, raw_value)
         payload["type"] = _value_model_name(field_value, "ChoiceFieldValue")
         payload["values"] = [
             {"id": reference_id, "type": reference_type}

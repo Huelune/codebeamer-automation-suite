@@ -82,6 +82,13 @@ SCHEMA = {
             "multipleValues": True,
         },
         {
+            "id": 13,
+            "name": "Approvers",
+            "type": "MemberField",
+            "valueModel": "ChoiceFieldValue",
+            "multipleValues": True,
+        },
+        {
             "id": 10,
             "name": "Test Steps",
             "type": "TableField",
@@ -284,6 +291,75 @@ class TrackerItemEditorModelTest(unittest.TestCase):
     def setUp(self) -> None:
         self.detail = _detail()
         self.schema = build_editable_tracker_schema(SCHEMA, self.detail)
+
+    def test_member_field_is_editable_with_a_type_choice(self) -> None:
+        """멤버 필드는 유형을 고르게 해서 편집할 수 있게 한다.
+
+        전에는 schema 가 referenceType 을 주지 않으면 편집 불가로 막았다.
+        그 필드가 필수면 아이템 생성 자체가 불가능했다.
+        """
+        member_field = next(
+            field for field in self.schema.fields if field.name == "Approvers"
+        )
+
+        self.assertTrue(member_field.editable)
+        self.assertEqual(member_field.editor_kind, FieldEditorKind.REFERENCE)
+        self.assertEqual(
+            member_field.reference_type_choices,
+            ("UserReference", "RoleReference", "GroupReference"),
+        )
+
+    def test_member_field_payload_uses_the_chosen_type(self) -> None:
+        member_field = next(
+            field for field in self.schema.fields if field.name == "Approvers"
+        )
+
+        payload = build_field_value(
+            TrackerItemFieldChange(
+                member_field, {"type": "RoleReference", "ids": "71\n72"}
+            )
+        )
+
+        self.assertEqual(
+            payload["values"],
+            [
+                {"id": 71, "type": "RoleReference"},
+                {"id": 72, "type": "RoleReference"},
+            ],
+        )
+
+    def test_member_field_without_a_chosen_type_is_refused(self) -> None:
+        """유형을 짐작하지 않는다. 틀리면 다른 대상을 참조하게 된다."""
+        member_field = next(
+            field for field in self.schema.fields if field.name == "Approvers"
+        )
+
+        with self.assertRaisesRegex(ValueError, "참조 유형을 먼저 고르세요"):
+            build_field_value(TrackerItemFieldChange(member_field, {"type": "", "ids": "71"}))
+
+    def test_member_field_rejects_a_type_outside_the_choices(self) -> None:
+        member_field = next(
+            field for field in self.schema.fields if field.name == "Approvers"
+        )
+
+        with self.assertRaisesRegex(ValueError, "쓸 수 없는 참조 유형"):
+            build_field_value(
+                TrackerItemFieldChange(
+                    member_field, {"type": "TrackerItemReference", "ids": "71"}
+                )
+            )
+
+    def test_schema_reference_type_still_wins(self) -> None:
+        """schema 가 유형을 알려주는 필드는 고를 필요가 없다."""
+        reviewers = next(
+            field for field in self.schema.fields if field.name == "Reviewers"
+        )
+
+        self.assertEqual(reviewers.reference_type_choices, ())
+        payload = build_field_value(TrackerItemFieldChange(reviewers, "71"))
+
+        self.assertEqual(payload["values"], [{"id": 71, "type": "UserReference"}])
+
 
     def field(self, name: str):
         return next(field for field in self.schema.fields if field.name == name)
