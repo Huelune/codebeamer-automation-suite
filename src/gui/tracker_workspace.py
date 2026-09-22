@@ -88,6 +88,7 @@ REQUEST_BUSY_MESSAGES = {
     "baseline_hierarchy": "선택한 Baseline의 전체 계층을 불러오는 중입니다.",
     "direct": "아이템 ID의 위치와 계층을 확인하는 중입니다.",
     "editor_schema": "수정 가능한 필드를 확인하는 중입니다.",
+    "required_fields": "새 아이템 필수 필드를 확인하는 중입니다.",
     "item_write": "트래커 아이템 변경 사항을 반영하는 중입니다.",
 }
 
@@ -248,6 +249,13 @@ class TrackerWorkspacePage(QWidget):
         self.refresh_context_button.clicked.connect(lambda: self.activate(force=True))
         context_layout.addWidget(self.refresh_context_button)
         root_layout.addWidget(context_card)
+
+        # 생성 대화상자를 열기 전에 무엇을 채워야 하는지 미리 보여 준다.
+        self.required_fields_label = QLabel("")
+        self.required_fields_label.setObjectName("tracker_required_fields")
+        self.required_fields_label.setWordWrap(True)
+        self.required_fields_label.hide()
+        root_layout.addWidget(self.required_fields_label)
 
         status_row = QHBoxLayout()
         self.workspace_status_label = QLabel("")
@@ -867,6 +875,7 @@ class TrackerWorkspacePage(QWidget):
                 self._reset_workspace("조회 가능한 트래커가 없습니다.")
                 return
             self._current_tracker = self._trackers[index]
+            self._show_required_fields(self._current_tracker)
             self.hierarchy_panel.clear_baseline_cache()
             self.hierarchy_panel.reset_source()
             self._reset_baseline_state("Baseline 목록을 불러오는 중입니다.")
@@ -884,6 +893,7 @@ class TrackerWorkspacePage(QWidget):
             self._trackers = ()
             self.tracker_combo.clear()
             self._current_tracker = None
+            self._clear_required_fields()
             self._set_available(True)
             self._show_error(exc, prefix="트래커 조회 실패")
             self._reset_workspace("트래커를 불러오지 못했습니다.")
@@ -899,6 +909,55 @@ class TrackerWorkspacePage(QWidget):
             failed,
         )
 
+    def _show_required_fields(self, tracker: TrackerSummary) -> None:
+        """새 아이템에 반드시 넣어야 하는 필드를 미리 보여 준다.
+
+        생성 대화상자를 열어야만 알 수 있으면 무엇을 준비해야 할지 모른 채
+        시작하게 된다. schema 는 트래커별로 캐시되므로 조회는 처음 한 번뿐이다.
+        """
+        tracker_id = tracker.tracker_id
+        settings = self.settings_provider()
+        self.required_fields_label.setText("필수 필드를 확인하는 중입니다.")
+        self.required_fields_label.show()
+
+        def loaded(schema: EditableTrackerSchema) -> None:
+            still_selected = self._current_tracker
+            if still_selected is None or still_selected.tracker_id != tracker_id:
+                return
+            names = [
+                field_value.label
+                for field_value in schema.fields
+                if field_value.mandatory and not field_value.is_status
+            ]
+            if not names:
+                self.required_fields_label.setText(
+                    "이 트래커는 생성 시 반드시 채워야 하는 필드가 없습니다."
+                )
+                return
+            self.required_fields_label.setText(
+                f"새 아이템 필수 필드 {len(names)}개: " + ", ".join(names)
+            )
+
+        def failed(_exc: Exception) -> None:
+            # 조회 실패가 화면을 막지는 않는다. 생성 대화상자에서 다시 확인한다.
+            still_selected = self._current_tracker
+            if still_selected is None or still_selected.tracker_id != tracker_id:
+                return
+            self.required_fields_label.setText(
+                "필수 필드를 확인하지 못했습니다. 새 아이템 창에서 확인하세요."
+            )
+
+        self._submit(
+            "required_fields",
+            lambda: self.editor_service.load_create_schema(settings, tracker_id),
+            loaded,
+            failed,
+        )
+
+    def _clear_required_fields(self) -> None:
+        self.required_fields_label.clear()
+        self.required_fields_label.hide()
+
     def _on_tracker_activated(self, index: int) -> None:
         if not (0 <= int(index) < len(self._trackers)):
             return
@@ -906,6 +965,7 @@ class TrackerWorkspacePage(QWidget):
         if self._current_tracker == tracker:
             return
         self._current_tracker = tracker
+        self._show_required_fields(tracker)
         self.hierarchy_panel.clear_baseline_cache()
         self.hierarchy_panel.reset_source()
         self._reset_baseline_state("Baseline 목록을 불러오는 중입니다.")

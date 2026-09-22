@@ -318,6 +318,22 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page.close()
         self._app.processEvents()
 
+    def test_selecting_a_tracker_shows_its_required_create_fields(self) -> None:
+        """생성 대화상자를 열기 전에 무엇을 채워야 하는지 보여 준다."""
+        self.page.activate()
+
+        label = self.page.required_fields_label
+        self.assertTrue(label.isVisible())
+        self.assertIn("Summary", label.text())
+        self.assertIn("필수 필드", label.text())
+
+    def test_required_fields_are_cleared_when_no_tracker_is_selected(self) -> None:
+        self.page.activate()
+        self.page._clear_required_fields()
+
+        self.assertFalse(self.page.required_fields_label.isVisible())
+        self.assertEqual(self.page.required_fields_label.text(), "")
+
     def test_activation_loads_project_tracker_and_top_level_items(self) -> None:
         self.page.activate()
 
@@ -1882,12 +1898,13 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
             starts = [value for kind, value in events if kind == "start"]
             finishes = [value for kind, value in events if kind == "finish"]
-            self.assertEqual(len(starts), 4)
-            self.assertEqual(finishes, [3, 4, 2, 1])
+            self.assertEqual(len(starts), 5)
+            self.assertEqual(finishes, [3, 4, 5, 2, 1])
             self.assertIn("프로젝트", starts[0])
             self.assertIn("트래커", starts[1])
-            self.assertIn("최상위 아이템", starts[2])
-            self.assertIn("baseline 목록", starts[3])
+            self.assertIn("필수 필드", starts[2])
+            self.assertIn("최상위 아이템", starts[3])
+            self.assertIn("baseline 목록", starts[4])
         finally:
             page.close()
 
