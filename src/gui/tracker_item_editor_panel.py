@@ -331,6 +331,7 @@ class TrackerItemEditorPanel(QWidget):
             3, QHeaderView.ResizeMode.Stretch
         )
         self.field_table.itemChanged.connect(self._on_item_changed)
+        self.field_table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self.field_table, 1)
 
         action_row = QHBoxLayout()
@@ -509,6 +510,26 @@ class TrackerItemEditorPanel(QWidget):
     @classmethod
     def _single_reference_id(cls, value: Any) -> int | None:
         return tracker_field_single_reference_id(value)
+
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        """행을 클릭하면 그 행의 `수정` 을 켜고 입력으로 포커스를 옮긴다.
+
+        켜야 입력이 열린다는 것을 모르면 값 칸이 고장 난 것처럼 보인다.
+        비활성 widget 은 마우스 이벤트를 삼키지 않아 이 신호가 그대로 온다.
+        `수정` 열은 Qt 가 직접 토글하므로 건드리지 않는다.
+        """
+        if column == 0:
+            return
+        check_item = self.field_table.item(row, 0)
+        if check_item is None:
+            return
+        if not (check_item.flags() & Qt.ItemFlag.ItemIsUserCheckable):
+            return
+        if check_item.checkState() != Qt.CheckState.Checked:
+            check_item.setCheckState(Qt.CheckState.Checked)
+        widget = self.field_table.cellWidget(row, 3)
+        if widget is not None and widget.isEnabled():
+            widget.setFocus()
 
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         if item.column() != 0:

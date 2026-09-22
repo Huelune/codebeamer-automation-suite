@@ -142,6 +142,7 @@ class TrackerItemCreateDialog(QDialog):
             2, QHeaderView.ResizeMode.Stretch
         )
         self.field_table.itemChanged.connect(self._on_item_changed)
+        self.field_table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self.field_table, 1)
 
         button_row = QHBoxLayout()
@@ -234,6 +235,27 @@ class TrackerItemCreateDialog(QDialog):
                 "필수 필드의 입력 형식을 지원하지 않아 생성할 수 없습니다: "
                 + ", ".join(unsupported_required)
             )
+
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        """행을 클릭하면 그 행의 `포함` 을 켜고 입력으로 포커스를 옮긴다.
+
+        켜야 입력이 열린다는 것을 모르면 값 칸이 고장 난 것처럼 보인다.
+        필수 필드는 항상 포함이라 체크를 바꿀 수 없고 포커스만 옮긴다.
+        `포함` 열은 Qt 가 직접 토글하므로 건드리지 않는다.
+        """
+        if column == 0:
+            return
+        include_item = self.field_table.item(row, 0)
+        if include_item is None:
+            return
+        if (
+            include_item.flags() & Qt.ItemFlag.ItemIsUserCheckable
+            and include_item.checkState() != Qt.CheckState.Checked
+        ):
+            include_item.setCheckState(Qt.CheckState.Checked)
+        widget = self.field_table.cellWidget(row, 2)
+        if widget is not None and widget.isEnabled():
+            widget.setFocus()
 
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         if item.column() != 0:
