@@ -364,6 +364,33 @@ class TrackerItemCreateDialogTest(unittest.TestCase):
         self.dialog.close()
         self._app.processEvents()
 
+    def test_clicking_a_row_turns_on_include_and_opens_the_input(self) -> None:
+        """값 칸을 눌렀을 때 그 행이 열리는지 확인한다.
+
+        '포함'을 켜야 입력이 열린다는 것을 모르면 값 칸이 고장 난 것처럼 보인다.
+        """
+        from PySide6.QtCore import Qt
+
+        description_row = self.dialog.rows[4]
+        self.assertFalse(description_row.widget.isEnabled())
+
+        self.dialog.field_table.cellClicked.emit(description_row.row, 2)
+        self._app.processEvents()
+
+        self.assertEqual(description_row.include_item.checkState(), Qt.CheckState.Checked)
+        self.assertTrue(description_row.widget.isEnabled())
+
+    def test_clicking_the_include_column_does_not_double_toggle(self) -> None:
+        """포함 열은 Qt 가 직접 토글하므로 우리가 다시 켜면 안 된다."""
+        from PySide6.QtCore import Qt
+
+        description_row = self.dialog.rows[4]
+
+        self.dialog.field_table.cellClicked.emit(description_row.row, 0)
+        self._app.processEvents()
+
+        self.assertEqual(description_row.include_item.checkState(), Qt.CheckState.Unchecked)
+
     def test_required_fields_are_fixed_and_optional_fields_are_explicit(self) -> None:
         from PySide6.QtCore import Qt
 

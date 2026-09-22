@@ -543,6 +543,40 @@ class TrackerItemEditorPanelTest(unittest.TestCase):
         self.panel.close()
         self._app.processEvents()
 
+    def test_clicking_a_row_turns_on_edit_and_opens_the_input(self) -> None:
+        """값 칸을 눌렀을 때 그 행이 열리는지 확인한다.
+
+        '수정'을 켜야 입력이 열린다는 것을 모르면 값 칸이 고장 난 것처럼 보인다.
+        """
+        from PySide6.QtCore import Qt
+
+        self.panel.set_context(self.detail, self.schema, write_enabled=True)
+        summary_field = next(field for field in self.schema.fields if field.name == "Summary")
+        summary_row = self.panel.rows[summary_field.field_id]
+        self.assertFalse(summary_row.widget.isEnabled())
+
+        self.panel.field_table.cellClicked.emit(summary_row.row, 3)
+        self._app.processEvents()
+
+        check_item = self.panel.field_table.item(summary_row.row, 0)
+        self.assertEqual(check_item.checkState(), Qt.CheckState.Checked)
+        self.assertTrue(summary_row.widget.isEnabled())
+
+    def test_clicking_a_row_does_nothing_when_writes_are_disabled(self) -> None:
+        """테스트 모드에서는 눌러도 열리지 않아야 한다."""
+        from PySide6.QtCore import Qt
+
+        self.panel.set_context(self.detail, self.schema, write_enabled=False)
+        summary_field = next(field for field in self.schema.fields if field.name == "Summary")
+        summary_row = self.panel.rows[summary_field.field_id]
+
+        self.panel.field_table.cellClicked.emit(summary_row.row, 3)
+        self._app.processEvents()
+
+        check_item = self.panel.field_table.item(summary_row.row, 0)
+        self.assertEqual(check_item.checkState(), Qt.CheckState.Unchecked)
+        self.assertFalse(summary_row.widget.isEnabled())
+
     def test_panel_uses_explicit_checkboxes_and_type_aware_widgets(self) -> None:
         from PySide6.QtCore import Qt
 
