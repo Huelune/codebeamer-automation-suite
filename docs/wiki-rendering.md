@@ -5,7 +5,8 @@
 트래커 작업공간은 Codebeamer가 Wiki 형식으로 선언한 설명과 필드만 안전한 rich text로 표시합니다.
 연결 프로필에서 `서버 Wiki HTML 렌더링 사용`을 명시적으로 켠 경우에만 Codebeamer의
 `/v3/projects/{projectId}/wiki2html`을 사용합니다. 기본값은 꺼짐이며, 꺼진 상태·테스트 모드·서버
-렌더링 실패 시 제한된 로컬 렌더러를 사용합니다. 값에 `%%(...)` 문자열이 포함됐다는 이유만으로 형식을
+렌더링 실패 시 로컬 렌더러를 사용합니다. `wiki2html`을 제공하지 않는 서버에서는 로컬 렌더러가
+유일한 경로이므로, 편집기에 붙여넣은 표처럼 실제 설명에 자주 나오는 문법을 로컬에서도 해석합니다. 값에 `%%(...)` 문자열이 포함됐다는 이유만으로 형식을
 추측하지 않습니다.
 
 ## 형식 판정
@@ -38,12 +39,24 @@
 - `%%(color:red;font-style:italic)내용%%` 형태의 스타일 블록
 - `%%red 내용%%` 형태의 기본 이름 색상
 - `__굵게__`, `''기울임''`, `{{고정폭}}`
-- 줄바꿈
+- 줄바꿈과 `\\` 강제 줄바꿈(바로 뒤 개행과 합쳐 한 번만 바꿉니다). 한글 글꼴에서는 `₩₩`로 보입니다.
+- `~` 이스케이프: `~-`, `~_`처럼 기호 앞의 `~`는 지우고 기호를 글자 그대로 표시합니다.
 - 대체 종료 기호 `%!`
 - `||` 머리글과 `|` 셀로 구성된 단순 Wiki table
+- `[{Table ...}]` plugin 표
+  - 한 줄에 셀이 여럿이면 줄마다 한 행, 첫 줄에 셀이 하나뿐이면 빈 줄까지가 한 행입니다.
+    Codebeamer 편집기에 붙여넣은 표는 한 줄에 셀 하나, 빈 줄로 행을 나누는 뒤쪽 형식으로 저장됩니다.
+  - `|`로 시작하지 않는 줄은 바로 앞 셀 내용이 이어지는 것으로 보고, 셀 내용은 다시 Wiki로 렌더링합니다.
+  - 셀 앞 `(css)`는 `rgb(...)`처럼 괄호가 겹쳐도 짝을 맞춰 읽습니다. 괄호 안에 `:`가 없으면
+    `(참고)`처럼 내용으로 둡니다.
+  - `<`는 왼쪽 셀, `^`는 위 셀과 합쳐 colspan·rowspan으로 바꿉니다. 셀 내용이 `#` 하나면
+    `rowNumber` 기준 행 번호로 바꿉니다.
+  - `style`, `dataStyle`, `headerStyle`, `evenRowStyle`, `oddRowStyle` 매개변수를 적용합니다.
+  - 셀마다 다른 테두리와 px 폭은 따르지 않습니다. 좁은 상세 영역에서도 읽히도록 균일한 격자와
+    내용 기준 폭을 쓰고, 배경색과 정렬만 남깁니다.
+  - `}]` 짝이 맞지 않는 블록은 원문 그대로 둡니다.
 
-온라인 서버 렌더링에서는 Codebeamer가 지원하는 고급 Table plugin 결과도 표시할 수 있습니다. 로컬
-fallback은 `Table`, sortable, zebra plugin을 재구현하지 않으며 원문에서 확인해야 합니다.
+sortable, zebra 등 다른 plugin은 로컬에서 재구현하지 않으며 원문에서 확인해야 합니다.
 
 ## 이미지와 첨부 리소스
 
@@ -73,14 +86,15 @@ fallback은 `Table`, sortable, zebra plugin을 재구현하지 않으며 원문�
 첨부 목록과 인라인 이미지 자동 다운로드를 차단합니다.
 
 허용하는 CSS 속성은 `color`, `background-color`, `font-size`, `font-style`, `font-weight`,
-`text-decoration`으로 제한합니다. 현재 테마와 충돌하는 검정·흰색 전경색은 제거하고 화면 기본 전경색을
+`text-decoration`, `text-align`, `vertical-align`으로 제한합니다. `background` 축약형은 색 값일 때만
+`background-color`로 바꿉니다. 같은 속성이 여러 번 나오면 뒤의 값을 씁니다. 현재 테마와 충돌하는 검정·흰색 전경색은 제거하고 화면 기본 전경색을
 사용합니다.
 
 ## 보안과 제한
 
 - 원문 HTML은 먼저 escape하며 script나 임의 HTML을 실행하지 않습니다.
 - `url(...)`, `expression`, `javascript` 같은 위험한 CSS 값과 허용 목록 밖의 속성은 버립니다.
-- Codebeamer plugin과 복합 Wiki table은 로컬에서 실행하지 않습니다.
+- `[{Table}]` 외의 Codebeamer plugin은 로컬에서 실행하지 않습니다.
 - 지원하지 않는 문법은 원문 보기 또는 마스킹된 원본 JSON에서 확인합니다.
 - 서버 HTML은 허용된 기본 텍스트·목록·table·링크·이미지 tag만 남기며 script, iframe, form,
   object, embed, event handler와 위험한 URL scheme을 제거합니다.
