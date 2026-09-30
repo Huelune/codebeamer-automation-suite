@@ -29,6 +29,7 @@ from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
+from src.gui.tracker_content_models import AttachmentSummary
 from src.gui.tracker_content_models import WikiRenderResult
 from src.gui.tracker_content_models import WikiResourceReference
 from src.gui.tracker_detail_panel import ATTACHMENT_VISIBLE_ROWS
@@ -2049,6 +2050,22 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self._app.processEvents()
         self.assertFalse(self.page.search_panel.condition_dialog.isVisible())
         self.assertEqual(self.page.search_panel.search_button.text(), "현재 트래커 검색")
+
+    def test_description_links_open_items_and_save_attachments(self) -> None:
+        """설명 속 아이템 링크는 ID 바로 열기처럼 열고, 첨부 링크는 저장 흐름으로 넘긴다."""
+        self.page.activate()
+        panel = self.page.detail_panel
+        panel.load_detail(9001001)
+        panel._attachments = (AttachmentSummary(31, "계획서.docx", size=2048),)
+
+        with patch.object(panel, "save_attachment") as save_attachment:
+            panel.detail_description.anchorClicked.emit(QUrl("cb-link:attachment/31/계획서.docx"))
+        save_attachment.assert_called_once_with(AttachmentSummary(31, "계획서.docx", size=2048))
+
+        panel.detail_description.anchorClicked.emit(QUrl("cb-link:item/9101002"))
+
+        self.assertEqual(panel.detail_id_badge.text(), "#9101002")
+        self.assertEqual(self.page.tracker_combo.currentData(), 24680002)
 
     def test_direct_id_open_resolves_other_tracker_and_builds_ancestor_path(self) -> None:
         self.page.activate()

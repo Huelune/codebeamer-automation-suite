@@ -45,6 +45,7 @@ from .tracker_query_models import TrackerItemSummary
 from .tracker_workspace_support import ITEM_SUMMARY_ROLE
 from .tracker_workspace_support import tree_items
 from .wiki_content_view import WikiContentView
+from .wiki_renderer import attachment_for_link
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
 
@@ -118,7 +119,8 @@ class TrackerItemDetailDialog(QDialog):
     navigate_forward_requested = Signal()
     tree_item_selected = Signal(int)
     comments_requested = Signal(bool)
-    comment_attachment_save_requested = Signal(object)
+    # 댓글 첨부 저장 버튼과 설명·댓글 속 첨부 링크가 함께 쓴다.
+    attachment_save_requested = Signal(object)
 
     def __init__(
         self,
@@ -292,6 +294,14 @@ class TrackerItemDetailDialog(QDialog):
         summary = selected[0].data(0, ITEM_SUMMARY_ROLE) if selected else None
         if isinstance(summary, TrackerItemSummary):
             self.tree_item_selected.emit(summary.item_id)
+
+    def _open_codebeamer_link(self, kind: str, target_id: int, name: str) -> None:
+        """아이템 링크는 이 창에서 열고, 첨부 링크는 저장한다."""
+        if kind == "attachment":
+            self.attachment_save_requested.emit(attachment_for_link(self.attachments, target_id, name))
+        # Baseline 상세 창에서 링크로 옮기면 현재 아이템이 열려 두 시점이 섞인다.
+        elif kind == "item" and self.baseline_id is None:
+            self.related_item_requested.emit(target_id)
 
     def set_navigation_state(self, *, can_go_back: bool, can_go_forward: bool) -> None:
         self.back_button.setEnabled(bool(can_go_back))
@@ -503,6 +513,7 @@ class TrackerItemDetailDialog(QDialog):
             meta.setObjectName("tracker_comment_meta")
             frame_layout.addWidget(meta)
             view = WikiContentView(frame)
+            view.codebeamer_link_activated.connect(self._open_codebeamer_link)
             source_html = (
                 codebeamer_wiki_to_html(comment.body)
                 if is_explicit_wiki_type(comment.format_name)
@@ -521,7 +532,7 @@ class TrackerItemDetailDialog(QDialog):
                     row.addWidget(QLabel(f"첨부: {attachment.name}", frame), 1)
                     save = QPushButton("저장", frame)
                     save.clicked.connect(
-                        lambda _checked=False, value=attachment: self.comment_attachment_save_requested.emit(value)
+                        lambda _checked=False, value=attachment: self.attachment_save_requested.emit(value)
                     )
                     row.addWidget(save)
                     frame_layout.addLayout(row)
@@ -553,6 +564,7 @@ class TrackerItemDetailDialog(QDialog):
         tab = QWidget(self)
         layout = QVBoxLayout(tab)
         description = WikiContentView(tab)
+        description.codebeamer_link_activated.connect(self._open_codebeamer_link)
         self.description_view = description
         description.setObjectName("tracker_detail_dialog_description")
         description.setHtml(description_html)

@@ -395,6 +395,7 @@ class TrackerWorkspacePage(QWidget):
             reload_current_detail=self._reload_current_detail,
             open_detail_dialog=self.detail_dialog.open_dialog,
             set_editor_expanded=self._set_editor_expanded,
+            open_item=self.open_item_by_id,
         )
         return TrackerDetailPanel(
             parent,
@@ -1529,6 +1530,11 @@ class TrackerWorkspacePage(QWidget):
 
 
 
+
+    def open_item_by_id(self, item_id: int) -> None:
+        """다른 화면의 링크가 가리키는 아이템을 ID 바로 열기처럼 연다."""
+        self.direct_id_input.setText(str(int(item_id)))
+        self._open_direct_item()
 
     def _open_direct_item(self) -> None:
         raw_id = self.direct_id_input.text().strip()

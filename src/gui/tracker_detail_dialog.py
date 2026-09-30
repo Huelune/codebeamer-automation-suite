@@ -64,7 +64,7 @@ class DetailDialogController:
                 force=force,
             )
         )
-        dialog.comment_attachment_save_requested.connect(self.page.detail_panel.save_attachment)
+        dialog.attachment_save_requested.connect(self.page.detail_panel.save_attachment)
         dialog.set_navigation_state(can_go_back=False, can_go_forward=False)
         dialog.context_tab_requested.connect(
             lambda kind, force=False: self.load_context(

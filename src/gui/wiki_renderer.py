@@ -8,13 +8,16 @@ from hashlib import sha256
 from html import escape
 from html.parser import HTMLParser
 from typing import Any
+from urllib.parse import parse_qs
 from urllib.parse import quote
+from urllib.parse import unquote
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 
 from .tracker_content_models import AttachmentResource
 from .tracker_content_models import AttachmentSummary
 from .tracker_content_models import WikiImageReference
+from .tracker_content_models import WikiLink
 from .tracker_content_models import WikiResourceReference
 
 
@@ -58,6 +61,10 @@ _LINE_BREAK_RE = re.compile(r"\\\\[ \t]*\n?")
 # 너비 같은 다른 매개변수가 붙은 모양은 확인되지 않아 원문 그대로 둔다.
 _WIKI_IMAGE_RE = re.compile(r"(?<!~)\[!([^!\[\]|#\n]+?)(?:#([0-9A-Fa-f]{8,64}))?!\]")
 _IMAGE_SLOT_RE = re.compile("\x00(\\d+)\x00")
+# `[표시|대상]`, `[대상]`. `[!` 이미지, `[{` plugin, `[[` 이스케이프는 링크가 아니다.
+_WIKI_LINK_RE = re.compile(r"(?<![~\[])\[(?![!{\[])([^\[\]\n]+?)\]")
+_ITEM_LINK_RE = re.compile(r"(?:CB|ISSUE):(\d+)", re.IGNORECASE)
+WIKI_LINK_SCHEME = "cb-link"
 _TABLE_PLUGIN_OPEN_RE = re.compile(r"\[\{Table(?=[\s}])")
 _PLUGIN_PARAM_RE = re.compile(r"""(\w+)\s*=\s*(?:'([^']*)'|"([^"]*)"|([^\s'"]+))""")
 _BLANK_LINE_RE = re.compile(r"\n[ \t]*\n")
@@ -229,16 +236,76 @@ def _render_image(match: re.Match[str]) -> str:
     )
 
 
+def _link_href(target: str) -> str | None:
+    """링크 대상을 이 앱이 여는 주소로 바꾼다. 열 수 없는 대상이면 None."""
+    if match := _ITEM_LINK_RE.fullmatch(target):
+        return f"{WIKI_LINK_SCHEME}:item/{int(match.group(1))}"
+    if target[:4].upper() == "CB:/":
+        # `CB:/displayDocument/<파일>?task_id=<아이템>&artifact_id=<첨부>`는 아이템 첨부다.
+        parsed = urlparse(target[3:])
+        artifact_id = parse_qs(parsed.query).get("artifact_id", [""])[0]
+        if not artifact_id.isdigit():
+            return None
+        name = unquote(parsed.path.rsplit("/", 1)[-1])
+        return f"{WIKI_LINK_SCHEME}:attachment/{int(artifact_id)}/{quote(name, safe='')}"
+    parsed = urlparse(target)
+    if parsed.scheme.casefold() in {"http", "https"} and parsed.netloc:
+        return target
+    return None
+
+
+def _render_link(match: re.Match[str]) -> str:
+    body = match.group(1)
+    label, separator, target = body.partition("|")
+    if not separator:
+        label = target = body
+    href = _link_href(target.strip())
+    # Wiki 페이지 이름처럼 이 앱이 열 수 없는 대상은 짐작하지 않고 원문으로 둔다.
+    if href is None:
+        return escape(match.group(0), quote=False)
+    return f'<a href="{escape(href, quote=True)}">{escape(label.strip(), quote=False)}</a>'
+
+
+def wiki_link_from_url(url: str) -> WikiLink | None:
+    """렌더러가 만든 앱 안 링크 주소를 되읽는다. 다른 주소면 None."""
+    prefix = f"{WIKI_LINK_SCHEME}:"
+    if not url.startswith(prefix):
+        return None
+    kind, _, rest = url[len(prefix) :].partition("/")
+    target_id, _, name = rest.partition("/")
+    if kind not in {"item", "attachment"} or not target_id.isdigit():
+        return None
+    return WikiLink(kind=kind, target_id=int(target_id), name=unquote(name))
+
+
+def attachment_for_link(
+    attachments: Iterable[AttachmentSummary],
+    attachment_id: int,
+    name: str,
+) -> AttachmentSummary:
+    """링크가 가리키는 첨부. 현재 아이템 첨부 목록에 있으면 그 정보를 쓴다.
+
+    다른 아이템의 첨부를 가리키는 링크도 첨부 ID로 받을 수 있으므로 목록에 없으면 새로 만든다.
+    """
+    for attachment in attachments:
+        if attachment.attachment_id == attachment_id:
+            return attachment
+    return AttachmentSummary(attachment_id=attachment_id, name=name or f"첨부 {attachment_id}")
+
+
 def _render_basic_markup(text: str) -> str:
     source = text.replace("\r\n", "\n").replace("\r", "\n")
-    # 이미지 문법은 escape와 강조 치환 전에 자리만 잡아 두었다가 마지막에 되돌린다.
+    # 이미지·링크 문법은 escape와 강조 치환 전에 자리만 잡아 두었다가 마지막에 되돌린다.
+    # 파일 이름 속 `__`나 `&`가 강조·문자 참조로 바뀌지 않는다.
     images: list[str] = []
 
-    def keep_image(match: re.Match[str]) -> str:
-        images.append(_render_image(match))
+    def keep(html: str) -> str:
+        images.append(html)
         return f"\x00{len(images) - 1}\x00"
 
-    rendered = escape(_WIKI_IMAGE_RE.sub(keep_image, source), quote=False)
+    source = _WIKI_IMAGE_RE.sub(lambda match: keep(_render_image(match)), source)
+    source = _WIKI_LINK_RE.sub(lambda match: keep(_render_link(match)), source)
+    rendered = escape(source, quote=False)
     # 문자 참조로 바꿔 두면 아래 강조 치환에 걸리지 않는다.
     rendered = _ESCAPED_MARKUP_RE.sub(lambda match: f"&#{ord(match.group(1))};", rendered)
     rendered = re.sub(r"__([^_\n]+?)__", r"<strong>\1</strong>", rendered)
@@ -711,6 +778,7 @@ def sanitize_server_wiki_html(value: Any, *, base_url: str) -> SanitizedWikiHtml
 
 
 __all__ = [
+    "attachment_for_link",
     "codebeamer_wiki_to_html",
     "is_explicit_wiki_type",
     "payload_uses_wiki",
@@ -719,4 +787,5 @@ __all__ = [
     "sanitize_wiki_style",
     "wiki_image_references",
     "wiki_image_resource_key",
+    "wiki_link_from_url",
 ]

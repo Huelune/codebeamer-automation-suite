@@ -64,6 +64,7 @@ from .tracker_table_field_dialog import is_table_field
 from .tracker_table_field_dialog import table_field_summary
 from .wiki_content_view import WikiContentDialog
 from .wiki_content_view import WikiContentView
+from .wiki_renderer import attachment_for_link
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
 from .wiki_renderer import payload_uses_wiki
@@ -94,6 +95,8 @@ class DetailPanelHost:
     reload_current_detail: Callable[[], None]
     open_detail_dialog: Callable[[], None]
     set_editor_expanded: Callable[[bool], None]
+    # 설명 속 아이템 링크를 누르면 작업공간에서 그 아이템을 연다.
+    open_item: Callable[[int], None]
 
 
 class TrackerDetailPanel(QFrame):
@@ -338,6 +341,7 @@ class TrackerDetailPanel(QFrame):
         description_header.addWidget(self.description_source_toggle)
         top_layout.addLayout(description_header)
         self.detail_description = WikiContentView(tab)
+        self.detail_description.codebeamer_link_activated.connect(self.open_codebeamer_link)
         self.detail_description.setObjectName("tracker_detail_description")
         self.detail_description.setReadOnly(True)
         self.detail_description.setOpenExternalLinks(False)
@@ -664,6 +668,7 @@ class TrackerDetailPanel(QFrame):
             if current is None or current.item_id != item_id or current.version != version:
                 return
             dialog = WikiContentDialog(field.name, field.display_value, result, self)
+            dialog.view.codebeamer_link_activated.connect(self.open_codebeamer_link)
             self._load_inline_resources(result, dialog.view, detail, baseline_id)
             dialog.exec()
 
@@ -908,6 +913,13 @@ class TrackerDetailPanel(QFrame):
         for resource in self._attachment_preview_resources.values():
             dialog.view.add_attachment_resource(resource)
         dialog.exec()
+
+    def open_codebeamer_link(self, kind: str, target_id: int, name: str) -> None:
+        """설명 속 링크를 앱 안에서 연다. 아이템은 작업공간에서 열고, 첨부는 저장한다."""
+        if kind == "item":
+            self._host.open_item(target_id)
+        elif kind == "attachment":
+            self.save_attachment(attachment_for_link(self._attachments, target_id, name))
 
     def save_attachment(self, attachment: AttachmentSummary) -> None:
         output_path, _selected_filter = QFileDialog.getSaveFileName(
