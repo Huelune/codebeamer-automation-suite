@@ -27,6 +27,8 @@ try:
     from PySide6.QtWidgets import QTableWidget
     from PySide6.QtWidgets import QTableWidgetItem
     from PySide6.QtWidgets import QTabWidget
+    from PySide6.QtWidgets import QTreeWidget
+    from PySide6.QtWidgets import QTreeWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
 except ImportError as exc:  # pragma: no cover
@@ -39,6 +41,9 @@ from .tracker_content_models import AttachmentSummary
 from .tracker_item_context_models import ItemHistorySnapshot
 from .tracker_item_context_models import ItemRelationsSnapshot
 from .tracker_query_models import TrackerItemDetail
+from .tracker_query_models import TrackerItemSummary
+from .tracker_workspace_support import ITEM_SUMMARY_ROLE
+from .tracker_workspace_support import tree_items
 from .wiki_content_view import WikiContentView
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
@@ -111,6 +116,7 @@ class TrackerItemDetailDialog(QDialog):
     related_item_requested = Signal(int)
     navigate_back_requested = Signal()
     navigate_forward_requested = Signal()
+    tree_item_selected = Signal(int)
     comments_requested = Signal(bool)
     comment_attachment_save_requested = Signal(object)
 
@@ -178,7 +184,8 @@ class TrackerItemDetailDialog(QDialog):
         layout.addWidget(self.context_label)
 
         self.tabs = QTabWidget(self)
-        self.tabs.addTab(self._build_overview_tab(description_html), "개요")
+        self.tabs.addTab(self._build_description_tab(description_html), "설명")
+        self.tabs.addTab(self._build_fields_tab(), "필드")
         self.relations_tab = self._build_relations_tab()
         self.tabs.addTab(self.relations_tab, "관계·참조")
         self.history_tab = self._build_history_tab()
@@ -190,7 +197,17 @@ class TrackerItemDetailDialog(QDialog):
         self.tabs.addTab(self._build_raw_tab(), "원본 JSON")
         self.tabs.currentChanged.connect(self._context_tab_changed)
         self.tabs.currentChanged.connect(self._comments_tab_changed)
-        layout.addWidget(self.tabs, 1)
+        # 트래커 계층은 채워 줄 때만 보인다. Baseline 상세 창에는 두지 않는다.
+        self.tree_pane = self._build_tree_pane()
+        self.tree_pane.hide()
+        body = QSplitter(Qt.Orientation.Horizontal, self)
+        body.setChildrenCollapsible(False)
+        body.addWidget(self.tree_pane)
+        body.addWidget(self.tabs)
+        body.setStretchFactor(0, 0)
+        body.setStretchFactor(1, 1)
+        body.setSizes([300, 900])
+        layout.addWidget(body, 1)
 
         if baseline_id is not None:
             context_message = (
@@ -212,6 +229,69 @@ class TrackerItemDetailDialog(QDialog):
             close_button.setText("닫기")
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _build_tree_pane(self) -> QWidget:
+        pane = QWidget(self)
+        layout = QVBoxLayout(pane)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.tree_label = QLabel("트래커 계층", pane)
+        self.tree_label.setObjectName("tracker_detail_section_title")
+        layout.addWidget(self.tree_label)
+        self.item_tree = QTreeWidget(pane)
+        # 작업공간 계층 트리와 같은 모양을 쓴다.
+        self.item_tree.setObjectName("tracker_item_tree")
+        self.item_tree.setHeaderLabels(["ID", "요약"])
+        self.item_tree.setMinimumWidth(220)
+        self.item_tree.itemSelectionChanged.connect(self._on_tree_selection_changed)
+        layout.addWidget(self.item_tree, 1)
+        return pane
+
+    def set_tree_items(
+        self,
+        items: list[QTreeWidgetItem],
+        *,
+        expanded_ids: set[int],
+        title: str,
+    ) -> None:
+        """작업공간이 펼쳐 둔 계층을 옆에 둔다. 항목을 누르면 이 창에서 그 아이템을 연다."""
+        self.tree_label.setText(title)
+        # 펼침은 이미 받은 하위만 보이게 할 뿐이라 하위 조회 신호를 내지 않는다.
+        self.item_tree.blockSignals(True)
+        self.item_tree.clear()
+        self.item_tree.addTopLevelItems(items)
+        for item in tree_items(self.item_tree):
+            summary = item.data(0, ITEM_SUMMARY_ROLE)
+            if isinstance(summary, TrackerItemSummary) and summary.item_id in expanded_ids:
+                item.setExpanded(True)
+        self.item_tree.blockSignals(False)
+        self.item_tree.resizeColumnToContents(0)
+        self.tree_pane.setVisible(bool(items))
+        self.select_tree_item(self.detail.item_id)
+
+    def select_tree_item(self, item_id: int) -> None:
+        """지금 보는 아이템을 트리에서 고른다. 트리에 없으면 선택을 비운다."""
+        found = next(
+            (
+                item
+                for item in tree_items(self.item_tree)
+                if isinstance(item.data(0, ITEM_SUMMARY_ROLE), TrackerItemSummary)
+                and item.data(0, ITEM_SUMMARY_ROLE).item_id == int(item_id)
+            ),
+            None,
+        )
+        self.item_tree.blockSignals(True)
+        if found is None:
+            self.item_tree.clearSelection()
+        else:
+            self.item_tree.setCurrentItem(found)
+            self.item_tree.scrollToItem(found)
+        self.item_tree.blockSignals(False)
+
+    def _on_tree_selection_changed(self) -> None:
+        selected = self.item_tree.selectedItems()
+        summary = selected[0].data(0, ITEM_SUMMARY_ROLE) if selected else None
+        if isinstance(summary, TrackerItemSummary):
+            self.tree_item_selected.emit(summary.item_id)
 
     def set_navigation_state(self, *, can_go_back: bool, can_go_forward: bool) -> None:
         self.back_button.setEnabled(bool(can_go_back))
@@ -469,20 +549,22 @@ class TrackerItemDetailDialog(QDialog):
         self._comment_resources.setdefault(str(comment_id), {})[resource.resource_key] = resource
         return True
 
-    def _build_overview_tab(self, description_html: str) -> QWidget:
+    def _build_description_tab(self, description_html: str) -> QWidget:
         tab = QWidget(self)
         layout = QVBoxLayout(tab)
-        splitter = QSplitter(Qt.Orientation.Vertical, tab)
-
-        description = WikiContentView(splitter)
+        description = WikiContentView(tab)
         self.description_view = description
         description.setObjectName("tracker_detail_dialog_description")
         description.setHtml(description_html)
         for resource in self.image_resources.values():
             description.add_attachment_resource(resource)
-        splitter.addWidget(description)
+        layout.addWidget(description, 1)
+        return tab
 
-        fields = QTableWidget(0, 3, splitter)
+    def _build_fields_tab(self) -> QWidget:
+        tab = QWidget(self)
+        layout = QVBoxLayout(tab)
+        fields = QTableWidget(0, 3, tab)
         self.fields_table = fields
         fields.setObjectName("tracker_detail_dialog_fields")
         fields.setHorizontalHeaderLabels(["필드", "값", "유형"])
@@ -493,28 +575,25 @@ class TrackerItemDetailDialog(QDialog):
         fields.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         fields.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         fields.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self._fill_fields_table(self.detail)
+        layout.addWidget(fields, 1)
+        return tab
+
+    def _fill_fields_table(self, detail: TrackerItemDetail) -> None:
         rows = [
-            ("ID", str(self.detail.item_id), "builtin"),
-            ("프로젝트", self.detail.summary.project_name or "-", "reference"),
-            ("트래커", self.detail.summary.tracker_name or "-", "reference"),
-            ("상태", self.detail.summary.status or "-", "reference"),
-            ("담당자", ", ".join(self.detail.summary.assignees) or "-", "reference"),
-            ("버전", str(self.detail.version) if self.detail.version is not None else "-", "builtin"),
-            *(
-                (field.name, field.display_value, field.type_name)
-                for field in self.detail.custom_fields
-            ),
+            ("ID", str(detail.item_id), "builtin"),
+            ("프로젝트", detail.summary.project_name or "-", "reference"),
+            ("트래커", detail.summary.tracker_name or "-", "reference"),
+            ("상태", detail.summary.status or "-", "reference"),
+            ("담당자", ", ".join(detail.summary.assignees) or "-", "reference"),
+            ("버전", str(detail.version) if detail.version is not None else "-", "builtin"),
+            *((field.name, field.display_value, field.type_name) for field in detail.custom_fields),
         ]
-        fields.setRowCount(len(rows))
+        self.fields_table.setRowCount(len(rows))
         for row, values in enumerate(rows):
             for column, value in enumerate(values):
-                fields.setItem(row, column, QTableWidgetItem(str(value)))
-        fields.resizeRowsToContents()
-        splitter.addWidget(fields)
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 3)
-        layout.addWidget(splitter, 1)
-        return tab
+                self.fields_table.setItem(row, column, QTableWidgetItem(str(value)))
+        self.fields_table.resizeRowsToContents()
 
     def replace_detail(
         self,
@@ -545,19 +624,7 @@ class TrackerItemDetailDialog(QDialog):
         self.description_view.setHtml(description_html)
         for resource in self.image_resources.values():
             self.description_view.add_attachment_resource(resource)
-        rows = [
-            ("ID", str(detail.item_id), "builtin"),
-            ("프로젝트", detail.summary.project_name or "-", "reference"),
-            ("트래커", detail.summary.tracker_name or "-", "reference"),
-            ("상태", detail.summary.status or "-", "reference"),
-            ("담당자", ", ".join(detail.summary.assignees) or "-", "reference"),
-            ("버전", str(detail.version) if detail.version is not None else "-", "builtin"),
-            *((field.name, field.display_value, field.type_name) for field in detail.custom_fields),
-        ]
-        self.fields_table.setRowCount(len(rows))
-        for row, values in enumerate(rows):
-            for column, value in enumerate(values):
-                self.fields_table.setItem(row, column, QTableWidgetItem(str(value)))
+        self._fill_fields_table(detail)
         self.raw_view.setPlainText(json.dumps(detail.raw_payload, ensure_ascii=False, indent=2, default=str))
         self._reset_images()
         self._context_states = {"relations": "idle", "history": "idle"}
@@ -572,6 +639,7 @@ class TrackerItemDetailDialog(QDialog):
         self._comments_state = "idle"
         self.comments_status.setText("탭을 열면 댓글을 조회합니다.")
         self.tabs.setCurrentIndex(0)
+        self.select_tree_item(detail.item_id)
 
     def set_description_html(self, html: str) -> None:
         self.description_view.setHtml(str(html or ""))

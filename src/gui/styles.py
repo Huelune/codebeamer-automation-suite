@@ -339,8 +339,7 @@ QSplitter#tracker_workspace_splitter::handle {
     width: 8px;
 }
 
-QSplitter#activity_history_splitter::handle,
-QSplitter#tracker_overview_splitter::handle {
+QSplitter#activity_history_splitter::handle {
     background: transparent;
     height: 8px;
 }

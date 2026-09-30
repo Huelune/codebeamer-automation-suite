@@ -30,6 +30,7 @@ try:
     from PySide6.QtWidgets import QTreeWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
+    from shiboken6 import isValid
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
@@ -140,7 +141,7 @@ class TrackerHierarchyPanel(QWidget):
         self.item_tree.setUniformRowHeights(True)
         self.item_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.item_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.item_tree.itemExpanded.connect(self._on_tree_item_expanded)
+        self.item_tree.itemExpanded.connect(self.load_children)
         self.item_tree.itemSelectionChanged.connect(self._on_tree_selection_changed)
         layout.addWidget(self.item_tree, 1)
 
@@ -679,7 +680,11 @@ class TrackerHierarchyPanel(QWidget):
         placeholder.setDisabled(True)
         return placeholder
 
-    def _on_tree_item_expanded(self, item: QTreeWidgetItem) -> None:
+    def load_children(self, item: QTreeWidgetItem) -> None:
+        """펼친 항목의 직접 하위 아이템을 불러온다.
+
+        상세 창의 계층 트리도 같은 캐시와 조회를 쓰도록 어느 트리의 항목이든 받는다.
+        """
         if self.selected_baseline_id() is not None:
             return
         summary = item.data(0, ITEM_SUMMARY_ROLE)
@@ -706,12 +711,17 @@ class TrackerHierarchyPanel(QWidget):
             if still_selected is None or still_selected.tracker_id != tracker_id:
                 return
             self._child_cache[summary.item_id] = children
+            # 상세 창을 닫아 항목이 사라졌어도 캐시는 남겨 다음 펼침에 쓴다.
+            if not isValid(item):
+                return
             self.replace_tree_children(item, children)
             self._host.set_workspace_status(
                 f"#{summary.item_id}의 직접 하위 아이템 {len(children)}개를 모두 불러왔습니다."
             )
 
         def failed(exc: Exception) -> None:
+            if not isValid(item):
+                return
             item.takeChildren()
             item.addChild(self.placeholder_item("하위 조회 실패 · 접었다가 다시 펼쳐 재시도"))
             item.setData(0, CHILDREN_LOADED_ROLE, False)

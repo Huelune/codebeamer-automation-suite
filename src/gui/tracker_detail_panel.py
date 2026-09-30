@@ -32,7 +32,6 @@ try:
     from PySide6.QtWidgets import QLabel
     from PySide6.QtWidgets import QPlainTextEdit
     from PySide6.QtWidgets import QPushButton
-    from PySide6.QtWidgets import QSplitter
     from PySide6.QtWidgets import QTableWidget
     from PySide6.QtWidgets import QTableWidgetItem
     from PySide6.QtWidgets import QTabWidget
@@ -179,7 +178,8 @@ class TrackerDetailPanel(QFrame):
 
         self.detail_tabs = QTabWidget(self)
         self.detail_tabs.setObjectName("tracker_detail_tabs")
-        self.detail_tabs.addTab(self._build_overview_tab(), "개요")
+        self.detail_tabs.addTab(self._build_description_tab(), "설명")
+        self.detail_tabs.addTab(self._build_fields_tab(), "필드")
         self.detail_tabs.addTab(self._build_raw_tab(), "원본 JSON")
 
         self.editor_host = QWidget(self.detail_tabs)
@@ -283,7 +283,7 @@ class TrackerDetailPanel(QFrame):
         return self._selected_item_id
 
     def show_detail(self, detail: TrackerItemDetail) -> None:
-        """다른 화면에서 연 아이템을 개요 탭에 바로 띄운다."""
+        """다른 화면에서 연 아이템을 설명 탭에 바로 띄운다."""
         self.detail_tabs.setCurrentIndex(0)
         self._selected_item_id = detail.item_id
         self.render_detail(detail)
@@ -322,23 +322,14 @@ class TrackerDetailPanel(QFrame):
             return codebeamer_wiki_to_html(self._description_text)
         return "<p>" + escape(self._description_text).replace("\n", "<br>") + "</p>"
 
-    def _build_overview_tab(self) -> QWidget:
+    def _build_description_tab(self) -> QWidget:
+        """설명과 첨부를 한 탭에 둔다. 필드 표는 따로 두어 설명이 탭 높이를 다 쓴다."""
         tab = QWidget(self)
-        layout = QVBoxLayout(tab)
-        layout.setContentsMargins(6, 8, 6, 6)
-        # 설명과 필드가 둘 다 데이터라 창이 커지면 함께 늘고, 경계는 사용자가 옮긴다.
-        # 첨부는 설명 쪽에 붙여 행 수만큼만 차지한다.
-        self.overview_splitter = QSplitter(Qt.Orientation.Vertical, tab)
-        self.overview_splitter.setObjectName("tracker_overview_splitter")
-        self.overview_splitter.setChildrenCollapsible(False)
-        description_pane = QWidget(self.overview_splitter)
-        top_layout = QVBoxLayout(description_pane)
-        top_layout.setContentsMargins(0, 0, 0, 4)
+        top_layout = QVBoxLayout(tab)
+        top_layout.setContentsMargins(6, 8, 6, 6)
         top_layout.setSpacing(6)
         description_header = QHBoxLayout()
-        description_label = QLabel("설명")
-        description_label.setObjectName("tracker_detail_section_title")
-        description_header.addWidget(description_label, 1)
+        description_header.addStretch(1)
         self.description_source_toggle = QPushButton("Wiki 원문", tab)
         self.description_source_toggle.setObjectName("mode_toggle")
         self.description_source_toggle.setCheckable(True)
@@ -392,14 +383,12 @@ class TrackerDetailPanel(QFrame):
         self.attachment_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.attachment_table.hide()
         top_layout.addWidget(self.attachment_table)
+        return tab
 
-        fields_pane = QWidget(self.overview_splitter)
-        bottom_layout = QVBoxLayout(fields_pane)
-        bottom_layout.setContentsMargins(0, 4, 0, 0)
-        bottom_layout.setSpacing(6)
-        fields_label = QLabel("필드")
-        fields_label.setObjectName("tracker_detail_section_title")
-        bottom_layout.addWidget(fields_label)
+    def _build_fields_tab(self) -> QWidget:
+        tab = QWidget(self)
+        bottom_layout = QVBoxLayout(tab)
+        bottom_layout.setContentsMargins(6, 8, 6, 6)
         self.detail_fields_table = QTableWidget(0, 3, tab)
         self.detail_fields_table.setObjectName("tracker_detail_fields")
         self.detail_fields_table.setHorizontalHeaderLabels(["필드", "값", "유형"])
@@ -419,12 +408,6 @@ class TrackerDetailPanel(QFrame):
             2, QHeaderView.ResizeMode.ResizeToContents
         )
         bottom_layout.addWidget(self.detail_fields_table, 1)
-
-        self.overview_splitter.addWidget(description_pane)
-        self.overview_splitter.addWidget(fields_pane)
-        self.overview_splitter.setStretchFactor(0, 3)
-        self.overview_splitter.setStretchFactor(1, 2)
-        layout.addWidget(self.overview_splitter, 1)
         return tab
 
     def _fit_attachment_table(self) -> None:
