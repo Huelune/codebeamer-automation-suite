@@ -13,6 +13,8 @@ from collections.abc import Callable
 from html import escape
 from typing import TYPE_CHECKING
 
+from shiboken6 import isValid
+
 from .tracker_comment_models import ItemComment
 from .tracker_comment_models import ItemCommentsSnapshot
 from .tracker_content_models import ATTACHMENT_IMAGE_MIME_TYPES
@@ -85,6 +87,9 @@ class DetailDialogController:
             self.attach_item_tree(dialog, session)
         dialog.finished.connect(lambda _result: session.invalidate())
         dialog.exec()
+        # 부모가 작업공간이라 지우지 않으면 닫은 창이 이미지·트리와 함께 계속 남는다.
+        # 늦게 도착하는 조회 결과는 각 콜백의 확인 함수가 isValid 로 걸러 낸다.
+        dialog.deleteLater()
 
     def attach_item_tree(
         self,
@@ -137,7 +142,8 @@ class DetailDialogController:
 
         def current() -> bool:
             return (
-                dialog.isVisible()
+                isValid(dialog)
+                and dialog.isVisible()
                 and session.generation == generation
                 and session.current.item_id == detail.item_id
             )
@@ -231,7 +237,8 @@ class DetailDialogController:
 
         def is_pending() -> bool:
             return (
-                dialog.isVisible()
+                isValid(dialog)
+                and dialog.isVisible()
                 and session.generation == source_generation
                 and session.current.item_id == source_item_id
                 and dialog.detail.item_id == source_item_id
@@ -280,7 +287,12 @@ class DetailDialogController:
         settings = self.page.settings_provider()
 
         def current() -> bool:
-            return dialog.isVisible() and session.generation == generation and dialog.detail.item_id == detail.item_id
+            return (
+                isValid(dialog)
+                and dialog.isVisible()
+                and session.generation == generation
+                and dialog.detail.item_id == detail.item_id
+            )
 
         if is_explicit_wiki_type(detail.description_format):
             self.page._submit(
@@ -354,7 +366,8 @@ class DetailDialogController:
 
         def current() -> bool:
             return (
-                dialog.isVisible()
+                isValid(dialog)
+                and dialog.isVisible()
                 and session.generation == generation
                 and session.current.item_id == item_id
                 and dialog.detail.item_id == item_id
@@ -396,7 +409,8 @@ class DetailDialogController:
 
         def current() -> bool:
             return (
-                dialog.isVisible()
+                isValid(dialog)
+                and dialog.isVisible()
                 and session.generation == generation
                 and session.current.item_id == item_id
                 and dialog.detail.item_id == item_id

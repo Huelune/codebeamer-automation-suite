@@ -6,10 +6,12 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QEvent
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QHeaderView
 
+from src.gui.tracker_content_models import WikiRenderResult
 from src.gui.tracker_query_models import TrackerFieldValue
 from src.gui.tracker_table_field_dialog import TrackerTableFieldDialog
 from src.gui.tracker_table_field_dialog import table_field_dimensions
@@ -61,6 +63,22 @@ class TrackerTableFieldDialogTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.dialog.close()
         self._app.processEvents()
+
+    def test_render_results_after_the_dialog_is_destroyed_are_ignored(self) -> None:
+        """닫혀 파괴된 창에 늦은 렌더링 결과가 와도 오류 없이 넘어가고 남은 칸을 요청하지 않는다."""
+        pending: list = []
+        dialog = TrackerTableFieldDialog(
+            self.field,
+            wiki_render_request=lambda markup, completed: pending.append(completed),
+        )
+        requested = len(pending)
+        self.assertGreater(requested, 0)
+
+        dialog.deleteLater()
+        self._app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        pending[0](WikiRenderResult(html="<b>late</b>"))
+
+        self.assertEqual(len(pending), requested)
 
     def test_table_dimensions_preserve_rows_and_columns(self) -> None:
         self.assertEqual(table_field_dimensions(self.field), (2, 2))

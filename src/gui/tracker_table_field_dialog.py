@@ -17,6 +17,7 @@ try:
     from PySide6.QtWidgets import QTableWidget
     from PySide6.QtWidgets import QTableWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
+    from shiboken6 import isValid
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
@@ -300,6 +301,9 @@ class TrackerTableFieldDialog(QDialog):
                 expected_generation=generation,
                 target=view,
             ) -> None:
+                # 창을 닫아 칸이 지워졌으면 결과를 넣지 않고 남은 칸도 요청하지 않는다.
+                if not isValid(target):
+                    return
                 self._active_wiki_requests = max(0, self._active_wiki_requests - 1)
                 if expected_generation == self._wiki_generation:
                     target.set_render_result(result)

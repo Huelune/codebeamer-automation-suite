@@ -37,6 +37,7 @@ try:
     from PySide6.QtWidgets import QTabWidget
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
+    from shiboken6 import isValid
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
@@ -624,6 +625,9 @@ class TrackerDetailPanel(QFrame):
                 reserved=reservation,
             ) -> None:
                 self._inline_resource_reservations.discard(reserved)
+                # Wiki 필드·표 필드 창을 닫아 대상 칸이 사라졌으면 넣지 않는다.
+                if not isValid(target):
+                    return
                 current = self._current_detail
                 if current is None or current.item_id != expected_id or current.version != expected_version:
                     return
@@ -671,6 +675,8 @@ class TrackerDetailPanel(QFrame):
             dialog.view.codebeamer_link_activated.connect(self.open_codebeamer_link)
             self._load_inline_resources(result, dialog.view, detail, baseline_id)
             dialog.exec()
+            # 부모가 상세 영역이라 지우지 않으면 닫은 창이 이미지와 함께 남는다.
+            dialog.deleteLater()
 
         self._host.submit(
             f"wiki_field:{field.field_id or field.name}",
@@ -721,6 +727,7 @@ class TrackerDetailPanel(QFrame):
             ),
         )
         dialog.exec()
+        dialog.deleteLater()
 
     @staticmethod
     def _attachment_size_text(size: int | None) -> str:
@@ -913,6 +920,7 @@ class TrackerDetailPanel(QFrame):
         for resource in self._attachment_preview_resources.values():
             dialog.view.add_attachment_resource(resource)
         dialog.exec()
+        dialog.deleteLater()
 
     def open_codebeamer_link(self, kind: str, target_id: int, name: str) -> None:
         """설명 속 링크를 앱 안에서 연다. 아이템은 작업공간에서 열고, 첨부는 저장한다."""
