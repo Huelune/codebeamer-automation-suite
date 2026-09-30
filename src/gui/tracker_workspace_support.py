@@ -14,6 +14,8 @@ try:
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor
     from PySide6.QtWidgets import QTableWidgetItem
+    from PySide6.QtWidgets import QTreeWidget
+    from PySide6.QtWidgets import QTreeWidgetItem
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
@@ -28,6 +30,19 @@ CHILDREN_LOADED_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 BASELINE_COMPARISON_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 HIERARCHY_FETCH_PAGE_SIZE = 500
 DEFAULT_SEARCH_PAGE_SIZE = 50
+
+
+def tree_items(tree: QTreeWidget) -> list[QTreeWidgetItem]:
+    """트리의 모든 항목. 부모가 자식보다 먼저 온다."""
+    items: list[QTreeWidgetItem] = []
+    pending = [tree.topLevelItem(index) for index in range(tree.topLevelItemCount())]
+    while pending:
+        item = pending.pop()
+        if item is None:
+            continue
+        items.append(item)
+        pending.extend(item.child(index) for index in range(item.childCount()))
+    return items
 
 
 @dataclass(frozen=True)

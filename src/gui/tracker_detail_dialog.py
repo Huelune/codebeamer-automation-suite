@@ -25,6 +25,9 @@ from .tracker_content_service import MAX_ITEM_INLINE_IMAGE_BYTES
 from .tracker_item_detail_dialog import TrackerItemDetailDialog
 from .tracker_item_detail_session import TrackerItemDetailSession
 from .tracker_query_models import TrackerItemDetail
+from .tracker_query_models import TrackerItemSummary
+from .tracker_workspace_support import ITEM_SUMMARY_ROLE
+from .tracker_workspace_support import tree_items
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
 from .wiki_renderer import resolve_wiki_images
@@ -77,8 +80,45 @@ class DetailDialogController:
         dialog.navigate_forward_requested.connect(
             lambda: self.navigate_history(dialog, session, back=False)
         )
+        # Baseline 상세는 과거 시점이라, 트리로 현재 아이템을 열면 두 시점이 섞인다.
+        if panel.baseline_id is None:
+            self.attach_item_tree(dialog, session)
         dialog.finished.connect(lambda _result: session.invalidate())
         dialog.exec()
+
+    def attach_item_tree(
+        self,
+        dialog: TrackerItemDetailDialog,
+        session: TrackerItemDetailSession,
+    ) -> None:
+        """작업공간이 펼쳐 둔 계층 트리를 상세 창 옆에 복사해 둔다.
+
+        하위는 작업공간 트리와 같은 캐시와 조회로 불러오고, 항목을 누르면 앞뒤 기록에 쌓인다.
+        """
+        hierarchy = self.page.hierarchy_panel
+        source = hierarchy.item_tree
+        items = [
+            root.clone()
+            for index in range(source.topLevelItemCount())
+            if (root := source.topLevelItem(index)) is not None
+        ]
+        # 복사본은 펼침 상태를 갖지 않으므로 작업공간에서 펼쳐 둔 항목을 따로 모은다.
+        expanded_ids = {
+            summary.item_id
+            for item in tree_items(source)
+            if item.isExpanded()
+            and isinstance(summary := item.data(0, ITEM_SUMMARY_ROLE), TrackerItemSummary)
+        }
+        tracker = self.page._current_tracker
+        dialog.set_tree_items(
+            items,
+            expanded_ids=expanded_ids,
+            title=f"{tracker.name} 계층" if tracker is not None else "트래커 계층",
+        )
+        dialog.item_tree.itemExpanded.connect(hierarchy.load_children)
+        dialog.tree_item_selected.connect(
+            lambda item_id: self.navigate(dialog, session, item_id)
+        )
 
     def load_context(
         self,

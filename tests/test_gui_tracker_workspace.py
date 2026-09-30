@@ -13,6 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QBuffer
 from PySide6.QtCore import QByteArray
+from PySide6.QtCore import QEvent
 from PySide6.QtCore import QIODevice
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
@@ -20,6 +21,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QDialog
 from PySide6.QtWidgets import QMessageBox
+from shiboken6 import isValid
 
 from src.gui.settings_store import GuiSettings
 from src.gui.tracker_baseline_compare import BaselineComparisonKind
@@ -43,6 +45,7 @@ from src.gui.tracker_query_service import TrackerQueryService
 from src.gui.tracker_workspace import CHILDREN_LOADED_ROLE
 from src.gui.tracker_workspace import ITEM_SUMMARY_ROLE
 from src.gui.tracker_workspace import TrackerWorkspacePage
+from src.gui.tracker_workspace_support import tree_items
 from src.gui.wiki_content_view import WikiContentDialog
 from src.gui.wiki_renderer import wiki_image_resource_key
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
@@ -404,7 +407,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(root.text(1), "Vehicle requirements baseline")
         self.assertEqual(root.childCount(), 2)
         self.assertTrue(root.data(0, CHILDREN_LOADED_ROLE))
-        self.page.hierarchy_panel._on_tree_item_expanded(root)
+        self.page.hierarchy_panel.load_children(root)
         self.assertEqual(self.service.child_load_count, child_loads_before)
 
         child = root.child(0)
@@ -1124,18 +1127,18 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.page.activate()
         root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
 
-        self.page.hierarchy_panel._on_tree_item_expanded(root)
+        self.page.hierarchy_panel.load_children(root)
 
         self.assertEqual(self.service.child_load_count, 1)
         self.assertEqual(root.childCount(), 2)
         self.assertEqual(root.child(0).text(0), "9001002")
         self.assertEqual(root.child(1).text(0), "9001003")
 
-        self.page.hierarchy_panel._on_tree_item_expanded(root)
+        self.page.hierarchy_panel.load_children(root)
 
         self.assertEqual(self.service.child_load_count, 1)
         steering = root.child(1)
-        self.page.hierarchy_panel._on_tree_item_expanded(steering)
+        self.page.hierarchy_panel.load_children(steering)
         self.assertEqual(self.service.child_load_count, 2)
         self.assertEqual(steering.child(0).text(0), "9001004")
 
@@ -1516,6 +1519,108 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             # 진짜 창이라 닫아 둔다. 파괴는 부모인 page 가 맡는다.
             opened[0].close()
             self._app.processEvents()
+
+    def _open_real_detail_dialog(self) -> TrackerItemDetailDialog:
+        """exec 만 막고 진짜 상세 창을 연다. 조회 결과가 반영되도록 화면에 띄워 둔다."""
+        opened: list[TrackerItemDetailDialog] = []
+
+        class _NonModalDialog(TrackerItemDetailDialog):
+            def exec(self) -> int:
+                opened.append(self)
+                return 0
+
+        with patch(
+            "src.gui.tracker_detail_dialog.TrackerItemDetailDialog", _NonModalDialog
+        ):
+            self.page.detail_dialog.open_dialog()
+        self.assertEqual(len(opened), 1)
+        dialog = opened[0]
+        self.addCleanup(lambda: isValid(dialog) and dialog.close())
+        dialog.show()
+        self._app.processEvents()
+        return dialog
+
+    @staticmethod
+    def _dialog_tree_item(dialog: TrackerItemDetailDialog, item_id: int):
+        return next(
+            item
+            for item in tree_items(dialog.item_tree)
+            if item.text(0) == str(item_id)
+        )
+
+    def test_detail_dialog_lists_the_tracker_tree_and_opens_selected_items(self) -> None:
+        """새 창 옆의 계층 트리로 아이템을 옮겨 다니고, 앞뒤 기록과 선택이 함께 움직인다."""
+        self.page.activate()
+        workspace_tree = self.page.hierarchy_panel.item_tree
+        root = workspace_tree.topLevelItem(0)
+        workspace_tree.setCurrentItem(root)
+        root.setExpanded(True)
+        self._app.processEvents()
+
+        dialog = self._open_real_detail_dialog()
+
+        self.assertTrue(dialog.tree_pane.isVisible())
+        self.assertIn("Offline Requirements", dialog.tree_label.text())
+        self.assertEqual(dialog.item_tree.topLevelItemCount(), workspace_tree.topLevelItemCount())
+        self.assertTrue(dialog.item_tree.topLevelItem(0).isExpanded())
+        self.assertEqual(dialog.item_tree.currentItem().text(0), "9001001")
+
+        dialog.item_tree.setCurrentItem(self._dialog_tree_item(dialog, 9001002))
+        self._app.processEvents()
+
+        self.assertEqual(dialog.detail.item_id, 9001002)
+        self.assertTrue(dialog.back_button.isEnabled())
+
+        dialog.back_button.click()
+        self._app.processEvents()
+
+        self.assertEqual(dialog.detail.item_id, 9001001)
+        self.assertEqual(dialog.item_tree.currentItem().text(0), "9001001")
+
+        # 아직 받지 않은 하위는 펼칠 때 작업공간과 같은 조회로 불러온다.
+        steering = self._dialog_tree_item(dialog, 9001003)
+        steering.setExpanded(True)
+        self._app.processEvents()
+
+        self.assertEqual(steering.childCount(), 1)
+        self.assertEqual(steering.child(0).text(0), "9001004")
+
+    def test_children_arriving_after_the_dialog_closes_are_only_cached(self) -> None:
+        """새 창이 파괴된 뒤 하위 조회가 끝나도 사라진 트리 항목은 건드리지 않고 캐시만 남긴다."""
+        self.page.activate()
+        workspace_tree = self.page.hierarchy_panel.item_tree
+        workspace_tree.setCurrentItem(workspace_tree.topLevelItem(0))
+        self._app.processEvents()
+        dialog = self._open_real_detail_dialog()
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+
+        dialog.item_tree.topLevelItem(0).setExpanded(True)
+        self.assertEqual(len(tasks), 1)
+        dialog.close()
+        dialog.deleteLater()
+        self._app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+        tasks[0].finish()
+
+        self.assertEqual(len(self.page.hierarchy_panel.child_cache()[9001001]), 2)
+
+    def test_baseline_detail_dialog_has_no_tracker_tree(self) -> None:
+        """Baseline 상세 창에서 트리로 현재 아이템을 열면 두 시점이 섞이므로 트리를 두지 않는다."""
+        self.page.activate()
+        workspace_tree = self.page.hierarchy_panel.item_tree
+        workspace_tree.setCurrentItem(workspace_tree.topLevelItem(0))
+        self._app.processEvents()
+        panel = self.page.detail_panel
+        panel.render_detail(panel.current_detail, baseline_id=24681001)
+
+        dialog = self._open_real_detail_dialog()
+
+        self.assertFalse(dialog.tree_pane.isVisible())
+        self.assertEqual(dialog.item_tree.topLevelItemCount(), 0)
 
     def test_wiki_field_dialog_is_built_with_the_real_class(self) -> None:
         """Wiki 필드 창도 진짜 클래스로 만들어 본다.
