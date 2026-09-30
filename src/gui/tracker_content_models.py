@@ -21,6 +21,15 @@ class WikiResourceReference:
 
 
 @dataclass(frozen=True)
+class WikiImageReference:
+    """Wiki 원문의 `[!파일명#해시!]`. 같은 아이템의 첨부 이미지를 가리킨다."""
+
+    name: str
+    content_hash: str
+    resource_key: str
+
+
+@dataclass(frozen=True)
 class WikiRenderResult:
     html: str
     resources: tuple[WikiResourceReference, ...] = field(default_factory=tuple)

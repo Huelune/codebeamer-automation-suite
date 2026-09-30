@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import field
 from hashlib import sha256
 from html import escape
 from html.parser import HTMLParser
 from typing import Any
+from urllib.parse import quote
 from urllib.parse import urljoin
 from urllib.parse import urlparse
 
+from .tracker_content_models import AttachmentResource
+from .tracker_content_models import AttachmentSummary
+from .tracker_content_models import WikiImageReference
 from .tracker_content_models import WikiResourceReference
 
 
@@ -49,6 +54,10 @@ _SAFE_VERTICAL_ALIGN_RE = re.compile(r"(?:top|middle|bottom|baseline)\Z")
 # `~` 뒤의 기호는 Wiki 문법이 아니라 글자 그대로 보여 준다.
 _ESCAPED_MARKUP_RE = re.compile(r"~([-_'{}\[\]|%\\*#!^~])")
 _LINE_BREAK_RE = re.compile(r"\\\\[ \t]*\n?")
+# `[!Primary Architecture.png#a114...!]`처럼 첨부 이름 뒤에 내용 해시가 붙는다.
+# 너비 같은 다른 매개변수가 붙은 모양은 확인되지 않아 원문 그대로 둔다.
+_WIKI_IMAGE_RE = re.compile(r"(?<!~)\[!([^!\[\]|#\n]+?)(?:#([0-9A-Fa-f]{8,64}))?!\]")
+_IMAGE_SLOT_RE = re.compile("\x00(\\d+)\x00")
 _TABLE_PLUGIN_OPEN_RE = re.compile(r"\[\{Table(?=[\s}])")
 _PLUGIN_PARAM_RE = re.compile(r"""(\w+)\s*=\s*(?:'([^']*)'|"([^"]*)"|([^\s'"]+))""")
 _BLANK_LINE_RE = re.compile(r"\n[ \t]*\n")
@@ -140,8 +149,96 @@ def sanitize_wiki_style(style: str) -> str:
     return "; ".join(f"{name}: {value}" for name, value in declarations.items())
 
 
+def wiki_image_resource_key(name: str, content_hash: str) -> str:
+    """본문 이미지 자리의 리소스 이름. 받기 전 자리 표시에 쓰도록 파일 이름을 담는다."""
+    return f"wiki-image/{quote(name, safe='')}/{content_hash.casefold()}"
+
+
+def _image_reference(match: re.Match[str]) -> WikiImageReference | None:
+    name = match.group(1).strip()
+    # 외부 주소 이미지는 받지 않는다. 첨부 이름만 이미지로 바꾼다.
+    if not name or "://" in name:
+        return None
+    content_hash = match.group(2) or ""
+    return WikiImageReference(
+        name=name,
+        content_hash=content_hash,
+        resource_key=wiki_image_resource_key(name, content_hash),
+    )
+
+
+def wiki_image_references(markup: Any) -> tuple[WikiImageReference, ...]:
+    """원문이 가리키는 첨부 이미지. 같은 이미지는 한 번만 돌려준다."""
+    references: dict[str, WikiImageReference] = {}
+    for match in _WIKI_IMAGE_RE.finditer(str(markup or "")):
+        reference = _image_reference(match)
+        if reference is not None:
+            references.setdefault(reference.resource_key, reference)
+    return tuple(references.values())
+
+
+def _matching_attachment(
+    reference: WikiImageReference,
+    attachments: Iterable[AttachmentSummary],
+) -> AttachmentSummary | None:
+    """이름이 같은 첨부를 찾는다. 붙여넣은 그림은 이름이 겹치므로 해시가 맞는 것을 먼저 고른다."""
+    candidates = [value for value in attachments if value.name == reference.name]
+    if not candidates:
+        wanted = reference.name.casefold()
+        candidates = [value for value in attachments if value.name.casefold() == wanted]
+    wanted_hash = reference.content_hash.casefold()
+    if wanted_hash:
+        for candidate in candidates:
+            if candidate.md5.casefold() == wanted_hash:
+                return candidate
+    return candidates[0] if candidates else None
+
+
+def resolve_wiki_images(
+    markup: Any,
+    attachments: Iterable[AttachmentSummary],
+    resources: Iterable[AttachmentResource],
+) -> tuple[AttachmentResource, ...]:
+    """원문의 이미지 자리에 넣을 리소스를 이미 받은 첨부 이미지에서 만든다.
+
+    첨부 영역이 `attachment-{id}`로 받아 둔 데이터를 본문 자리 이름으로 다시 붙일 뿐,
+    새로 내려받지 않는다. 짝을 찾지 못한 자리는 보기 화면이 파일 이름으로 표시한다.
+    """
+    attachment_list = list(attachments)
+    by_key = {resource.resource_key: resource for resource in resources}
+    resolved: list[AttachmentResource] = []
+    for reference in wiki_image_references(markup):
+        attachment = _matching_attachment(reference, attachment_list)
+        if attachment is None:
+            continue
+        resource = by_key.get(f"attachment-{attachment.attachment_id}")
+        if resource is not None:
+            resolved.append(
+                AttachmentResource(reference.resource_key, resource.mime_type, resource.data)
+            )
+    return tuple(resolved)
+
+
+def _render_image(match: re.Match[str]) -> str:
+    reference = _image_reference(match)
+    if reference is None:
+        return escape(match.group(0), quote=False)
+    return (
+        f'<img src="cb-attachment://{escape(reference.resource_key, quote=True)}" '
+        f'alt="{escape(reference.name, quote=True)}">'
+    )
+
+
 def _render_basic_markup(text: str) -> str:
-    rendered = escape(text.replace("\r\n", "\n").replace("\r", "\n"), quote=False)
+    source = text.replace("\r\n", "\n").replace("\r", "\n")
+    # 이미지 문법은 escape와 강조 치환 전에 자리만 잡아 두었다가 마지막에 되돌린다.
+    images: list[str] = []
+
+    def keep_image(match: re.Match[str]) -> str:
+        images.append(_render_image(match))
+        return f"\x00{len(images) - 1}\x00"
+
+    rendered = escape(_WIKI_IMAGE_RE.sub(keep_image, source), quote=False)
     # 문자 참조로 바꿔 두면 아래 강조 치환에 걸리지 않는다.
     rendered = _ESCAPED_MARKUP_RE.sub(lambda match: f"&#{ord(match.group(1))};", rendered)
     rendered = re.sub(r"__([^_\n]+?)__", r"<strong>\1</strong>", rendered)
@@ -149,7 +246,8 @@ def _render_basic_markup(text: str) -> str:
     rendered = re.sub(r"\{\{([^{}\n]+?)\}\}", r"<code>\1</code>", rendered)
     # `\\`는 강제 줄바꿈이다. 바로 뒤 개행과 합쳐 한 번만 바꾼다.
     rendered = _LINE_BREAK_RE.sub("<br>", rendered)
-    return rendered.replace("\n", "<br>")
+    rendered = rendered.replace("\n", "<br>")
+    return _IMAGE_SLOT_RE.sub(lambda match: images[int(match.group(1))], rendered)
 
 
 def _table_cells(line: str, marker: str) -> list[str]:
@@ -616,6 +714,9 @@ __all__ = [
     "codebeamer_wiki_to_html",
     "is_explicit_wiki_type",
     "payload_uses_wiki",
+    "resolve_wiki_images",
     "sanitize_server_wiki_html",
     "sanitize_wiki_style",
+    "wiki_image_references",
+    "wiki_image_resource_key",
 ]
