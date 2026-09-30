@@ -85,6 +85,26 @@ class WikiRendererTest(unittest.TestCase):
             '<span style="font-size: 12px"><span style="color: rgb(30, 30, 30)">111 </span>설명.</span>',
         )
 
+    def test_heading_lines_become_heading_blocks(self) -> None:
+        rendered = codebeamer_wiki_to_html(
+            "!3 설명( Description)\n\n본문\n!3 %%(font-size:12px;)%%(color:rgb(30, 30, 30);)설명222%!%!"
+        )
+
+        self.assertEqual(
+            rendered,
+            "<h3>설명( Description)</h3><br>본문"
+            '<h3><span style="font-size: 12px"><span style="color: rgb(30, 30, 30)">설명222</span></span></h3>',
+        )
+
+    def test_jspwiki_heading_marks_and_look_alikes(self) -> None:
+        self.assertEqual(codebeamer_wiki_to_html("!!!큰 제목"), "<h2>큰 제목</h2>")
+        self.assertEqual(codebeamer_wiki_to_html("!! 중간 제목"), "<h3>중간 제목</h3>")
+        self.assertEqual(codebeamer_wiki_to_html("! 작은 제목"), "<h4>작은 제목</h4>")
+        # 네 개 이상의 `!`, 문장 중간의 `!3`, 줄 맨 앞 이미지는 제목이 아니다.
+        self.assertEqual(codebeamer_wiki_to_html("!!!!아님"), "!!!!아님")
+        self.assertEqual(codebeamer_wiki_to_html("문장 중간 !3 아님"), "문장 중간 !3 아님")
+        self.assertTrue(codebeamer_wiki_to_html("[!그림.png!]").startswith("<img "))
+
     def test_unpaired_style_marks_stay_as_text_and_open_blocks_close_at_the_end(self) -> None:
         self.assertEqual(codebeamer_wiki_to_html("100%! 할인"), "100%! 할인")
         self.assertEqual(

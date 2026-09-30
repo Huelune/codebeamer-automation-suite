@@ -33,6 +33,12 @@ _STYLE_OPEN_RE = re.compile(
 _NAMED_STYLE_OPEN_RE = re.compile(r"%%(?P<name>[A-Za-z][A-Za-z0-9_-]*)\s*")
 # 스타일 블록을 열거나 닫는 표시. 어느 쪽인지는 뒤따르는 글자로 정한다.
 _STYLE_MARK_RE = re.compile(r"%%|%!")
+# 줄 맨 앞의 제목 표시. Codebeamer `!3 제목`은 숫자 뒤에 빈칸이 있어야 하고, 그 밖의 `!`, `!!`,
+# `!!!`는 JSPWiki 제목이다.
+_HEADING_RE = re.compile(
+    r"^[ \t]*(?:!(?P<level>[1-6])[ \t]+|(?P<marks>!{1,3})(?!!)[ \t]*)(?P<text>\S.*)$",
+    re.MULTILINE,
+)
 _SAFE_STYLE_NAMES = {
     "background-color",
     "color",
@@ -652,9 +658,33 @@ def codebeamer_wiki_to_html(value: Any) -> str:
             break
         before = source[position : opening.start()]
         # 표는 블록이라 바로 앞뒤 개행까지 `<br>`로 바꾸면 빈 줄이 하나 더 생긴다.
-        parts.append(_render_styled_text(before.removesuffix("\n")))
+        parts.append(_render_text_blocks(before.removesuffix("\n")))
         parts.append(_render_table_plugin(source[opening.end() : end - 2]))
         position = end + 1 if source.startswith("\n", end) else end
+    parts.append(_render_text_blocks(source[position:]))
+    return "".join(parts)
+
+
+def _heading_level(match: re.Match[str]) -> int:
+    # Codebeamer `!1`~`!6`은 숫자가 곧 단계다. JSPWiki `!!!`는 큰 제목, `!`는 작은 제목이다.
+    if match.group("level"):
+        return int(match.group("level"))
+    return {3: 2, 2: 3, 1: 4}[len(match.group("marks"))]
+
+
+def _render_text_blocks(source: str) -> str:
+    """제목 줄을 블록으로 떼어 내고 나머지를 스타일 블록과 함께 렌더링한다.
+
+    제목 줄 안의 스타일 블록은 그 줄에서 닫는다. 제목은 블록이라 바로 앞뒤 개행 하나씩은
+    `<br>`로 바꾸지 않는다.
+    """
+    parts: list[str] = []
+    position = 0
+    for match in _HEADING_RE.finditer(source):
+        parts.append(_render_styled_text(source[position : match.start()].removesuffix("\n")))
+        level = _heading_level(match)
+        parts.append(f"<h{level}>{_render_styled_text(match.group('text').strip())}</h{level}>")
+        position = match.end() + 1 if source.startswith("\n", match.end()) else match.end()
     parts.append(_render_styled_text(source[position:]))
     return "".join(parts)
 
