@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from dataclasses import field
 from hashlib import sha256
 from html import escape
 from html.parser import HTMLParser
@@ -28,8 +29,12 @@ _SAFE_STYLE_NAMES = {
     "font-size",
     "font-style",
     "font-weight",
+    "text-align",
     "text-decoration",
+    "vertical-align",
 }
+# 붙여넣은 표는 배경색을 `background` 축약형으로 적는다.
+_STYLE_NAME_ALIASES = {"background": "background-color"}
 _SAFE_COLOR_RE = re.compile(
     r"(?:#[0-9a-fA-F]{3,8}|[A-Za-z]{1,24}|rgba?\([0-9.,%\s]+\))\Z"
 )
@@ -39,6 +44,15 @@ _SAFE_FONT_STYLE_RE = re.compile(r"(?:normal|italic|oblique)\Z")
 _SAFE_DECORATION_RE = re.compile(
     r"(?:none|underline|line-through|underline line-through|line-through underline)\Z"
 )
+_SAFE_TEXT_ALIGN_RE = re.compile(r"(?:left|right|center|justify)\Z")
+_SAFE_VERTICAL_ALIGN_RE = re.compile(r"(?:top|middle|bottom|baseline)\Z")
+# `~` 뒤의 기호는 Wiki 문법이 아니라 글자 그대로 보여 준다.
+_ESCAPED_MARKUP_RE = re.compile(r"~([-_'{}\[\]|%\\*#!^~])")
+_LINE_BREAK_RE = re.compile(r"\\\\[ \t]*\n?")
+_TABLE_PLUGIN_OPEN_RE = re.compile(r"\[\{Table(?=[\s}])")
+_PLUGIN_PARAM_RE = re.compile(r"""(\w+)\s*=\s*(?:'([^']*)'|"([^"]*)"|([^\s'"]+))""")
+_BLANK_LINE_RE = re.compile(r"\n[ \t]*\n")
+_TABLE_CELL_STYLE = "border: 1px solid #999; padding: 4px"
 _THEME_FOREGROUND_COLORS = {
     "black",
     "white",
@@ -102,30 +116,40 @@ def _safe_style_value(name: str, value: str) -> str | None:
         return normalized
     if name == "text-decoration" and _SAFE_DECORATION_RE.fullmatch(normalized):
         return normalized
+    if name == "text-align" and _SAFE_TEXT_ALIGN_RE.fullmatch(normalized):
+        return normalized
+    if name == "vertical-align" and _SAFE_VERTICAL_ALIGN_RE.fullmatch(normalized):
+        return normalized
     return None
 
 
 def sanitize_wiki_style(style: str) -> str:
-    declarations: list[str] = []
+    # 같은 속성이 여러 번 나오면 CSS처럼 뒤의 값을 쓴다.
+    declarations: dict[str, str] = {}
     for declaration in str(style or "").split(";"):
         if ":" not in declaration:
             continue
         raw_name, raw_value = declaration.split(":", 1)
         name = raw_name.strip().casefold()
+        name = _STYLE_NAME_ALIASES.get(name, name)
         if name not in _SAFE_STYLE_NAMES:
             continue
         value = _safe_style_value(name, raw_value)
         if value is not None:
-            declarations.append(f"{name}: {value}")
-    return "; ".join(declarations)
+            declarations[name] = value
+    return "; ".join(f"{name}: {value}" for name, value in declarations.items())
 
 
 def _render_basic_markup(text: str) -> str:
-    rendered = escape(text, quote=False)
+    rendered = escape(text.replace("\r\n", "\n").replace("\r", "\n"), quote=False)
+    # 문자 참조로 바꿔 두면 아래 강조 치환에 걸리지 않는다.
+    rendered = _ESCAPED_MARKUP_RE.sub(lambda match: f"&#{ord(match.group(1))};", rendered)
     rendered = re.sub(r"__([^_\n]+?)__", r"<strong>\1</strong>", rendered)
     rendered = re.sub(r"''([^'\n]+?)''", r"<em>\1</em>", rendered)
     rendered = re.sub(r"\{\{([^{}\n]+?)\}\}", r"<code>\1</code>", rendered)
-    return rendered.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>")
+    # `\\`는 강제 줄바꿈이다. 바로 뒤 개행과 합쳐 한 번만 바꾼다.
+    rendered = _LINE_BREAK_RE.sub("<br>", rendered)
+    return rendered.replace("\n", "<br>")
 
 
 def _table_cells(line: str, marker: str) -> list[str]:
@@ -195,9 +219,8 @@ def _closing_index(source: str, start: int) -> tuple[int, int] | None:
     return min(candidates) if candidates else None
 
 
-def codebeamer_wiki_to_html(value: Any) -> str:
-    """안전한 Codebeamer Wiki 스타일 일부를 Qt rich text용 HTML로 바꾼다."""
-    source = str(value or "")
+def _render_styled_text(source: str) -> str:
+    """`%%(...)` 스타일 블록과 단순 Wiki table을 HTML로 바꾼다."""
     parts: list[str] = []
     position = 0
     while position < len(source):
@@ -224,6 +247,236 @@ def codebeamer_wiki_to_html(value: Any) -> str:
                 style = ""
         parts.append(f'<span style="{style}">{content}</span>' if style else content)
         position = closing_position + closing_length
+    return "".join(parts)
+
+
+@dataclass
+class _TableCell:
+    content: str = ""
+    header: bool = False
+    style: str = ""
+    # `<`는 왼쪽 셀, `^`는 위 셀과 합친다.
+    merge: str = ""
+    # 이 셀이 차지하는 (행, 열) 칸. 병합 계산 중에 채운다.
+    positions: list[tuple[int, int]] = field(default_factory=list)
+
+
+def _plugin_end(source: str, start: int) -> int | None:
+    """`[{`로 연 plugin과 짝이 맞는 `}]` 바로 뒤 위치를 찾는다."""
+    depth = 0
+    index = start
+    while index < len(source) - 1:
+        pair = source[index : index + 2]
+        if pair == "[{":
+            depth += 1
+            index += 2
+        elif pair == "}]":
+            depth -= 1
+            index += 2
+            if depth == 0:
+                return index
+        else:
+            index += 1
+    return None
+
+
+def _balanced_paren_end(text: str) -> int | None:
+    """`(`로 시작하는 text에서 짝이 맞는 `)` 위치를 찾는다. `rgb(...)`처럼 괄호가 겹친다."""
+    depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def _split_row_line(line: str) -> list[str]:
+    """한 줄에 적은 행을 셀 조각으로 나눈다. 조각은 `|` 또는 `||`로 시작한다.
+
+    `[이름|주소]` 링크 안의 `|`와 `~|`는 셀 구분자가 아니다.
+    """
+    source = line.strip()
+    starts: list[int] = []
+    depth = 0
+    index = 0
+    while index < len(source):
+        char = source[index]
+        if char == "~":
+            index += 2
+            continue
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth = max(depth - 1, 0)
+        elif char == "|" and depth == 0:
+            starts.append(index)
+            if source.startswith("||", index):
+                index += 1
+        index += 1
+    pieces = [
+        source[begin:end]
+        for begin, end in zip(starts, [*starts[1:], len(source)], strict=True)
+    ]
+    # 줄 끝의 `|`는 마지막 셀을 닫을 뿐이다.
+    if len(pieces) > 1 and pieces[-1] in {"|", "||"}:
+        pieces.pop()
+    return pieces
+
+
+def _parse_cell(piece: str) -> _TableCell:
+    header = piece.startswith("||")
+    body = piece[2:] if header else piece[1:]
+    marker = body.lstrip()
+    if marker[:1] in {"<", "^"}:
+        return _TableCell(header=header, merge=marker[0])
+    if marker.startswith("("):
+        end = _balanced_paren_end(marker)
+        # `(참고) 내용`처럼 CSS가 아닌 괄호는 내용으로 둔다.
+        if end is not None and ":" in marker[1:end]:
+            return _TableCell(content=marker[end + 1 :], header=header, style=marker[1:end])
+    return _TableCell(content=body, header=header)
+
+
+def _table_rows(body: str) -> list[list[_TableCell]]:
+    """Table plugin 본문을 행과 셀로 나눈다.
+
+    한 줄에 셀이 여럿이면 줄마다 한 행이다. 첫 줄에 셀이 하나뿐이면 빈 줄까지를
+    한 행으로 보고 `|`로 시작하는 줄마다 새 셀을 연다. `|`로 시작하지 않는 줄은
+    바로 앞 셀 내용이 이어지는 것이다.
+    """
+    rows: list[list[_TableCell]] = []
+    for group in _BLANK_LINE_RE.split(body):
+        if not group.strip():
+            continue
+        text = group.strip("\n")
+        lines = text.split("\n")
+        if not lines[0].lstrip().startswith("|"):
+            # 셀 밖 글자도 버리지 않는다. 앞 셀에 잇거나 한 칸짜리 행으로 둔다.
+            if rows:
+                rows[-1][-1].content += "\n" + text
+            else:
+                rows.append([_TableCell(content=text)])
+            continue
+        single_line_rows = len(_split_row_line(lines[0])) > 1
+        row: list[_TableCell] = []
+        for line in lines:
+            if not line.lstrip().startswith("|"):
+                row[-1].content += "\n" + line
+            elif single_line_rows:
+                if row:
+                    rows.append(row)
+                row = [_parse_cell(piece) for piece in _split_row_line(line)]
+            else:
+                row.append(_parse_cell(line.lstrip()))
+        rows.append(row)
+    return rows
+
+
+def _resolve_merges(rows: list[list[_TableCell]]) -> list[list[_TableCell]]:
+    """각 칸을 실제로 차지하는 셀을 돌려준다. 병합 표시는 원래 셀을 가리킨다."""
+    owners: list[list[_TableCell]] = []
+    for row_index, row in enumerate(rows):
+        owner_row: list[_TableCell] = []
+        for col_index, cell in enumerate(row):
+            owner = cell
+            if cell.merge == "<" and col_index > 0:
+                owner = owner_row[col_index - 1]
+            elif cell.merge == "^" and row_index > 0 and col_index < len(owners[-1]):
+                owner = owners[-1][col_index]
+            owner.positions.append((row_index, col_index))
+            owner_row.append(owner)
+        owners.append(owner_row)
+    return owners
+
+
+def _plugin_params(header: str) -> dict[str, str]:
+    params: dict[str, str] = {}
+    for match in _PLUGIN_PARAM_RE.finditer(header):
+        value = next(group for group in match.groups()[1:] if group is not None)
+        params[match.group(1).casefold()] = value
+    return params
+
+
+def _render_table_plugin(inner: str) -> str:
+    """`[{Table ...}]` 안쪽을 HTML 표로 바꾼다.
+
+    셀마다 다른 테두리와 px 폭은 따르지 않는다. 좁은 상세 영역에서도 읽히도록
+    균일한 격자와 내용 기준 폭을 쓰고, 배경색과 정렬만 남긴다.
+    """
+    lines = inner.split("\n")
+    header_end = 0
+    while (
+        header_end < len(lines)
+        and lines[header_end].strip()
+        and not lines[header_end].lstrip().startswith("|")
+    ):
+        header_end += 1
+    params = _plugin_params(" ".join(lines[:header_end]))
+    rows = _table_rows("\n".join(lines[header_end:]))
+    owners = _resolve_merges(rows)
+    try:
+        first_row_number = int(params.get("rownumber", "0"))
+    except ValueError:
+        first_row_number = 0
+
+    rows_html: list[str] = []
+    for row_index, row in enumerate(rows):
+        cells_html: list[str] = []
+        for col_index, cell in enumerate(row):
+            if owners[row_index][col_index] is not cell:
+                continue
+            if cell.header:
+                styles = [params.get("headerstyle", ""), cell.style]
+            else:
+                row_style = params.get("evenrowstyle" if row_index % 2 == 0 else "oddrowstyle", "")
+                styles = [params.get("datastyle", ""), cell.style, row_style]
+            style = sanitize_wiki_style(";".join(styles))
+            style_attr = f"{_TABLE_CELL_STYLE}; {style}" if style else _TABLE_CELL_STYLE
+            last_row = max(position[0] for position in cell.positions)
+            last_col = max(position[1] for position in cell.positions)
+            span_attrs = ""
+            if last_col > col_index:
+                span_attrs += f' colspan="{last_col - col_index + 1}"'
+            if last_row > row_index:
+                span_attrs += f' rowspan="{last_row - row_index + 1}"'
+            content = cell.content.strip()
+            if content == "#":
+                content = str(first_row_number + row_index)
+            tag = "th" if cell.header else "td"
+            cells_html.append(
+                f'<{tag} style="{style_attr}"{span_attrs}>'
+                f"{codebeamer_wiki_to_html(content)}</{tag}>"
+            )
+        rows_html.append(f"<tr>{''.join(cells_html)}</tr>")
+    table_style = sanitize_wiki_style(params.get("style", ""))
+    table_style_attr = "border-collapse: collapse; margin: 4px 0"
+    if table_style:
+        table_style_attr += f"; {table_style}"
+    return f'<table style="{table_style_attr}">{"".join(rows_html)}</table>'
+
+
+def codebeamer_wiki_to_html(value: Any) -> str:
+    """안전한 Codebeamer Wiki 문법 일부를 Qt rich text용 HTML로 바꾼다.
+
+    Table plugin 블록은 셀 안에 스타일 블록이 들어 있으므로 먼저 떼어 낸다.
+    짝이 맞지 않는 블록은 원문 그대로 둔다.
+    """
+    source = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    parts: list[str] = []
+    position = 0
+    while (opening := _TABLE_PLUGIN_OPEN_RE.search(source, position)) is not None:
+        end = _plugin_end(source, opening.start())
+        if end is None:
+            break
+        before = source[position : opening.start()]
+        # 표는 블록이라 바로 앞뒤 개행까지 `<br>`로 바꾸면 빈 줄이 하나 더 생긴다.
+        parts.append(_render_styled_text(before.removesuffix("\n")))
+        parts.append(_render_table_plugin(source[opening.end() : end - 2]))
+        position = end + 1 if source.startswith("\n", end) else end
+    parts.append(_render_styled_text(source[position:]))
     return "".join(parts)
 
 
