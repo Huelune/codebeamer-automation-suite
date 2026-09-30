@@ -31,6 +31,8 @@ _STYLE_OPEN_RE = re.compile(
     r"%%\((?P<style>(?:[^()]|\([^()]*\)){1,1000})\)"
 )
 _NAMED_STYLE_OPEN_RE = re.compile(r"%%(?P<name>[A-Za-z][A-Za-z0-9_-]*)\s*")
+# 스타일 블록을 열거나 닫는 표시. 어느 쪽인지는 뒤따르는 글자로 정한다.
+_STYLE_MARK_RE = re.compile(r"%%|%!")
 _SAFE_STYLE_NAMES = {
     "background-color",
     "color",
@@ -375,43 +377,55 @@ def _render_local_tables(source: str) -> str:
     return "".join(rendered)
 
 
-def _closing_index(source: str, start: int) -> tuple[int, int] | None:
-    candidates = [
-        (index, len(token))
-        for token in ("%%", "%!")
-        if (index := source.find(token, start)) >= 0
-    ]
-    return min(candidates) if candidates else None
-
-
 def _render_styled_text(source: str) -> str:
-    """`%%(...)` 스타일 블록과 단순 Wiki table을 HTML로 바꾼다."""
+    """`%%(...)` 스타일 블록과 단순 Wiki table을 HTML로 바꾼다.
+
+    Codebeamer는 붙여넣은 서식을 `%%(바깥)%%(안쪽)글자%!%!`처럼 겹쳐 저장한다. 열린 블록을
+    쌓아 두고 `%%`나 `%!`가 나오면 가장 안쪽 블록을 닫는다. 끝까지 닫히지 않은 블록은 끝에서
+    닫는다. 이름 스타일 `%%red`는 블록 밖에서만 연다. 블록 안의 `%%`는 닫는 표시로 본다.
+    """
     parts: list[str] = []
+    # 열린 블록마다 `<span>`을 열었는지. 허용되지 않은 스타일만 있으면 span 없이 글자만 둔다.
+    open_spans: list[bool] = []
     position = 0
-    while position < len(source):
-        style_match = _STYLE_OPEN_RE.search(source, position)
-        named_match = _NAMED_STYLE_OPEN_RE.search(source, position)
-        matches = [match for match in (style_match, named_match) if match is not None]
-        if not matches:
-            parts.append(_render_local_tables(source[position:]))
-            break
-        opening = min(matches, key=lambda match: match.start())
-        parts.append(_render_local_tables(source[position : opening.start()]))
-        closing = _closing_index(source, opening.end())
-        if closing is None:
-            parts.append(_render_basic_markup(source[opening.start() :]))
-            break
-        closing_position, closing_length = closing
-        content = _render_basic_markup(source[opening.end() : closing_position])
-        if opening.re is _STYLE_OPEN_RE:
-            style = sanitize_wiki_style(opening.group("style"))
+    search_from = 0
+    while (mark := _STYLE_MARK_RE.search(source, search_from)) is not None:
+        start = mark.start()
+        style_open = _STYLE_OPEN_RE.match(source, start)
+        named_open = (
+            _NAMED_STYLE_OPEN_RE.match(source, start)
+            if style_open is None and not open_spans
+            else None
+        )
+        if style_open is None and named_open is None and not open_spans:
+            # 열린 블록이 없으면 `%%`, `%!`는 글자 그대로 둔다.
+            search_from = mark.end()
+            continue
+        text = source[position:start]
+        parts.append(_render_basic_markup(text) if open_spans else _render_local_tables(text))
+        if style_open is not None:
+            style = sanitize_wiki_style(style_open.group("style"))
+            position = style_open.end()
+        elif named_open is not None:
+            name = named_open.group("name").casefold()
+            style = (
+                f"color: {name}"
+                if name in _NAMED_COLOR_STYLES and name not in _THEME_FOREGROUND_COLORS
+                else ""
+            )
+            position = named_open.end()
         else:
-            name = opening.group("name").casefold()
-            style = f"color: {name}" if name in _NAMED_COLOR_STYLES else ""
-            if name in _THEME_FOREGROUND_COLORS:
-                style = ""
-        parts.append(f'<span style="{style}">{content}</span>' if style else content)
-        position = closing_position + closing_length
+            if open_spans.pop():
+                parts.append("</span>")
+            position = search_from = mark.end()
+            continue
+        open_spans.append(bool(style))
+        if style:
+            parts.append(f'<span style="{style}">')
+        search_from = position
+    rest = source[position:]
+    parts.append(_render_basic_markup(rest) if open_spans else _render_local_tables(rest))
+    parts.extend("</span>" for opened in reversed(open_spans) if opened)
     return "".join(parts)
 
 

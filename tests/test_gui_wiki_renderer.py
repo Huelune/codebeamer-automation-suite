@@ -73,6 +73,25 @@ class WikiRendererTest(unittest.TestCase):
         self.assertIn("&lt;script&gt;", rendered)
         self.assertIn("font-weight: bold", rendered)
 
+    def test_nested_style_blocks_close_innermost_first(self) -> None:
+        """붙여넣은 서식은 `%%(바깥)%%(안쪽)글자%!%!`로 겹친다. 바깥 블록이 안쪽 시작에서 닫히면
+        안쪽 CSS 원문이 글자로 드러난다."""
+        rendered = codebeamer_wiki_to_html(
+            "%%(font-size:12px;)%%(color:rgb(30, 30, 30);display:inline !important;)111 %!설명.%!"
+        )
+
+        self.assertEqual(
+            rendered,
+            '<span style="font-size: 12px"><span style="color: rgb(30, 30, 30)">111 </span>설명.</span>',
+        )
+
+    def test_unpaired_style_marks_stay_as_text_and_open_blocks_close_at_the_end(self) -> None:
+        self.assertEqual(codebeamer_wiki_to_html("100%! 할인"), "100%! 할인")
+        self.assertEqual(
+            codebeamer_wiki_to_html("%%(color:red)끝까지"),
+            '<span style="color: red">끝까지</span>',
+        )
+
     def test_style_sanitizer_keeps_only_allowlisted_properties(self) -> None:
         style = sanitize_wiki_style(
             "color:#336699; position:fixed; text-decoration:underline"
