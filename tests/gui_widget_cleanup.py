@@ -17,6 +17,7 @@ def tearDownModule() -> None:
     """모듈의 테스트가 끝난 뒤 남아 있는 최상위 위젯을 파괴한다."""
     try:
         from PySide6.QtCore import QEvent
+        from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QApplication
     except ImportError:  # pragma: no cover - PySide6 없는 환경
         return
@@ -26,6 +27,10 @@ def tearDownModule() -> None:
         return
 
     for widget in list(app.topLevelWidgets()):
+        # 자동완성 목록 같은 팝업은 부모 없이 떠 있어도 주인 객체가 지운다.
+        # 여기서 먼저 지우면 주인이 소멸할 때 같은 팝업을 다시 지워 프로세스가 죽는다.
+        if widget.windowType() == Qt.WindowType.Popup:
+            continue
         widget.close()
         widget.deleteLater()
     app.processEvents()
