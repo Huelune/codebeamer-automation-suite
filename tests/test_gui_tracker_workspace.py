@@ -1609,6 +1609,81 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(len(self.page.hierarchy_panel.child_cache()[9001001]), 2)
 
+    def test_closed_detail_dialog_is_destroyed_and_late_results_are_ignored(self) -> None:
+        """닫은 상세 창은 작업공간 아래에 남지 않고, 그 뒤 도착한 조회 결과는 창을 건드리지 않는다."""
+        self.page.activate()
+        workspace_tree = self.page.hierarchy_panel.item_tree
+        workspace_tree.setCurrentItem(workspace_tree.topLevelItem(0))
+        workspace_tree.topLevelItem(0).setExpanded(True)
+        self._app.processEvents()
+        dialog = self._open_real_detail_dialog()
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        dialog.item_tree.setCurrentItem(self._dialog_tree_item(dialog, 9001002))
+        self.assertEqual(len(tasks), 1)
+
+        dialog.close()
+        self._app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+        self.assertFalse(isValid(dialog))
+        self.assertEqual(self.page.findChildren(TrackerItemDetailDialog), [])
+        tasks[0].finish()
+
+    def test_closed_wiki_field_dialog_is_destroyed_and_late_images_are_ignored(self) -> None:
+        self.settings.offline_mode = False
+        self.settings.base_url = "https://example.test/cb"
+        self.settings.username = "sample"
+        self.settings.password = "placeholder"
+        panel = self.page.detail_panel
+        panel.render_detail(
+            TrackerItemDetail.from_raw(
+                {
+                    "id": 1230,
+                    "name": "Wiki field",
+                    "version": 1,
+                    "tracker": {
+                        "id": 24680001,
+                        "name": "Offline Requirements",
+                        "project": {"id": 246800, "name": "Offline Project"},
+                    },
+                }
+            )
+        )
+        panel.content_service.render_wiki = lambda *_args: WikiRenderResult(
+            html='<img src="cb-attachment://late-image">',
+            resources=(WikiResourceReference("late-image", "https://example.test/cb/attachment/9"),),
+        )
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        panel.content_service.download_resource = lambda *_args, **_kwargs: AttachmentResource(
+            "late-image", "image/png", _png_bytes(2, 2)
+        )
+        opened: list[WikiContentDialog] = []
+
+        class _NonModalWikiDialog(WikiContentDialog):
+            def exec(self) -> int:
+                opened.append(self)
+                return 0
+
+        field = TrackerFieldValue(
+            field_id=77, name="Notes", type_name="WikiTextFieldValue", display_value="[!x.png!]"
+        )
+        with patch("src.gui.tracker_detail_panel.WikiContentDialog", _NonModalWikiDialog):
+            panel._open_wiki_field(field)
+            tasks.pop(0).finish()
+        self.assertEqual(len(opened), 1)
+        self._app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+        self.assertFalse(isValid(opened[0]))
+        # 창이 사라진 뒤 이미지 받기가 끝나도 오류 없이 넘어간다.
+        tasks.pop(0).finish()
+
     def test_baseline_detail_dialog_has_no_tracker_tree(self) -> None:
         """Baseline 상세 창에서 트리로 현재 아이템을 열면 두 시점이 섞이므로 트리를 두지 않는다."""
         self.page.activate()
