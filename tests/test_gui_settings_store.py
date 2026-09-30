@@ -8,6 +8,7 @@ from pathlib import Path
 from src.gui.settings_store import CREDENTIAL_STORAGE_LOCAL
 from src.gui.settings_store import CREDENTIAL_STORAGE_NONE
 from src.gui.settings_store import CREDENTIAL_STORAGE_OS
+from src.gui.settings_store import MAX_RECENT_TRACKERS
 from src.gui.settings_store import AppSettings
 from src.gui.settings_store import ConnectionProfile
 from src.gui.settings_store import GuiSettings
@@ -678,3 +679,33 @@ class GuiAppSettingsStoreTest(unittest.TestCase):
             self.assertEqual(store.load().bulk_update_chunk_size, 2500)
             payload = json.loads(store.app_settings_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["bulk_update_chunk_size"], 2500)
+
+    def test_workspace_recent_trackers_are_cleaned_up_and_kept_out_of_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            store = _DeterministicSettingsStore(
+                Path(tmp_dir), credential_store=_FakeCredentialStore()
+            )
+            store.ensure_app_settings()
+
+            store.save_workspace_recent_trackers(
+                [
+                    {"project_id": 1, "tracker_id": 11},
+                    {"project_id": 1, "tracker_id": 11},
+                    {"project_id": 0, "tracker_id": 12},
+                    {"project_id": "x", "tracker_id": 13},
+                    *({"project_id": 2, "tracker_id": 20 + index} for index in range(10)),
+                ]
+            )
+
+            remembered = store.load_app_settings().workspace_recent_trackers
+            self.assertEqual(len(remembered), MAX_RECENT_TRACKERS)
+            self.assertEqual(remembered[0], {"project_id": 1, "tracker_id": 11})
+            self.assertEqual(remembered[1], {"project_id": 2, "tracker_id": 20})
+            payload = json.loads(store.app_settings_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["workspace_recent_trackers"], remembered)
+
+            # 개인 화면 상태라 다른 PC로 옮기는 설정 내보내기에는 넣지 않는다.
+            export_path = Path(tmp_dir) / "exported.json"
+            store.export_app_settings(export_path)
+            exported = json.loads(export_path.read_text(encoding="utf-8"))
+            self.assertNotIn("workspace_recent_trackers", exported)

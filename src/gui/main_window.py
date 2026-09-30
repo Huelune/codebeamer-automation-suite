@@ -235,6 +235,8 @@ class MainWindow(QMainWindow):
             activity_recorder=self._record_activity,
             bulk_run_store=self.bulk_run_store,
             bulk_chunk_size_saver=self.settings_store.save_bulk_update_chunk_size,
+            recent_trackers=self.settings_store.load_app_settings().workspace_recent_trackers,
+            recent_trackers_saver=self.settings_store.save_workspace_recent_trackers,
             busy_started=self._begin_busy,
             busy_finished=self._end_busy,
             error_notifier=self._show_error_dialog,

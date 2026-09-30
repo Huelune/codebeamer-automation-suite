@@ -279,6 +279,26 @@ class TrackerQueryService:
             ] = tracker_payload
         return tuple(trackers)
 
+    def load_tracker(self, settings, tracker_id: int) -> TrackerSummary:
+        """트래커 ID 하나로 이름과 소속 프로젝트를 확인한다."""
+        normalized_tracker_id = int(tracker_id)
+        cache_key = self._cache_key(settings, normalized_tracker_id)
+        payload = self._tracker_cache.get(cache_key)
+        if payload is None:
+            client = self._client(settings, "load_tracker")
+            payload = self._run(
+                "load_tracker",
+                lambda: client.get_tracker(normalized_tracker_id),
+            )
+            if not isinstance(payload, dict):
+                raise TrackerQueryServiceError(
+                    TrackerQueryErrorKind.SERVER,
+                    "트래커 응답 형식을 해석할 수 없습니다.",
+                    operation="load_tracker",
+                )
+            self._tracker_cache[cache_key] = dict(payload)
+        return TrackerSummary.from_raw(payload)
+
     def load_tracker_schema(self, settings, tracker_id: int) -> dict[str, Any]:
         normalized_tracker_id = int(tracker_id)
         cache_key = self._cache_key(settings, normalized_tracker_id)
