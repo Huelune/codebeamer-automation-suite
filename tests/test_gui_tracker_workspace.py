@@ -23,6 +23,7 @@ from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
 from src.gui.tracker_content_models import WikiRenderResult
 from src.gui.tracker_content_models import WikiResourceReference
+from src.gui.tracker_detail_panel import ATTACHMENT_VISIBLE_ROWS
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_create_dialog import TrackerItemCreateRequest
 from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
@@ -1251,6 +1252,64 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.detail_panel.attachment_table.item(0, 0).text(), "sample.png")
         self.assertEqual(self.page.detail_panel.attachment_table.item(0, 1).text(), "2.0 KB")
         self.assertIsNotNone(self.page.detail_panel.attachment_table.cellWidget(0, 3))
+
+    def test_overview_description_grows_with_the_window(self) -> None:
+        """설명 칸은 고정 높이가 아니라 창 크기를 따라 늘고, 필드와의 경계를 옮길 수 있다."""
+        self.page.activate()
+        panel = self.page.detail_panel
+        panel.load_detail(9001001)
+        self.page.resize(1280, 860)
+        self._app.processEvents()
+        normal_height = panel.detail_description.height()
+
+        self.page.resize(1920, 1080)
+        self._app.processEvents()
+
+        self.assertGreater(panel.detail_description.height(), normal_height)
+        self.assertGreater(panel.detail_description.height(), 150)
+        splitter = panel.overview_splitter
+        self.assertEqual(splitter.count(), 2)
+        self.assertTrue(splitter.widget(0).isAncestorOf(panel.detail_description))
+        self.assertTrue(splitter.widget(1).isAncestorOf(panel.detail_fields_table))
+
+    def test_attachment_table_is_hidden_when_empty_and_fits_its_rows(self) -> None:
+        """첨부 표가 빈 채로 자리를 차지하지 않고, 행이 많으면 몇 행까지만 보인다."""
+        panel = self.page.detail_panel
+
+        def render_with_attachments(count: int) -> int:
+            panel.render_detail(
+                TrackerItemDetail.from_raw(
+                    {
+                        "id": 1300 + count,
+                        "name": "Attachment layout",
+                        "version": 1,
+                        "tracker": {
+                            "id": 24680001,
+                            "name": "Offline Requirements",
+                            "project": {"id": 246800, "name": "Offline Project"},
+                        },
+                        "attachments": [
+                            {"id": 700 + index, "name": f"sample-{index}.txt", "size": 10}
+                            for index in range(count)
+                        ],
+                    }
+                )
+            )
+            self._app.processEvents()
+            return panel.attachment_table.height()
+
+        render_with_attachments(0)
+        self.assertFalse(panel.attachment_table.isVisible())
+        self.assertEqual(panel.attachment_status_label.text(), "첨부 파일이 없습니다.")
+
+        one_row_height = render_with_attachments(1)
+        self.assertTrue(panel.attachment_table.isVisible())
+        capped_height = render_with_attachments(ATTACHMENT_VISIBLE_ROWS)
+        self.assertGreater(capped_height, one_row_height)
+        self.assertEqual(render_with_attachments(ATTACHMENT_VISIBLE_ROWS + 3), capped_height)
+
+        panel.reset_detail()
+        self.assertFalse(panel.attachment_table.isVisible())
 
     def test_current_detail_automatically_renders_image_attachment_in_memory(self) -> None:
         self.settings.offline_mode = False
