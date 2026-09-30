@@ -32,6 +32,7 @@ try:
     from PySide6.QtWidgets import QLabel
     from PySide6.QtWidgets import QPlainTextEdit
     from PySide6.QtWidgets import QPushButton
+    from PySide6.QtWidgets import QSplitter
     from PySide6.QtWidgets import QTableWidget
     from PySide6.QtWidgets import QTableWidgetItem
     from PySide6.QtWidgets import QTabWidget
@@ -67,6 +68,10 @@ from .wiki_content_view import WikiContentView
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
 from .wiki_renderer import payload_uses_wiki
+
+
+# 첨부 표가 스크롤 없이 보여 주는 최대 행 수.
+ATTACHMENT_VISIBLE_ROWS = 4
 
 
 @dataclass(frozen=True)
@@ -273,7 +278,15 @@ class TrackerDetailPanel(QFrame):
         tab = QWidget(self)
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(6, 8, 6, 6)
-        layout.setSpacing(6)
+        # 설명과 필드가 둘 다 데이터라 창이 커지면 함께 늘고, 경계는 사용자가 옮긴다.
+        # 첨부는 설명 쪽에 붙여 행 수만큼만 차지한다.
+        self.overview_splitter = QSplitter(Qt.Orientation.Vertical, tab)
+        self.overview_splitter.setObjectName("tracker_overview_splitter")
+        self.overview_splitter.setChildrenCollapsible(False)
+        description_pane = QWidget(self.overview_splitter)
+        top_layout = QVBoxLayout(description_pane)
+        top_layout.setContentsMargins(0, 0, 0, 4)
+        top_layout.setSpacing(6)
         description_header = QHBoxLayout()
         description_label = QLabel("설명")
         description_label.setObjectName("tracker_detail_section_title")
@@ -284,14 +297,14 @@ class TrackerDetailPanel(QFrame):
         self.description_source_toggle.setVisible(False)
         self.description_source_toggle.toggled.connect(self._render_description)
         description_header.addWidget(self.description_source_toggle)
-        layout.addLayout(description_header)
+        top_layout.addLayout(description_header)
         self.detail_description = WikiContentView(tab)
         self.detail_description.setObjectName("tracker_detail_description")
         self.detail_description.setReadOnly(True)
         self.detail_description.setOpenExternalLinks(False)
         self.detail_description.setPlaceholderText("아이템을 선택하면 설명을 표시합니다.")
-        self.detail_description.setMaximumHeight(150)
-        layout.addWidget(self.detail_description)
+        self.detail_description.setMinimumHeight(120)
+        top_layout.addWidget(self.detail_description, 1)
 
         attachment_header = QHBoxLayout()
         attachment_label = QLabel("첨부 파일")
@@ -308,17 +321,17 @@ class TrackerDetailPanel(QFrame):
         self.attachment_preview_button.setVisible(False)
         self.attachment_preview_button.clicked.connect(self._open_attachment_preview)
         attachment_header.addWidget(self.attachment_preview_button)
-        layout.addLayout(attachment_header)
+        top_layout.addLayout(attachment_header)
         self.attachment_status_label = QLabel("아이템을 선택하면 첨부를 확인할 수 있습니다.", tab)
         self.attachment_status_label.setWordWrap(True)
-        layout.addWidget(self.attachment_status_label)
+        top_layout.addWidget(self.attachment_status_label)
         self.attachment_preview = WikiContentView(tab)
         self.attachment_preview.setObjectName("tracker_attachment_preview")
         self.attachment_preview.setReadOnly(True)
         self.attachment_preview.setOpenExternalLinks(False)
         self.attachment_preview.setMaximumHeight(260)
         self.attachment_preview.setVisible(False)
-        layout.addWidget(self.attachment_preview)
+        top_layout.addWidget(self.attachment_preview)
         self.attachment_table = QTableWidget(0, 4, tab)
         self.attachment_table.setObjectName("tracker_attachment_table")
         self.attachment_table.setHorizontalHeaderLabels(["파일명", "크기", "수정 시각", "작업"])
@@ -329,12 +342,16 @@ class TrackerDetailPanel(QFrame):
         self.attachment_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.attachment_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.attachment_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.attachment_table.setMaximumHeight(150)
-        layout.addWidget(self.attachment_table)
+        self.attachment_table.hide()
+        top_layout.addWidget(self.attachment_table)
 
+        fields_pane = QWidget(self.overview_splitter)
+        bottom_layout = QVBoxLayout(fields_pane)
+        bottom_layout.setContentsMargins(0, 4, 0, 0)
+        bottom_layout.setSpacing(6)
         fields_label = QLabel("필드")
         fields_label.setObjectName("tracker_detail_section_title")
-        layout.addWidget(fields_label)
+        bottom_layout.addWidget(fields_label)
         self.detail_fields_table = QTableWidget(0, 3, tab)
         self.detail_fields_table.setObjectName("tracker_detail_fields")
         self.detail_fields_table.setHorizontalHeaderLabels(["필드", "값", "유형"])
@@ -353,8 +370,31 @@ class TrackerDetailPanel(QFrame):
         self.detail_fields_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.ResizeToContents
         )
-        layout.addWidget(self.detail_fields_table, 1)
+        bottom_layout.addWidget(self.detail_fields_table, 1)
+
+        self.overview_splitter.addWidget(description_pane)
+        self.overview_splitter.addWidget(fields_pane)
+        self.overview_splitter.setStretchFactor(0, 3)
+        self.overview_splitter.setStretchFactor(1, 2)
+        layout.addWidget(self.overview_splitter, 1)
         return tab
+
+    def _fit_attachment_table(self) -> None:
+        """첨부가 없으면 표를 숨기고, 있으면 몇 행만 보이는 높이로 맞춘다.
+
+        첨부 표가 고정 높이를 차지하면 설명과 필드가 그만큼 줄어든다.
+        """
+        table = self.attachment_table
+        row_count = table.rowCount()
+        table.setVisible(row_count > 0)
+        if row_count == 0:
+            return
+        visible_rows = min(row_count, ATTACHMENT_VISIBLE_ROWS)
+        table.setFixedHeight(
+            table.horizontalHeader().sizeHint().height()
+            + table.verticalHeader().defaultSectionSize() * visible_rows
+            + table.frameWidth() * 2
+        )
 
 
     def _build_raw_tab(self) -> QWidget:
@@ -664,6 +704,7 @@ class TrackerDetailPanel(QFrame):
                 "과거 첨부 revision 계약이 확인되지 않아 Baseline 첨부 목록은 표시하지 않습니다."
             )
             self.attachment_table.setRowCount(0)
+            self._fit_attachment_table()
             return
         settings = self.settings_provider()
         item_id = detail.item_id
@@ -690,6 +731,7 @@ class TrackerDetailPanel(QFrame):
                     lambda _checked=False, selected=attachment: self.save_attachment(selected)
                 )
                 self.attachment_table.setCellWidget(row, 3, save_button)
+            self._fit_attachment_table()
             self.attachment_status_label.setText(
                 f"첨부 파일 {len(attachments)}개" if attachments else "첨부 파일이 없습니다."
             )
@@ -918,6 +960,7 @@ class TrackerDetailPanel(QFrame):
         self.attachment_preview.clear()
         self.attachment_preview.setVisible(False)
         self.attachment_table.setRowCount(0)
+        self._fit_attachment_table()
         self.attachment_reload_button.setEnabled(not historical)
         self.attachment_reload_button.setText("첨부 다시 불러오기")
         self.attachment_status_label.setText(
@@ -1054,6 +1097,7 @@ class TrackerDetailPanel(QFrame):
         self.attachment_preview.clear()
         self.attachment_preview.setVisible(False)
         self.attachment_table.setRowCount(0)
+        self._fit_attachment_table()
         self.detail_fields_table.setRowCount(0)
         self.detail_raw_json.clear()
         self.editor_panel.clear()
