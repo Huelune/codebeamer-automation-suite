@@ -1277,8 +1277,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.detail_panel.attachment_table.item(0, 1).text(), "2.0 KB")
         self.assertIsNotNone(self.page.detail_panel.attachment_table.cellWidget(0, 3))
 
-    def test_overview_description_grows_with_the_window(self) -> None:
-        """설명 칸은 고정 높이가 아니라 창 크기를 따라 늘고, 필드와의 경계를 옮길 수 있다."""
+    def test_description_and_fields_have_their_own_tabs(self) -> None:
+        """설명과 필드 표는 각자 탭을 갖고, 설명 칸은 창 크기를 따라 탭 높이를 채운다."""
         self.page.activate()
         panel = self.page.detail_panel
         panel.load_detail(9001001)
@@ -1290,11 +1290,14 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self._app.processEvents()
 
         self.assertGreater(panel.detail_description.height(), normal_height)
-        self.assertGreater(panel.detail_description.height(), 150)
-        splitter = panel.overview_splitter
-        self.assertEqual(splitter.count(), 2)
-        self.assertTrue(splitter.widget(0).isAncestorOf(panel.detail_description))
-        self.assertTrue(splitter.widget(1).isAncestorOf(panel.detail_fields_table))
+        tabs = panel.detail_tabs
+        self.assertEqual(tabs.tabText(0), "설명")
+        self.assertEqual(tabs.tabText(1), "필드")
+        self.assertTrue(tabs.widget(0).isAncestorOf(panel.detail_description))
+        self.assertFalse(tabs.widget(0).isAncestorOf(panel.detail_fields_table))
+        self.assertTrue(tabs.widget(1).isAncestorOf(panel.detail_fields_table))
+        # 필드 표가 빠진 만큼 설명 칸이 탭 높이의 대부분을 쓴다.
+        self.assertGreater(panel.detail_description.height(), tabs.widget(0).height() * 0.6)
 
     def test_attachment_table_is_hidden_when_empty_and_fits_its_rows(self) -> None:
         """첨부 표가 빈 채로 자리를 차지하지 않고, 행이 많으면 몇 행까지만 보인다."""
@@ -1500,8 +1503,15 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(len(opened), 1)
         try:
-            self.assertIn(str(detail.item_id), opened[0].windowTitle())
-            self.assertIs(opened[0].parent(), self.page)
+            dialog = opened[0]
+            self.assertIn(str(detail.item_id), dialog.windowTitle())
+            self.assertIs(dialog.parent(), self.page)
+            # 설명과 필드 표는 각자 탭에서 창 높이를 쓴다.
+            self.assertEqual(dialog.tabs.tabText(0), "설명")
+            self.assertEqual(dialog.tabs.tabText(1), "필드")
+            self.assertTrue(dialog.tabs.widget(0).isAncestorOf(dialog.description_view))
+            self.assertTrue(dialog.tabs.widget(1).isAncestorOf(dialog.fields_table))
+            self.assertGreater(dialog.fields_table.rowCount(), 0)
         finally:
             # 진짜 창이라 닫아 둔다. 파괴는 부모인 page 가 맡는다.
             opened[0].close()
