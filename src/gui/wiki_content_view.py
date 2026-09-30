@@ -8,6 +8,7 @@ try:
     from PySide6.QtCore import QRect
     from PySide6.QtCore import Qt
     from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QDesktopServices
     from PySide6.QtGui import QFontMetrics
     from PySide6.QtGui import QImage
     from PySide6.QtGui import QPainter
@@ -36,6 +37,9 @@ class WikiContentView(QTextBrowser):
         super().__init__(parent)
         self.setReadOnly(True)
         self.setOpenExternalLinks(False)
+        # 기본값이면 링크를 누를 때 이 칸이 그 주소로 이동하려다 내용이 통째로 사라진다.
+        self.setOpenLinks(False)
+        self.anchorClicked.connect(self._open_link)
         # 그림 폭을 맞추는 편집이 되돌리기 기록에 쌓이지 않게 한다.
         self.document().setUndoRedoEnabled(False)
         self._result: WikiRenderResult | None = None
@@ -60,6 +64,11 @@ class WikiContentView(QTextBrowser):
     def clear(self) -> None:
         self._images.clear()
         super().clear()
+
+    def _open_link(self, url: QUrl) -> None:
+        """웹 주소는 기본 브라우저로 연다. 그 밖의 주소는 이 칸에서 열지 않는다."""
+        if url.scheme().casefold() in {"http", "https"}:
+            QDesktopServices.openUrl(url)
 
     def add_attachment_resource(self, resource: AttachmentResource) -> bool:
         url = QUrl(f"{ATTACHMENT_SCHEME}://{resource.resource_key}")
