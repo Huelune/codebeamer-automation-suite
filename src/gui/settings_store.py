@@ -31,6 +31,8 @@ WORKFLOW_PRESET_FILE_NAME = "gui_workflow_preset.json"
 WORKFLOW_PRESET_COLLECTION_FILE_NAME = "gui_workflow_presets.json"
 WORKFLOW_PRESET_COLLECTION_VERSION = 2
 APP_SETTINGS_VERSION = 4
+# 트래커 작업공간이 기억하는 최근 트래커 수.
+MAX_RECENT_TRACKERS = 5
 
 CREDENTIAL_STORAGE_NONE = "none"
 CREDENTIAL_STORAGE_LOCAL = "local_encrypted"
@@ -114,6 +116,8 @@ class AppSettings:
     test_mode_validated_at: str = ""
     default_project_id: str = ""
     default_tracker_id: str = ""
+    # 작업공간에서 연 트래커. 최근 것이 앞이고 업로드 기본값과 따로 둔다.
+    workspace_recent_trackers: list[dict[str, int]] = field(default_factory=list)
     migrated_from_legacy: bool = False
 
     def active_profile(self) -> ConnectionProfile | None:
@@ -209,6 +213,24 @@ def _file_validation_marker(path_text: str) -> dict[str, object]:
         marker["size"] = int(stat.st_size)
         marker["mtime_ns"] = int(stat.st_mtime_ns)
     return marker
+
+
+def _normalized_recent_trackers(value: object) -> list[dict[str, int]]:
+    """양의 정수 ID 쌍만 남기고 같은 트래커는 앞의 것 하나만 둔다."""
+    entries: list[dict[str, int]] = []
+    seen: set[int] = set()
+    for raw in value if isinstance(value, list) else []:
+        entry = as_mapping(raw)
+        try:
+            project_id = int(entry.get("project_id") or 0)
+            tracker_id = int(entry.get("tracker_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if project_id <= 0 or tracker_id <= 0 or tracker_id in seen:
+            continue
+        seen.add(tracker_id)
+        entries.append({"project_id": project_id, "tracker_id": tracker_id})
+    return entries[:MAX_RECENT_TRACKERS]
 
 
 def profile_validation_signature(profile: ConnectionProfile) -> str:
@@ -534,6 +556,11 @@ class GuiSettingsStore:
     def save_bulk_update_chunk_size(self, chunk_size: int) -> None:
         app_settings = self.ensure_app_settings()
         app_settings.bulk_update_chunk_size = max(int(chunk_size), 1)
+        self.save_app_settings(app_settings)
+
+    def save_workspace_recent_trackers(self, entries: list[dict[str, int]]) -> None:
+        app_settings = self.ensure_app_settings()
+        app_settings.workspace_recent_trackers = _normalized_recent_trackers(entries)
         self.save_app_settings(app_settings)
 
     def export_app_settings(self, path: Path, settings: AppSettings | None = None) -> None:
@@ -1047,6 +1074,9 @@ class GuiSettingsStore:
             test_mode_validated_at=str(settings.test_mode_validated_at or ""),
             default_project_id=str(settings.default_project_id or ""),
             default_tracker_id=str(settings.default_tracker_id or ""),
+            workspace_recent_trackers=_normalized_recent_trackers(
+                settings.workspace_recent_trackers
+            ),
             migrated_from_legacy=bool(settings.migrated_from_legacy),
         )
 
@@ -1106,6 +1136,7 @@ class GuiSettingsStore:
             "test_mode_validated_at": settings.test_mode_validated_at,
             "default_project_id": settings.default_project_id,
             "default_tracker_id": settings.default_tracker_id,
+            "workspace_recent_trackers": settings.workspace_recent_trackers,
             "migrated_from_legacy": settings.migrated_from_legacy,
         }
 
@@ -1198,6 +1229,9 @@ class GuiSettingsStore:
             test_mode_validated_at=str(payload.get("test_mode_validated_at") or ""),
             default_project_id=str(payload.get("default_project_id") or ""),
             default_tracker_id=str(payload.get("default_tracker_id") or ""),
+            workspace_recent_trackers=_normalized_recent_trackers(
+                payload.get("workspace_recent_trackers")
+            ),
             migrated_from_legacy=bool(payload.get("migrated_from_legacy", False)),
         )
         return self._normalize_app_settings(settings)

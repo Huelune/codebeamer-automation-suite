@@ -340,7 +340,14 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(self.page.project_combo.count(), 1)
         self.assertEqual(self.page.project_combo.currentData(), 246800)
-        self.assertEqual(self.page.tracker_combo.count(), 2)
+        # 연 트래커는 최근 항목으로 맨 위에 오고, 구분선 아래에 나머지가 온다.
+        self.assertEqual(
+            [
+                self.page.tracker_combo.itemData(index)
+                for index in range(self.page.tracker_combo.count())
+            ],
+            [24680001, None, 24680002],
+        )
         self.assertEqual(self.page.tracker_combo.currentData(), 24680001)
         self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 2)
         self.assertEqual(self.page.hierarchy_panel.item_tree.columnCount(), 2)
@@ -1773,7 +1780,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         }
         self.assertEqual(requirement_ids, {9001003, 9001004})
 
-        self.page._on_tracker_activated(1)
+        self.page._on_tracker_activated(self.page.tracker_combo.findData(24680002))
         self.page.search_panel.search_text_input.setText("Steering")
         self.page.search_panel._run_search()
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from collections.abc import Iterable
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -8,6 +10,7 @@ from typing import Any
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QComboBox
+    from PySide6.QtWidgets import QCompleter
     from PySide6.QtWidgets import QFrame
     from PySide6.QtWidgets import QHBoxLayout
     from PySide6.QtWidgets import QLabel
@@ -28,6 +31,7 @@ from src.diagnostics import DiagnosticSource
 from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
+from .settings_store import MAX_RECENT_TRACKERS
 from .settings_store import GuiSettings
 from .tracker_baseline_compare import BaselineComparisonSource
 from .tracker_baseline_compare import TrackerBaseline
@@ -90,7 +94,25 @@ REQUEST_BUSY_MESSAGES = {
     "editor_schema": "수정 가능한 필드를 확인하는 중입니다.",
     "required_fields": "새 아이템 필수 필드를 확인하는 중입니다.",
     "item_write": "트래커 아이템 변경 사항을 반영하는 중입니다.",
+    "tracker_lookup": "트래커 ID의 소속 프로젝트를 확인하는 중입니다.",
 }
+
+
+def _make_searchable(combo: QComboBox, placeholder: str) -> None:
+    """이름 일부나 ID를 입력해 목록을 좁힐 수 있게 한다.
+
+    Qt 기본 completer는 앞글자만 맞춰 보므로 `이름  ·  ID` 중간의 ID로는 찾을 수 없다.
+    """
+    combo.setEditable(True)
+    combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+    line_edit = combo.lineEdit()
+    if line_edit is not None:
+        line_edit.setPlaceholderText(placeholder)
+    completer = combo.completer()
+    if completer is not None:
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
 
 
 class TrackerWorkspacePage(QWidget):
@@ -121,6 +143,8 @@ class TrackerWorkspacePage(QWidget):
         bulk_run_store: BulkUpdateRunStore | None = None,
         bulk_chunk_size_saver: Callable[[int], None] | None = None,
         bulk_request_provider: Callable[..., BulkUpdateRequest | None] | None = None,
+        recent_trackers: Sequence[dict[str, int]] = (),
+        recent_trackers_saver: Callable[[list[dict[str, int]]], None] | None = None,
         busy_started: Callable[[str], object] | None = None,
         busy_finished: Callable[[object], None] | None = None,
         error_notifier: Callable[[str, str], None] | None = None,
@@ -147,6 +171,9 @@ class TrackerWorkspacePage(QWidget):
         self.bulk_run_store = bulk_run_store
         self.bulk_chunk_size_saver = bulk_chunk_size_saver
         self.bulk_request_provider = bulk_request_provider
+        # 최근에 연 트래커. 최근 것이 앞이고 {"project_id", "tracker_id"} 모양이다.
+        self._recent_trackers = [dict(entry) for entry in recent_trackers]
+        self.recent_trackers_saver = recent_trackers_saver
         self.busy_started = busy_started
         self.busy_finished = busy_finished
         self.error_notifier = error_notifier
@@ -221,7 +248,14 @@ class TrackerWorkspacePage(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.project_combo.setMinimumContentsLength(18)
+        _make_searchable(self.project_combo, "프로젝트 이름 또는 ID")
         self.project_combo.activated.connect(self._on_project_activated)
+        project_edit = self.project_combo.lineEdit()
+        if project_edit is not None:
+            project_edit.returnPressed.connect(self._submit_project_text)
+            project_edit.editingFinished.connect(
+                lambda: self._restore_combo_text(self.project_combo)
+            )
         context_layout.addWidget(self.project_combo, 1)
 
         tracker_label = QLabel("트래커")
@@ -234,7 +268,18 @@ class TrackerWorkspacePage(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.tracker_combo.setMinimumContentsLength(18)
+        _make_searchable(self.tracker_combo, "트래커 이름 또는 ID")
+        self.tracker_combo.setToolTip(
+            "이름 일부나 ID로 찾습니다. 다른 프로젝트의 트래커 ID를 넣고 Enter를 누르면 "
+            "그 프로젝트로 이동합니다."
+        )
         self.tracker_combo.activated.connect(self._on_tracker_activated)
+        tracker_edit = self.tracker_combo.lineEdit()
+        if tracker_edit is not None:
+            tracker_edit.returnPressed.connect(self._submit_tracker_text)
+            tracker_edit.editingFinished.connect(
+                lambda: self._restore_combo_text(self.tracker_combo)
+            )
         context_layout.addWidget(self.tracker_combo, 1)
 
         self.create_item_button = QPushButton("새 아이템", context_card)
@@ -764,11 +809,15 @@ class TrackerWorkspacePage(QWidget):
                 self.project_combo.addItem(
                     f"{project.name}  ·  {project.project_id}", project.project_id
                 )
-            preferred_id = self._preferred_id(
-                str(settings.default_project_id or ""),
-                self._current_project.project_id if self._current_project else None,
+            # 작업공간에서 마지막으로 본 프로젝트를 업로드 기본값보다 먼저 연다.
+            index = self._first_combo_index(
+                self.project_combo,
+                (
+                    *(entry.get("project_id") for entry in self._recent_trackers[:1]),
+                    settings.default_project_id,
+                    self._current_project.project_id if self._current_project else None,
+                ),
             )
-            index = self._combo_index_for_id(self.project_combo, preferred_id)
             if index < 0 and self.project_combo.count():
                 index = 0
             self.project_combo.setCurrentIndex(index)
@@ -795,18 +844,18 @@ class TrackerWorkspacePage(QWidget):
 
         self._submit("projects", lambda: self.service.load_projects(settings), loaded, failed)
 
-    @staticmethod
-    def _preferred_id(primary: str, fallback: int | None) -> int | None:
-        for value in (primary, fallback):
-            if value is None or value == "":
-                continue
+    @classmethod
+    def _first_combo_index(cls, combo: QComboBox, candidates: Iterable[object]) -> int:
+        """후보 ID 중 목록에 있는 첫 번째 항목의 위치를 돌려준다."""
+        for candidate in candidates:
             try:
-                normalized = int(value)
+                entity_id = int(str(candidate))
             except (TypeError, ValueError):
                 continue
-            if normalized > 0:
-                return normalized
-        return None
+            index = cls._combo_index_for_id(combo, entity_id)
+            if index >= 0:
+                return index
+        return -1
 
     @staticmethod
     def _combo_index_for_id(combo: QComboBox, entity_id: int | None) -> int:
@@ -820,12 +869,40 @@ class TrackerWorkspacePage(QWidget):
                 continue
         return -1
 
+    def _project_at(self, index: int) -> ProjectSummary | None:
+        project_id = self.project_combo.itemData(int(index))
+        return next(
+            (project for project in self._projects if project.project_id == project_id),
+            None,
+        )
+
+    def _tracker_at(self, index: int) -> TrackerSummary | None:
+        # 최근 트래커를 위에 두므로 콤보 순서와 목록 순서가 다르다. ID로 찾는다.
+        tracker_id = self.tracker_combo.itemData(int(index))
+        return next(
+            (tracker for tracker in self._trackers if tracker.tracker_id == tracker_id),
+            None,
+        )
+
     def _on_project_activated(self, index: int) -> None:
-        if not (0 <= int(index) < len(self._projects)):
+        project = self._project_at(index)
+        if project is None:
             return
-        project = self._projects[int(index)]
         if self._current_project == project and self._trackers:
             return
+        self._switch_project(project)
+
+    def _switch_project(
+        self,
+        project: ProjectSummary,
+        *,
+        preferred_tracker_id: int | None = None,
+    ) -> None:
+        """다른 프로젝트로 옮긴다.
+
+        첫 트래커를 대신 골라 조회하지 않는다. 기억해 둔 트래커나 요청한
+        트래커가 있을 때만 이어서 연다.
+        """
         self._current_project = project
         self._current_tracker = None
         self.hierarchy_panel.clear_baseline_cache()
@@ -833,9 +910,19 @@ class TrackerWorkspacePage(QWidget):
         self.search_panel.reset_condition_search("트래커를 불러오는 중입니다.")
         self._reset_baseline_state("트래커를 불러오는 중입니다.")
         self.detail_panel.reset_detail()
-        self._load_trackers(project)
+        self._load_trackers(
+            project,
+            auto_select=False,
+            preferred_tracker_id=preferred_tracker_id,
+        )
 
-    def _load_trackers(self, project: ProjectSummary) -> None:
+    def _load_trackers(
+        self,
+        project: ProjectSummary,
+        *,
+        auto_select: bool = True,
+        preferred_tracker_id: int | None = None,
+    ) -> None:
         settings = self.settings_provider()
         project_id = project.project_id
         self.tracker_combo.setEnabled(False)
@@ -850,31 +937,46 @@ class TrackerWorkspacePage(QWidget):
             if self._current_project is None or self._current_project.project_id != project_id:
                 return
             self._trackers = tuple(trackers)
-            self.tracker_combo.blockSignals(True)
-            self.tracker_combo.clear()
-            for tracker in self._trackers:
-                self.tracker_combo.addItem(
-                    self._tracker_combo_text(tracker), tracker.tracker_id
-                )
-            preferred_id = self._preferred_id(
-                str(settings.default_tracker_id or ""),
-                self._current_tracker.tracker_id if self._current_tracker else None,
+            self._fill_tracker_combo()
+            index = self._first_combo_index(
+                self.tracker_combo,
+                (
+                    preferred_tracker_id,
+                    *(entry.get("tracker_id") for entry in self._recent_trackers),
+                    settings.default_tracker_id,
+                    self._current_tracker.tracker_id if self._current_tracker else None,
+                ),
             )
-            index = self._combo_index_for_id(self.tracker_combo, preferred_id)
-            if index < 0 and self.tracker_combo.count():
+            if index < 0 and auto_select and self.tracker_combo.count():
                 index = 0
-            self.tracker_combo.setCurrentIndex(index)
-            self.tracker_combo.blockSignals(False)
-            if index < 0:
+            self._select_combo_index(self.tracker_combo, index)
+            tracker = None if index < 0 else self._tracker_at(index)
+            if tracker is None:
                 self._current_tracker = None
+                self._clear_required_fields()
                 self._set_available(True)
-                self._set_workspace_status(
-                    f"'{project.name}' 프로젝트에 조회 가능한 트래커가 없습니다.",
-                    tone="warning",
-                )
-                self._reset_workspace("조회 가능한 트래커가 없습니다.")
+                if self._trackers:
+                    missing = (
+                        ""
+                        if preferred_tracker_id is None
+                        else f"트래커 #{preferred_tracker_id}이(가) 목록에 없습니다. "
+                    )
+                    self._set_workspace_status(
+                        f"'{project.name}' 프로젝트의 트래커 {len(self._trackers)}개를 불러왔습니다. "
+                        f"{missing}조회할 트래커를 고르세요.",
+                        tone="warning" if missing else "info",
+                    )
+                    self._reset_workspace("트래커를 고르면 계층을 조회합니다.")
+                else:
+                    self._set_workspace_status(
+                        f"'{project.name}' 프로젝트에 조회 가능한 트래커가 없습니다.",
+                        tone="warning",
+                    )
+                    self._reset_workspace("조회 가능한 트래커가 없습니다.")
                 return
-            self._current_tracker = self._trackers[index]
+            self._current_tracker = tracker
+            # 자동으로 연 트래커도 사용자가 본 것이다. 다른 프로젝트에 갔다 돌아오면 다시 연다.
+            self._remember_tracker(tracker)
             self._show_required_fields(self._current_tracker)
             self.hierarchy_panel.clear_baseline_cache()
             self.hierarchy_panel.reset_source()
@@ -959,12 +1061,13 @@ class TrackerWorkspacePage(QWidget):
         self.required_fields_label.hide()
 
     def _on_tracker_activated(self, index: int) -> None:
-        if not (0 <= int(index) < len(self._trackers)):
+        tracker = self._tracker_at(index)
+        if tracker is None:
             return
-        tracker = self._trackers[int(index)]
         if self._current_tracker == tracker:
             return
         self._current_tracker = tracker
+        self._remember_tracker(tracker)
         self._show_required_fields(tracker)
         self.hierarchy_panel.clear_baseline_cache()
         self.hierarchy_panel.reset_source()
@@ -998,6 +1101,154 @@ class TrackerWorkspacePage(QWidget):
         }:
             suffix = f" · {type_name}"
         return f"{tracker.name}  ·  {tracker.tracker_id}{suffix}"
+
+    def _fill_tracker_combo(self) -> None:
+        """최근에 연 트래커를 위에 두고, 구분선 아래에 나머지를 서버 순서대로 채운다."""
+        by_id = {tracker.tracker_id: tracker for tracker in self._trackers}
+        recent = [
+            by_id[entry["tracker_id"]]
+            for entry in self._recent_trackers
+            if entry.get("tracker_id") in by_id
+        ]
+        recent_ids = {tracker.tracker_id for tracker in recent}
+        rest = [tracker for tracker in self._trackers if tracker.tracker_id not in recent_ids]
+        combo = self.tracker_combo
+        combo.blockSignals(True)
+        combo.clear()
+        for tracker in recent:
+            combo.addItem(self._tracker_combo_text(tracker), tracker.tracker_id)
+        if recent and rest:
+            combo.insertSeparator(combo.count())
+        for tracker in rest:
+            combo.addItem(self._tracker_combo_text(tracker), tracker.tracker_id)
+        combo.blockSignals(False)
+
+    @staticmethod
+    def _select_combo_index(combo: QComboBox, index: int) -> None:
+        combo.blockSignals(True)
+        combo.setCurrentIndex(index)
+        combo.blockSignals(False)
+        # 편집 칸은 선택이 없을 때도 마지막 글자를 남기므로 직접 맞춘다.
+        combo.setEditText(combo.itemText(index) if index >= 0 else "")
+
+    def _remember_tracker(self, tracker: TrackerSummary) -> None:
+        """사용자가 연 트래커를 최근 목록 맨 앞에 두고 저장한다."""
+        if tracker.project_id is None:
+            return
+        entry = {"project_id": int(tracker.project_id), "tracker_id": tracker.tracker_id}
+        recent = [
+            entry,
+            *(
+                existing
+                for existing in self._recent_trackers
+                if existing.get("tracker_id") != tracker.tracker_id
+            ),
+        ][:MAX_RECENT_TRACKERS]
+        # 설정 파일 저장은 자격 증명 저장소까지 다시 쓰므로 순서가 바뀔 때만 한다.
+        if recent == self._recent_trackers:
+            return
+        self._recent_trackers = recent
+        if tracker.tracker_id in {value.tracker_id for value in self._trackers}:
+            self._fill_tracker_combo()
+            self._select_combo_index(
+                self.tracker_combo,
+                self._combo_index_for_id(self.tracker_combo, tracker.tracker_id),
+            )
+        if self.recent_trackers_saver is None:
+            return
+        # 최근 목록 저장은 부가 기능이다. 저장이 실패해도 조회 흐름을 끊지 않는다.
+        with contextlib.suppress(Exception):
+            self.recent_trackers_saver(list(self._recent_trackers))
+
+    @staticmethod
+    def _restore_combo_text(combo: QComboBox) -> None:
+        """고르지 않고 남긴 검색 글자를 지금 선택한 항목 이름으로 되돌린다."""
+        index = combo.currentIndex()
+        expected = combo.itemText(index) if index >= 0 else ""
+        if combo.currentText() != expected:
+            combo.setEditText(expected)
+
+    @staticmethod
+    def _matching_combo_index(combo: QComboBox, text: str) -> int:
+        """입력한 글자를 포함하는 첫 항목. 목록 팝업에 보이는 순서와 같다."""
+        needle = text.casefold()
+        for index in range(combo.count()):
+            if combo.itemData(index) is not None and needle in combo.itemText(index).casefold():
+                return index
+        return -1
+
+    def _submit_project_text(self) -> None:
+        """Enter를 누르면 글자를 포함하는 첫 프로젝트를 연다."""
+        combo = self.project_combo
+        text = combo.currentText().strip()
+        if not text or text == combo.itemText(combo.currentIndex()):
+            return
+        index = self._matching_combo_index(combo, text)
+        self._restore_combo_text(combo)
+        if index < 0:
+            self._set_workspace_status(f"'{text}'와(과) 일치하는 프로젝트가 없습니다.", tone="warning")
+            return
+        self._select_combo_index(combo, index)
+        self._on_project_activated(index)
+
+    def _submit_tracker_text(self) -> None:
+        """Enter를 누르면 글자를 포함하는 첫 트래커를 연다.
+
+        현재 프로젝트 목록에 없는 숫자는 트래커 ID로 보고 소속 프로젝트까지 옮겨 간다.
+        Enter 한 번에 이 처리가 두 번 불릴 수 있어서, 처리한 뒤에는 글자를 선택
+        항목 이름으로 되돌려 두 번째 호출이 아무 일도 하지 않게 한다.
+        """
+        combo = self.tracker_combo
+        text = combo.currentText().strip()
+        if not text or text == combo.itemText(combo.currentIndex()):
+            return
+        index = self._matching_combo_index(combo, text)
+        self._restore_combo_text(combo)
+        if index >= 0:
+            self._select_combo_index(combo, index)
+            self._on_tracker_activated(index)
+            return
+        if text.isdigit() and int(text) > 0:
+            self._open_tracker_by_id(int(text))
+            return
+        self._set_workspace_status(f"'{text}'와(과) 일치하는 트래커가 없습니다.", tone="warning")
+
+    def _open_tracker_by_id(self, tracker_id: int) -> None:
+        settings = self.settings_provider()
+        self._set_workspace_status(
+            f"트래커 #{tracker_id}의 소속 프로젝트를 확인하는 중입니다.",
+            tone="loading",
+        )
+
+        def loaded(tracker: TrackerSummary) -> None:
+            if tracker.project_id is None:
+                self._set_workspace_status(
+                    f"트래커 #{tracker_id}의 소속 프로젝트를 확인할 수 없습니다.",
+                    tone="warning",
+                )
+                return
+            project = next(
+                (value for value in self._projects if value.project_id == tracker.project_id),
+                None,
+            )
+            if project is None:
+                project = ProjectSummary(
+                    project_id=int(tracker.project_id),
+                    name=tracker.project_name or "프로젝트 정보 없음",
+                )
+                self._ensure_project_option(project)
+            self._select_combo_index(
+                self.project_combo,
+                self._combo_index_for_id(self.project_combo, project.project_id),
+            )
+            self._switch_project(project, preferred_tracker_id=tracker.tracker_id)
+
+        self._submit(
+            "tracker_lookup",
+            lambda: self.service.load_tracker(settings, tracker_id),
+            loaded,
+            lambda exc: self._show_error(exc, prefix=f"트래커 #{tracker_id} 열기 실패"),
+        )
 
 
 
@@ -1324,6 +1575,7 @@ class TrackerWorkspacePage(QWidget):
         self._ensure_tracker_option(tracker)
         self._current_project = project
         self._current_tracker = tracker
+        self._remember_tracker(tracker)
         if previous_tracker_id != tracker.tracker_id:
             self.search_panel.reset_condition_search(
                 "트래커가 변경되었습니다. 상세 검색 조건을 다시 설정하세요."
@@ -1400,11 +1652,7 @@ class TrackerWorkspacePage(QWidget):
         else:
             trackers.append(tracker)
         self._trackers = tuple(trackers)
-        self.tracker_combo.blockSignals(True)
-        self.tracker_combo.clear()
-        for value in self._trackers:
-            self.tracker_combo.addItem(self._tracker_combo_text(value), value.tracker_id)
-        self.tracker_combo.blockSignals(False)
+        self._fill_tracker_combo()
 
     def _render_ancestor_path(self, path: tuple[TrackerItemSummary, ...]) -> None:
         self.hierarchy_panel.item_tree.blockSignals(True)
