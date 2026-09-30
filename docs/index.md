@@ -35,6 +35,7 @@
 가상환경 생성, 의존성 설치, lint·type check·테스트 실행 명령은 [README의 빠른 시작](../README.md#빠른-시작)에 있습니다.
 lint 규칙과 type check 범위는 저장소 루트 `pyproject.toml`에 정의되어 있고, GitHub Actions의
 `Lint and type check`, `Regression tests` job이 같은 명령을 실행합니다.
+커밋 단위와 메시지 형식은 [커밋 규칙](./ai/commit-convention.md)을 따릅니다.
 
 ## 문서별 역할
 

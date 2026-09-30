@@ -18,8 +18,9 @@
 - 재내보내기만 하는 모듈을 새로 만들지 않는다. 소비자는 정의 모듈에서 직접 import 한다.
 
 ## Git 및 커밋 규칙
-- 커밋 메시지는 반드시 Conventional Commits 형식을 따른다.
-- 모든 커밋 메시지는 한글로 작성한다.
+- 커밋을 만들거나 제안할 때는 `docs/ai/commit-convention.md`를 따른다. 커밋 하나에 논리적 변경 하나, Conventional Commits 형식, `type`·`scope` 외에는 한글로 쓰되 summary는 `~ 추가`, `~ 분리`처럼 명사형으로 끝내고(`~한다` 문장형 금지), 여러 커밋이 필요하면 계획을 먼저 보여 준다.
+- 변경을 설명하는 문서(`docs/feature-status.md`, README 등)는 그 변경을 만든 커밋에 함께 넣는다.
+- 사용자가 요청하지 않으면 기존 이력을 rewrite 하거나 squash, force push 하지 않는다.
 - 커밋 전에는 의도한 파일만 스테이징한다.
 - `push`, PR 생성, 브랜치 정리는 사용자가 요청했을 때 진행한다.
 - 로컬 보조 디렉터리 `.tools/`는 추적하지 않는다.
