@@ -30,6 +30,15 @@ class WikiImageReference:
 
 
 @dataclass(frozen=True)
+class WikiLink:
+    """앱 안에서 처리하는 Wiki 링크. `kind`는 `item`(아이템 열기) 또는 `attachment`(첨부 저장)이다."""
+
+    kind: str
+    target_id: int
+    name: str = ""
+
+
+@dataclass(frozen=True)
 class WikiRenderResult:
     html: str
     resources: tuple[WikiResourceReference, ...] = field(default_factory=tuple)

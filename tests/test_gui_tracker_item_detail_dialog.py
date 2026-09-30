@@ -7,12 +7,15 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QUrl
+
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
 from src.gui.tracker_content_models import AttachmentSummary
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
 from src.gui.tracker_query_models import TrackerItemDetail
+from src.gui.wiki_renderer import codebeamer_wiki_to_html
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
@@ -121,7 +124,7 @@ class TrackerItemDetailDialogTest(unittest.TestCase):
         requested = []
         saved = []
         dialog.comments_requested.connect(requested.append)
-        dialog.comment_attachment_save_requested.connect(saved.append)
+        dialog.attachment_save_requested.connect(saved.append)
         dialog.show()
         dialog.tabs.setCurrentWidget(dialog.comments_tab)
         self.app.processEvents()
@@ -171,6 +174,43 @@ class TrackerItemDetailDialogTest(unittest.TestCase):
         self.assertEqual(dialog.comment_views, {})
         self.assertEqual(dialog._comments_state, "idle")
         self.assertIn("탭을 열면", dialog.comments_status.text())
+        dialog.close()
+
+    def test_description_links_open_items_here_and_save_attachments(self) -> None:
+        dialog = TrackerItemDetailDialog(
+            self.detail(),
+            description_html=codebeamer_wiki_to_html(
+                "[관련|CB:9001002] [계획서.docx|CB:/displayDocument/계획서.docx?task_id=1205&artifact_id=31]"
+            ),
+            attachments=(AttachmentSummary(31, "계획서.docx", size=2048),),
+        )
+        related: list[int] = []
+        saved: list[AttachmentSummary] = []
+        dialog.related_item_requested.connect(related.append)
+        dialog.attachment_save_requested.connect(saved.append)
+
+        dialog.description_view.anchorClicked.emit(QUrl("cb-link:item/9001002"))
+        dialog.description_view.anchorClicked.emit(QUrl("cb-link:attachment/31/계획서.docx"))
+        dialog.description_view.anchorClicked.emit(QUrl("cb-link:attachment/99/다른 문서.docx"))
+
+        self.assertEqual(related, [9001002])
+        # 현재 아이템 첨부면 목록의 정보(크기 등)를 쓰고, 아니면 링크의 파일 이름으로 받는다.
+        self.assertEqual(saved[0], AttachmentSummary(31, "계획서.docx", size=2048))
+        self.assertEqual(saved[1], AttachmentSummary(99, "다른 문서.docx"))
+        dialog.close()
+
+    def test_baseline_dialog_does_not_follow_item_links(self) -> None:
+        dialog = TrackerItemDetailDialog(
+            self.detail(),
+            description_html=codebeamer_wiki_to_html("[관련|CB:9001002]"),
+            baseline_id=24681001,
+        )
+        related: list[int] = []
+        dialog.related_item_requested.connect(related.append)
+
+        dialog.description_view.anchorClicked.emit(QUrl("cb-link:item/9001002"))
+
+        self.assertEqual(related, [])
         dialog.close()
 
 

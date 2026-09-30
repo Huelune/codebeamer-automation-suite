@@ -4,6 +4,7 @@ import unittest
 
 from src.gui.tracker_content_models import AttachmentResource
 from src.gui.tracker_content_models import AttachmentSummary
+from src.gui.tracker_content_models import WikiLink
 from src.gui.wiki_renderer import codebeamer_wiki_to_html
 from src.gui.wiki_renderer import is_explicit_wiki_type
 from src.gui.wiki_renderer import payload_uses_wiki
@@ -12,6 +13,7 @@ from src.gui.wiki_renderer import sanitize_server_wiki_html
 from src.gui.wiki_renderer import sanitize_wiki_style
 from src.gui.wiki_renderer import wiki_image_references
 from src.gui.wiki_renderer import wiki_image_resource_key
+from src.gui.wiki_renderer import wiki_link_from_url
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
@@ -70,6 +72,45 @@ class WikiRendererTest(unittest.TestCase):
         self.assertNotIn("<script>", rendered)
         self.assertIn("&lt;script&gt;", rendered)
         self.assertIn("font-weight: bold", rendered)
+
+    def test_nested_style_blocks_close_innermost_first(self) -> None:
+        """붙여넣은 서식은 `%%(바깥)%%(안쪽)글자%!%!`로 겹친다. 바깥 블록이 안쪽 시작에서 닫히면
+        안쪽 CSS 원문이 글자로 드러난다."""
+        rendered = codebeamer_wiki_to_html(
+            "%%(font-size:12px;)%%(color:rgb(30, 30, 30);display:inline !important;)111 %!설명.%!"
+        )
+
+        self.assertEqual(
+            rendered,
+            '<span style="font-size: 12px"><span style="color: rgb(30, 30, 30)">111 </span>설명.</span>',
+        )
+
+    def test_heading_lines_become_heading_blocks(self) -> None:
+        rendered = codebeamer_wiki_to_html(
+            "!3 설명( Description)\n\n본문\n!3 %%(font-size:12px;)%%(color:rgb(30, 30, 30);)설명222%!%!"
+        )
+
+        self.assertEqual(
+            rendered,
+            "<h3>설명( Description)</h3><br>본문"
+            '<h3><span style="font-size: 12px"><span style="color: rgb(30, 30, 30)">설명222</span></span></h3>',
+        )
+
+    def test_jspwiki_heading_marks_and_look_alikes(self) -> None:
+        self.assertEqual(codebeamer_wiki_to_html("!!!큰 제목"), "<h2>큰 제목</h2>")
+        self.assertEqual(codebeamer_wiki_to_html("!! 중간 제목"), "<h3>중간 제목</h3>")
+        self.assertEqual(codebeamer_wiki_to_html("! 작은 제목"), "<h4>작은 제목</h4>")
+        # 네 개 이상의 `!`, 문장 중간의 `!3`, 줄 맨 앞 이미지는 제목이 아니다.
+        self.assertEqual(codebeamer_wiki_to_html("!!!!아님"), "!!!!아님")
+        self.assertEqual(codebeamer_wiki_to_html("문장 중간 !3 아님"), "문장 중간 !3 아님")
+        self.assertTrue(codebeamer_wiki_to_html("[!그림.png!]").startswith("<img "))
+
+    def test_unpaired_style_marks_stay_as_text_and_open_blocks_close_at_the_end(self) -> None:
+        self.assertEqual(codebeamer_wiki_to_html("100%! 할인"), "100%! 할인")
+        self.assertEqual(
+            codebeamer_wiki_to_html("%%(color:red)끝까지"),
+            '<span style="color: red">끝까지</span>',
+        )
 
     def test_style_sanitizer_keeps_only_allowlisted_properties(self) -> None:
         style = sanitize_wiki_style(
@@ -139,8 +180,44 @@ class WikiRendererTest(unittest.TestCase):
             "[{Table\n\n|(참고) [링크|https://example.test] 내용\n}]"
         )
 
+        # 링크 안의 `|`는 셀 구분자가 아니다.
         self.assertEqual(rendered.count("<td "), 1)
-        self.assertIn("(참고) [링크|https://example.test] 내용</td>", rendered)
+        self.assertIn('(참고) <a href="https://example.test">링크</a> 내용</td>', rendered)
+
+    def test_wiki_links_become_attachment_item_and_web_links(self) -> None:
+        rendered = codebeamer_wiki_to_html(
+            "AAA Report : [AA_BB_CC_v1.2.3.docx|CB:/displayDocument/AA_BB_CC_v1.2.3.docx"
+            "?task_id=112345&artifact_id=111111]\n"
+            "[CB:1234] [요구 사항|ISSUE:42] [사이트|https://example.test/a?b=1]"
+        )
+
+        self.assertEqual(
+            rendered,
+            'AAA Report : <a href="cb-link:attachment/111111/AA_BB_CC_v1.2.3.docx">'
+            "AA_BB_CC_v1.2.3.docx</a><br>"
+            '<a href="cb-link:item/1234">CB:1234</a> '
+            '<a href="cb-link:item/42">요구 사항</a> '
+            '<a href="https://example.test/a?b=1">사이트</a>',
+        )
+
+    def test_links_the_app_cannot_open_stay_as_source(self) -> None:
+        """Wiki 페이지 이름이나 첨부 ID가 없는 경로는 짐작하지 않고 원문으로 둔다."""
+        rendered = codebeamer_wiki_to_html(
+            "[WikiPage] [문서|CB:/proj/doc/42] [mail|mailto:a@example.test] ~[x|https://a.test] [!img.png!]"
+        )
+
+        self.assertIn("[WikiPage] [문서|CB:/proj/doc/42] [mail|mailto:a@example.test] &#91;x|https://a.test]", rendered)
+        self.assertNotIn("<a ", rendered)
+        self.assertIn("<img ", rendered)
+
+    def test_wiki_link_urls_are_read_back(self) -> None:
+        self.assertEqual(
+            wiki_link_from_url("cb-link:attachment/111111/AA%20BB.docx"),
+            WikiLink("attachment", 111111, "AA BB.docx"),
+        )
+        self.assertEqual(wiki_link_from_url("cb-link:item/1234"), WikiLink("item", 1234, ""))
+        self.assertIsNone(wiki_link_from_url("cb-link:folder/12"))
+        self.assertIsNone(wiki_link_from_url("https://example.test/cb-link:item/1"))
 
     def test_unclosed_table_plugin_stays_as_source(self) -> None:
         rendered = codebeamer_wiki_to_html("[{Table\n\n|a|b")

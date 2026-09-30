@@ -8,6 +8,8 @@ try:
     from PySide6.QtCore import QRect
     from PySide6.QtCore import Qt
     from PySide6.QtCore import QUrl
+    from PySide6.QtCore import Signal
+    from PySide6.QtGui import QDesktopServices
     from PySide6.QtGui import QFontMetrics
     from PySide6.QtGui import QImage
     from PySide6.QtGui import QPainter
@@ -24,6 +26,7 @@ except ImportError as exc:  # pragma: no cover
 
 from .tracker_content_models import AttachmentResource
 from .tracker_content_models import WikiRenderResult
+from .wiki_renderer import wiki_link_from_url
 
 
 ATTACHMENT_SCHEME = "cb-attachment"
@@ -32,10 +35,17 @@ ATTACHMENT_SCHEME = "cb-attachment"
 class WikiContentView(QTextBrowser):
     """원격 네트워크 로딩 없이 정제된 Wiki HTML과 로컬 이미지만 표시한다."""
 
+    # 앱 안에서 처리할 링크. ("item", 아이템 ID, "") 또는 ("attachment", 첨부 ID, 파일 이름)
+    codebeamer_link_activated = Signal(str, int, str)
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setReadOnly(True)
         self.setOpenExternalLinks(False)
+        # 기본값이면 링크를 누를 때 이 칸이 그 주소로 이동하려다 내용이 통째로 사라진다.
+        self.setOpenLinks(False)
+        self.anchorClicked.connect(self._open_link)
+        self.highlighted.connect(self._show_link_tip)
         # 그림 폭을 맞추는 편집이 되돌리기 기록에 쌓이지 않게 한다.
         self.document().setUndoRedoEnabled(False)
         self._result: WikiRenderResult | None = None
@@ -60,6 +70,27 @@ class WikiContentView(QTextBrowser):
     def clear(self) -> None:
         self._images.clear()
         super().clear()
+
+    def _open_link(self, url: QUrl) -> None:
+        """웹 주소는 기본 브라우저로 열고, 아이템·첨부 링크는 이 칸을 쓰는 화면에 넘긴다.
+
+        그 밖의 주소는 이 칸에서 열지 않는다.
+        """
+        link = wiki_link_from_url(bytes(url.toEncoded().data()).decode("ascii", "replace"))
+        if link is not None:
+            self.codebeamer_link_activated.emit(link.kind, link.target_id, link.name)
+        elif url.scheme().casefold() in {"http", "https"}:
+            QDesktopServices.openUrl(url)
+
+    def _show_link_tip(self, url: QUrl) -> None:
+        """누르기 전에 링크가 무엇을 하는지 알려 준다."""
+        link = wiki_link_from_url(bytes(url.toEncoded().data()).decode("ascii", "replace"))
+        if link is not None and link.kind == "item":
+            self.setToolTip(f"아이템 #{link.target_id} 열기")
+        elif link is not None:
+            self.setToolTip(f"첨부 저장 · {link.name or link.target_id}")
+        else:
+            self.setToolTip(url.toString())
 
     def add_attachment_resource(self, resource: AttachmentResource) -> bool:
         url = QUrl(f"{ATTACHMENT_SCHEME}://{resource.resource_key}")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest.mock import patch
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -122,6 +123,40 @@ class WikiContentViewTest(unittest.TestCase):
         self.assertIsInstance(rejected, QImage)
         self.assertFalse(rejected.isNull())
         self.assertGreater(rejected.width(), waiting.width())
+
+    def test_clicking_a_link_keeps_the_content_and_opens_web_links_in_the_browser(self) -> None:
+        """링크를 누르면 칸이 그 주소로 이동하며 내용이 사라지던 문제를 막는다."""
+        self.view.setHtml('<p>본문 <a href="https://example.test/doc">링크</a> 끝</p>')
+
+        with patch("src.gui.wiki_content_view.QDesktopServices.openUrl") as open_url:
+            self.view.anchorClicked.emit(QUrl("https://example.test/doc"))
+            self.view.anchorClicked.emit(QUrl("/cb/issue/1234"))
+        self._app.processEvents()
+
+        self.assertEqual(self.view.toPlainText(), "본문 링크 끝")
+        open_url.assert_called_once_with(QUrl("https://example.test/doc"))
+
+    def test_codebeamer_links_are_handed_to_the_screen_and_explained_on_hover(self) -> None:
+        activated: list[tuple[str, int, str]] = []
+        self.view.codebeamer_link_activated.connect(
+            lambda kind, target_id, name: activated.append((kind, target_id, name))
+        )
+
+        with patch("src.gui.wiki_content_view.QDesktopServices.openUrl") as open_url:
+            self.view.anchorClicked.emit(QUrl("cb-link:item/1234"))
+            self.view.anchorClicked.emit(QUrl("cb-link:attachment/111111/AA_BB 계획.docx"))
+
+        self.assertEqual(
+            activated,
+            [("item", 1234, ""), ("attachment", 111111, "AA_BB 계획.docx")],
+        )
+        open_url.assert_not_called()
+        self.view.highlighted.emit(QUrl("cb-link:item/1234"))
+        self.assertEqual(self.view.toolTip(), "아이템 #1234 열기")
+        self.view.highlighted.emit(QUrl("cb-link:attachment/111111/AA_BB 계획.docx"))
+        self.assertEqual(self.view.toolTip(), "첨부 저장 · AA_BB 계획.docx")
+        self.view.highlighted.emit(QUrl())
+        self.assertEqual(self.view.toolTip(), "")
 
     def test_clear_drops_downloaded_images(self) -> None:
         self.view.add_attachment_resource(
