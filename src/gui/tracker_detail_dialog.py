@@ -27,6 +27,7 @@ from .tracker_item_detail_session import TrackerItemDetailSession
 from .tracker_query_models import TrackerItemDetail
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
+from .wiki_renderer import resolve_wiki_images
 
 
 if TYPE_CHECKING:
@@ -265,8 +266,16 @@ class DetailDialogController:
                 return
 
             def resources_loaded(resources: tuple[AttachmentResource, ...]) -> None:
-                if current():
-                    dialog.set_images(attachments, resources)
+                if not current():
+                    return
+                # 로컬 렌더링한 설명의 `[!파일명#해시!]` 자리에도 같은 이미지를 붙인다.
+                # 서버가 렌더링했다면 자리 이름이 달라 쓰이지 않을 뿐이다.
+                description_images = (
+                    resolve_wiki_images(detail.description, attachments, resources)
+                    if is_explicit_wiki_type(detail.description_format)
+                    else ()
+                )
+                dialog.set_images(attachments, (*resources, *description_images))
 
             self.page._submit(
                 "detail_dialog_images",

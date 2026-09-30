@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import unittest
 
+from src.gui.tracker_content_models import AttachmentResource
+from src.gui.tracker_content_models import AttachmentSummary
 from src.gui.wiki_renderer import codebeamer_wiki_to_html
 from src.gui.wiki_renderer import is_explicit_wiki_type
 from src.gui.wiki_renderer import payload_uses_wiki
+from src.gui.wiki_renderer import resolve_wiki_images
 from src.gui.wiki_renderer import sanitize_server_wiki_html
 from src.gui.wiki_renderer import sanitize_wiki_style
+from src.gui.wiki_renderer import wiki_image_references
+from src.gui.wiki_renderer import wiki_image_resource_key
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
@@ -171,6 +176,70 @@ class WikiRendererTest(unittest.TestCase):
         self.assertIn("이미지 차단", result.html)
         self.assertEqual(len(result.resources), 1)
         self.assertEqual(result.resources[0].attachment_id, 28)
+
+    def test_attachment_image_becomes_a_named_image_slot(self) -> None:
+        rendered = codebeamer_wiki_to_html(
+            "before [!Primary Architecture.png#A114E08877977D75CFAC6AADE92755CB!] __after__"
+        )
+
+        self.assertEqual(
+            rendered,
+            'before <img src="cb-attachment://wiki-image/Primary%20Architecture.png/'
+            'a114e08877977d75cfac6aade92755cb" alt="Primary Architecture.png"> '
+            "<strong>after</strong>",
+        )
+
+    def test_escaped_or_external_images_stay_as_source(self) -> None:
+        rendered = codebeamer_wiki_to_html("~[!plain.png!] [!https://outside.test/a.png!]")
+
+        self.assertEqual(rendered, "&#91;!plain.png!] [!https://outside.test/a.png!]")
+        self.assertEqual(
+            wiki_image_references("~[!plain.png!] [!https://outside.test/a.png!]"),
+            (),
+        )
+
+    def test_wiki_images_pick_the_attachment_whose_md5_matches(self) -> None:
+        """붙여넣은 그림은 이름이 겹치므로 해시로 고르고, 해시가 없으면 첫 번째를 쓴다."""
+        attachments = (
+            AttachmentSummary(attachment_id=1, name="image.png", md5="aaaa0000aaaa0000"),
+            AttachmentSummary(attachment_id=2, name="image.png", md5="bbbb1111bbbb1111"),
+            AttachmentSummary(attachment_id=3, name="Diagram.PNG"),
+        )
+        resources = (
+            AttachmentResource("attachment-1", "image/png", b"first"),
+            AttachmentResource("attachment-2", "image/png", b"second"),
+            AttachmentResource("attachment-3", "image/png", b"third"),
+        )
+        markup = (
+            "[!image.png#BBBB1111BBBB1111!] [!image.png!] [!image.png!] "
+            "[!diagram.png!] [!missing.png!]"
+        )
+
+        resolved = {
+            resource.resource_key: resource.data
+            for resource in resolve_wiki_images(markup, attachments, resources)
+        }
+
+        self.assertEqual(
+            resolved,
+            {
+                wiki_image_resource_key("image.png", "bbbb1111bbbb1111"): b"second",
+                wiki_image_resource_key("image.png", ""): b"first",
+                wiki_image_resource_key("diagram.png", ""): b"third",
+            },
+        )
+
+    def test_wiki_images_inside_table_plugin_cells_are_found(self) -> None:
+        markup = "[{Table\n\n|(background:white)[!cell.png#0123456789abcdef!]\n|text\n}]"
+
+        self.assertIn(
+            'src="cb-attachment://wiki-image/cell.png/0123456789abcdef"',
+            codebeamer_wiki_to_html(markup),
+        )
+        self.assertEqual(
+            [reference.name for reference in wiki_image_references(markup)],
+            ["cell.png"],
+        )
 
 
 if __name__ == "__main__":

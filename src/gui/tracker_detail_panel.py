@@ -68,6 +68,7 @@ from .wiki_content_view import WikiContentView
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
 from .wiki_renderer import payload_uses_wiki
+from .wiki_renderer import resolve_wiki_images
 
 
 # 첨부 표가 스크롤 없이 보여 주는 최대 행 수.
@@ -126,6 +127,10 @@ class TrackerDetailPanel(QFrame):
         self._description_render_result: WikiRenderResult | None = None
         self._attachments: tuple[AttachmentSummary, ...] = ()
         self._attachment_preview_resources: dict[str, AttachmentResource] = {}
+        # 받았지만 그리지 못한 이미지. 설명 본문 자리에 이유를 보여 줄 때만 쓴다.
+        self._failed_preview_resources: dict[str, AttachmentResource] = {}
+        # 설명 본문에 이미 넣은 이미지 자리. 아이템이 바뀌면 설명 칸과 함께 비운다.
+        self._description_image_keys: set[str] = set()
         self._inline_image_bytes = 0
         self._inline_resource_reservations: set[tuple[Any, ...]] = set()
         self._loaded_inline_resources: set[tuple[Any, ...]] = set()
@@ -223,7 +228,50 @@ class TrackerDetailPanel(QFrame):
 
     @property
     def preview_resources(self) -> tuple[AttachmentResource, ...]:
-        return tuple(self._attachment_preview_resources.values())
+        """상세 창에 넘길 이미지. 설명 본문 자리에 넣을 이미지도 함께 넘긴다."""
+        return (
+            *self._attachment_preview_resources.values(),
+            *self._description_images(),
+        )
+
+    def _description_images_enabled(self) -> bool:
+        """설명 본문에 첨부 이미지를 직접 넣는 경우. 서버 HTML은 제 이미지 주소를 쓴다."""
+        result = self._description_render_result
+        return self._description_uses_wiki and (result is None or result.used_fallback)
+
+    def _description_images(self) -> tuple[AttachmentResource, ...]:
+        """설명의 `[!파일명#해시!]` 자리에 넣을 이미지. 로컬 렌더링일 때만 쓴다."""
+        if not self._description_images_enabled():
+            return ()
+        return resolve_wiki_images(
+            self._description_text,
+            self._attachments,
+            self._attachment_preview_resources.values(),
+        )
+
+    def _add_description_images(self) -> None:
+        """첨부 영역이 받아 둔 이미지를 설명 본문 자리에도 넣는다.
+
+        wiki2html이 없는 서버에서는 로컬 렌더러가 유일한 경로라, 여기서 넣지 않으면
+        설명에는 파일 이름만 남고 그림은 첨부 영역에 따로 떨어져 보인다. 그리지 못한
+        이미지도 넘겨서 본문 자리에 이유가 보이게 한다.
+        """
+        if self.description_source_toggle.isChecked() or not self._description_images_enabled():
+            return
+        resources = resolve_wiki_images(
+            self._description_text,
+            self._attachments,
+            (
+                *self._attachment_preview_resources.values(),
+                *self._failed_preview_resources.values(),
+            ),
+        )
+        # 미리보기가 하나씩 도착할 때마다 불리므로 이미 넣은 그림은 다시 디코딩하지 않는다.
+        for resource in resources:
+            if resource.resource_key in self._description_image_keys:
+                continue
+            self._description_image_keys.add(resource.resource_key)
+            self.detail_description.add_attachment_resource(resource)
 
     @property
     def baseline_id(self) -> int | None:
@@ -488,6 +536,7 @@ class TrackerDetailPanel(QFrame):
                     )
             else:
                 self.detail_description.setHtml(codebeamer_wiki_to_html(self._description_text))
+            self._add_description_images()
             return
         self.detail_description.setPlainText(self._description_text)
 
@@ -530,6 +579,7 @@ class TrackerDetailPanel(QFrame):
             if not self.description_source_toggle.isChecked():
                 self.detail_description.set_render_result(result)
                 self._load_inline_resources(result, self.detail_description, detail, baseline_id)
+                self._add_description_images()
             if result.warning:
                 existing = self.detail_warning.text().strip()
                 lines = [line for line in (existing, result.warning) if line]
@@ -772,6 +822,7 @@ class TrackerDetailPanel(QFrame):
         settings = self.settings_provider()
         if bool(settings.offline_mode) or self._detail_baseline_id is not None:
             self._attachment_preview_resources.clear()
+            self._failed_preview_resources.clear()
             self.attachment_preview_button.setEnabled(False)
             self.attachment_preview_button.setVisible(False)
             self.attachment_preview.clear()
@@ -794,6 +845,7 @@ class TrackerDetailPanel(QFrame):
         ][:available_slots]
         if not candidates:
             self._attachment_preview_resources.clear()
+            self._failed_preview_resources.clear()
             self.attachment_preview_button.setEnabled(False)
             self.attachment_preview_button.setVisible(False)
             self.attachment_preview.clear()
@@ -811,6 +863,7 @@ class TrackerDetailPanel(QFrame):
                 "</p>"
             )
         self._attachment_preview_resources.clear()
+        self._failed_preview_resources.clear()
         self.attachment_preview_button.setEnabled(False)
         self.attachment_preview_button.setVisible(True)
         self.attachment_preview.setHtml("".join(blocks))
@@ -842,6 +895,9 @@ class TrackerDetailPanel(QFrame):
                     self._loaded_inline_resources.add(reserved)
                     self._attachment_preview_resources[resource.resource_key] = resource
                     self.attachment_preview_button.setEnabled(True)
+                else:
+                    self._failed_preview_resources[resource.resource_key] = resource
+                self._add_description_images()
 
             def failed(_exc: Exception, *, reserved=reservation) -> None:
                 self._inline_resource_reservations.discard(reserved)
@@ -949,12 +1005,16 @@ class TrackerDetailPanel(QFrame):
         self._description_text = detail.description
         self._description_uses_wiki = is_explicit_wiki_type(detail.description_format)
         self._description_render_result = None
+        # 해시 없는 `[!image.png!]`는 아이템이 달라도 자리 이름이 같다. 앞 아이템 그림을 비운다.
+        self.detail_description.clear()
+        self._description_image_keys.clear()
         self._inline_image_bytes = 0
         self._wiki_resource_generation += 1
         self._inline_resource_reservations.clear()
         self._loaded_inline_resources.clear()
         self._attachments = ()
         self._attachment_preview_resources.clear()
+        self._failed_preview_resources.clear()
         self.attachment_preview_button.setEnabled(False)
         self.attachment_preview_button.setVisible(False)
         self.attachment_preview.clear()
@@ -1068,8 +1128,10 @@ class TrackerDetailPanel(QFrame):
         self._description_text = ""
         self._description_uses_wiki = False
         self._description_render_result = None
+        self._description_image_keys.clear()
         self._attachments = ()
         self._attachment_preview_resources.clear()
+        self._failed_preview_resources.clear()
         self._inline_image_bytes = 0
         self._wiki_resource_generation += 1
         self._inline_resource_reservations.clear()

@@ -583,6 +583,9 @@ class TrackerItemDetailDialog(QDialog):
     ) -> None:
         self.attachments = attachments
         self.image_resources = {resource.resource_key: resource for resource in resources}
+        # 설명 본문 자리 이미지도 함께 온다. 늦게 도착해도 보기 화면이 다시 배치한다.
+        for resource in resources:
+            self.description_view.add_attachment_resource(resource)
         self._reset_images()
 
     def _build_image_tab(self) -> QWidget:

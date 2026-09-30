@@ -11,7 +11,13 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QBuffer
+from PySide6.QtCore import QByteArray
+from PySide6.QtCore import QIODevice
 from PySide6.QtCore import Qt
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QColor
+from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QDialog
 from PySide6.QtWidgets import QMessageBox
 
@@ -38,10 +44,21 @@ from src.gui.tracker_workspace import CHILDREN_LOADED_ROLE
 from src.gui.tracker_workspace import ITEM_SUMMARY_ROLE
 from src.gui.tracker_workspace import TrackerWorkspacePage
 from src.gui.wiki_content_view import WikiContentDialog
+from src.gui.wiki_renderer import wiki_image_resource_key
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "gui-offline-sample"
+
+
+def _png_bytes(width: int, height: int) -> bytes:
+    image = QImage(width, height, QImage.Format.Format_RGB32)
+    image.fill(QColor("steelblue"))
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    return bytes(data.data())
 
 
 def _detail(item_id: int, name: str, *, version: int = 1) -> TrackerItemDetail:
@@ -1390,6 +1407,71 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(detail_kwargs["attachments"], self.page.detail_panel._attachments)
         self.assertEqual(len(detail_kwargs["image_resources"]), 1)
         detail_dialog.return_value.exec.assert_called_once()
+
+    def test_wiki_description_shows_attachment_images_in_place(self) -> None:
+        """wiki2html 없이도 `[!파일명#해시!]` 자리에 첨부 이미지가 보인다."""
+        self.settings.offline_mode = False
+        self.settings.base_url = "https://example.test/cb"
+        self.settings.username = "sample"
+        self.settings.password = "placeholder"
+        images = {41: _png_bytes(4, 4), 42: _png_bytes(6, 3), 43: b"too large to decode"}
+        self.page.content_service.download_attachment = (
+            lambda _settings, attachment, *, max_bytes: AttachmentResource(
+                f"attachment-{attachment.attachment_id}",
+                "image/png",
+                images[attachment.attachment_id],
+            )
+        )
+
+        def detail(item_id: int, description: str, attachments: list[dict]) -> TrackerItemDetail:
+            return TrackerItemDetail.from_raw(
+                {
+                    "id": item_id,
+                    "name": "Wiki images",
+                    "version": 1,
+                    "description": description,
+                    "descriptionFormat": "Wiki",
+                    "tracker": {
+                        "id": 24680001,
+                        "name": "Offline Requirements",
+                        "project": {"id": 246800, "name": "Offline Project"},
+                    },
+                    "attachments": attachments,
+                }
+            )
+
+        panel = self.page.detail_panel
+        panel.render_detail(
+            detail(
+                1210,
+                "[!image.png#bbbb1111bbbb1111!]\n[!broken.png!]",
+                [
+                    {"id": 41, "name": "image.png", "mimeType": "image/png", "md5": "aaaa0000aaaa0000"},
+                    {"id": 42, "name": "image.png", "mimeType": "image/png", "md5": "bbbb1111bbbb1111"},
+                    {"id": 43, "name": "broken.png", "mimeType": "image/png"},
+                ],
+            )
+        )
+        self._app.processEvents()
+
+        chosen = panel.detail_description._images.get(
+            QUrl("cb-attachment://" + wiki_image_resource_key("image.png", "bbbb1111bbbb1111")).toString()
+        )
+        self.assertIsNotNone(chosen)
+        self.assertEqual((chosen.width(), chosen.height()), (6, 3))
+        self.assertIn(
+            wiki_image_resource_key("image.png", "bbbb1111bbbb1111"),
+            [resource.resource_key for resource in panel.preview_resources],
+        )
+        # 그리지 못한 그림은 본문 자리에 이유가 나오도록 넘긴다.
+        self.assertIn("attachment-43", panel._failed_preview_resources)
+        self.assertEqual(len(panel.detail_description._images), 1)
+
+        # 해시 없는 같은 이름이라도 앞 아이템의 그림이 남지 않는다.
+        panel.render_detail(detail(1211, "[!image.png!]", []))
+        self._app.processEvents()
+
+        self.assertEqual(panel.detail_description._images, {})
 
     def test_detail_dialog_is_built_with_the_real_class(self) -> None:
         """상세 창을 진짜 클래스로 만들어 본다.
