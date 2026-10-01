@@ -82,6 +82,26 @@ class TrackerItemDetailDialogTest(unittest.TestCase):
         self.assertFalse(dialog.image_combo.isEnabled())
         self.assertIn("없습니다", dialog.image_status.text())
 
+    def test_moving_to_an_item_without_images_clears_the_previous_images(self) -> None:
+        dialog = TrackerItemDetailDialog(
+            self.detail(),
+            description_html='<p><img src="cb-attachment://attachment-28"></p>',
+            attachments=(AttachmentSummary(28, "sample.png", mime_type="image/png"),),
+            image_resources=(AttachmentResource("attachment-28", "image/png", PNG),),
+        )
+        dialog.show()
+        self.app.processEvents()
+        self.assertEqual(len(dialog.image_view.scene().items()), 1)
+        other = TrackerItemDetail.from_raw({"id": 1206, "name": "No images", "version": 1})
+
+        dialog.replace_detail(other, description_html="<p>그림 없음</p>")
+
+        # 이미지 탭과 설명 본문 모두 앞 아이템의 그림을 들고 있지 않는다.
+        self.assertEqual(dialog.image_view.scene().items(), [])
+        self.assertIn("없습니다", dialog.image_status.text())
+        self.assertEqual(dialog.description_view._images, {})
+        dialog.close()
+
     def test_context_tabs_are_lazy_and_related_item_is_opened_in_dialog(self) -> None:
         dialog = TrackerItemDetailDialog(self.detail(), description_html="<p>설명</p>")
         requested = []
