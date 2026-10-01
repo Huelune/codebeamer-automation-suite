@@ -76,6 +76,11 @@ class BaselineComparisonPanel(QWidget):
         self.after_combo.addItem("선택하세요", "")
         self.after_combo.addItem("현재 상태", None)
         source_row.addWidget(self.after_combo, 1)
+        # 기본 정책은 가장 긴 Baseline 이름만큼 최소 폭을 잡아 작업공간 창을 줄일 수 없게 만든다.
+        # 6자 폭이면 "선택하세요"까지 잘리지 않고, 남는 폭은 늘어나는 칸이 채운다.
+        for combo in (self.before_combo, self.after_combo):
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(6)
         self.run_button = QPushButton("전체 비교 실행", self)
         self.run_button.setObjectName("primary_button")
         self.run_button.clicked.connect(self._run)

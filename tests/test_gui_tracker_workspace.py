@@ -4,6 +4,7 @@ import base64
 import os
 import unittest
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import QMessageBox
 from shiboken6 import isValid
 
 from src.gui.settings_store import GuiSettings
+from src.gui.styles import build_gui_stylesheet
 from src.gui.tracker_baseline_compare import BaselineComparisonKind
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
@@ -339,6 +341,51 @@ class TrackerWorkspacePageTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.page.close()
         self._app.processEvents()
+
+    def _minimum_widths_with_baseline_names(self, repeat: int) -> tuple[int, int, int]:
+        """Baseline 이름을 `repeat`배로 늘린 새 작업공간의 최소 너비.
+
+        조회 탭, Baseline 탭, 테마를 바꾼 뒤의 계층 출처 콤보 순서다.
+        """
+        service = CountingTrackerQueryService()
+        original = service.load_tracker_baselines
+
+        def long_named_baselines(*args, **kwargs):
+            return tuple(
+                replace(baseline, name=baseline.name * repeat)
+                for baseline in original(*args, **kwargs)
+            )
+
+        service.load_tracker_baselines = long_named_baselines  # type: ignore[method-assign]
+        page = TrackerWorkspacePage(settings_provider=lambda: self.settings, service=service, synchronous=True)
+        self.addCleanup(page.deleteLater)
+        self.addCleanup(page.close)
+        # 앱처럼 테마를 입혀야 콤보가 처음 보일 때 폭을 다시 잰다.
+        page.setStyleSheet(build_gui_stylesheet("kefico"))
+        # 처음 보이기 전에 Baseline 목록을 채운다. 내용 길이로 폭을 잡는 정책이면 여기서 넓어진다.
+        page.activate()
+        page.show()
+        self._app.processEvents()
+        browse_width = page.minimumSizeHint().width()
+        page.workspace_mode_tabs.setCurrentIndex(page.baseline_mode_index)
+        self._app.processEvents()
+        self.assertGreater(page.baseline_workspace.baseline_comparison_panel.after_combo.count(), 2)
+        self.assertGreater(page.hierarchy_panel.hierarchy_source_combo.count(), 1)
+        baseline_width = page.minimumSizeHint().width()
+        # 테마를 바꾸면 콤보가 폭을 다시 잰다. 이미 채운 계층 출처 콤보도 이름 길이를 따르지 않아야 한다.
+        page.setStyleSheet(build_gui_stylesheet("igloo"))
+        self._app.processEvents()
+        return (
+            browse_width,
+            baseline_width,
+            page.hierarchy_panel.hierarchy_source_combo.minimumSizeHint().width(),
+        )
+
+    def test_long_baseline_names_do_not_widen_the_workspace(self) -> None:
+        """Baseline 이름이 길어도 창을 줄일 수 있다. 콤보는 남는 폭만 채운다."""
+        short_widths = self._minimum_widths_with_baseline_names(1)
+
+        self.assertEqual(self._minimum_widths_with_baseline_names(8), short_widths)
 
     def test_selecting_a_tracker_shows_its_required_create_fields(self) -> None:
         """생성 대화상자를 열기 전에 무엇을 채워야 하는지 보여 준다."""

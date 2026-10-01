@@ -111,6 +111,11 @@ class TrackerHierarchyPanel(QWidget):
         source_toolbar.addWidget(QLabel("조회 기준", self))
         self.hierarchy_source_combo = QComboBox(self)
         self.hierarchy_source_combo.setObjectName("tracker_hierarchy_source_combo")
+        # Baseline 이름 길이가 최소 폭을 정하지 않게 한다. 비교 탭 콤보와 같은 기준이다.
+        self.hierarchy_source_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.hierarchy_source_combo.setMinimumContentsLength(6)
         self.hierarchy_source_combo.addItem("현재 상태", None)
         self.hierarchy_source_combo.currentIndexChanged.connect(
             self._on_hierarchy_source_changed
