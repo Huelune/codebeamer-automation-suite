@@ -1861,14 +1861,44 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertFalse(dialog.tree_pane.isVisible())
         self.assertEqual(dialog.item_tree.topLevelItemCount(), 0)
 
+    def test_baseline_detail_from_received_items_says_so_and_refresh_asks_the_server(self) -> None:
+        """받아 둔 Baseline 목록에서 꺼낸 상세는 그렇다고 알리고, 다시 조회만 서버에서 새로 받는다."""
+        load_detail = self.service.load_detail
+        refresh_flags: list[bool] = []
+
+        def listed_load_detail(settings, item_id, *, baseline_id=None, refresh=False):
+            refresh_flags.append(refresh)
+            detail = load_detail(settings, item_id, baseline_id=baseline_id, refresh=refresh)
+            return detail if refresh else replace(detail, baseline_list_received_at="2026-09-30T05:00:00+00:00")
+
+        self.service.load_detail = listed_load_detail  # type: ignore[method-assign]
+        self.page.activate()
+        self._show_baseline_hierarchy()
+        workspace_tree = self.page.hierarchy_panel.item_tree
+        workspace_tree.setCurrentItem(workspace_tree.topLevelItem(0))
+        self._app.processEvents()
+        panel = self.page.detail_panel
+
+        self.assertEqual(refresh_flags, [False])
+        self.assertIn("읽기 전용 · Baseline #24681001", panel.detail_warning.text())
+        self.assertIn("받아 둔 Baseline 목록(2026-09-30", panel.detail_warning.text())
+        self.assertIn("'다시 조회'", panel.detail_warning.text())
+
+        panel.detail_refresh_button.click()
+        self._app.processEvents()
+
+        self.assertEqual(refresh_flags, [False, True])
+        self.assertEqual(panel.baseline_id, 24681001)
+        self.assertNotIn("받아 둔 Baseline 목록", panel.detail_warning.text())
+
     def test_baseline_detail_dialog_lists_the_baseline_tree_and_stays_at_that_baseline(self) -> None:
         """Baseline 상세 창도 그 Baseline 계층을 옆에 두고, 트리로 옮겨도 같은 Baseline 시점을 연다."""
         load_detail = self.service.load_detail
         requested_baselines: list[int | None] = []
 
-        def recording_load_detail(settings, item_id, *, baseline_id=None):
+        def recording_load_detail(settings, item_id, *, baseline_id=None, refresh=False):
             requested_baselines.append(baseline_id)
-            return load_detail(settings, item_id, baseline_id=baseline_id)
+            return load_detail(settings, item_id, baseline_id=baseline_id, refresh=refresh)
 
         self.service.load_detail = recording_load_detail  # type: ignore[method-assign]
         attachment_requests: list[int] = []

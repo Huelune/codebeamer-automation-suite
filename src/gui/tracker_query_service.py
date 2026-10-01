@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
+from datetime import UTC
+from datetime import datetime
 from functools import partial
 from typing import Any
 
@@ -31,6 +33,9 @@ from .tracker_query_models import TrackerQueryErrorKind
 from .tracker_query_models import TrackerQueryServiceError
 from .tracker_query_models import TrackerSummary
 
+
+# 상세를 꺼내 쓰려고 메모리에 두는 Baseline 아이템 목록 수. 오래 쓰지 않은 목록부터 버린다.
+MAX_INDEXED_BASELINE_LISTS = 8
 
 _ERROR_MESSAGES = {
     TrackerQueryErrorKind.UNAUTHORIZED: "Codebeamer 인증에 실패했습니다. 활성 연결 정보를 확인하세요.",
@@ -96,6 +101,8 @@ class TrackerQueryService:
         self.baseline_cache = baseline_cache
         self._tracker_cache: dict[tuple[tuple[Any, ...], int], dict[str, Any]] = {}
         self._schema_cache: dict[tuple[tuple[Any, ...], int], dict[str, Any]] = {}
+        # 받은 Baseline 전체 아이템(아이템 ID -> 원본)과 받은 시각. 그 Baseline 상세는 여기서 꺼낸다.
+        self._baseline_item_index: dict[BaselineCacheKey, tuple[dict[int, dict[str, Any]], str]] = {}
 
     @staticmethod
     def _settings_cache_key(settings) -> tuple[Any, ...]:
@@ -528,21 +535,55 @@ class TrackerQueryService:
             tracker_id=normalized_tracker_id,
         )
 
+    def _baseline_server(self, settings) -> tuple[str, str] | None:
+        """Baseline 저장본과 색인을 쓰는 서버·사용자. 저장본이 없거나 테스트 모드면 None."""
+        if self.baseline_cache is None or bool(getattr(settings, "offline_mode", False)):
+            return None
+        return (
+            str(getattr(settings, "base_url", "") or "").strip().rstrip("/"),
+            str(getattr(settings, "username", "") or "").strip(),
+        )
+
     def _baseline_cache_key(self, settings, query: TrackerQuery) -> BaselineCacheKey | None:
         """저장본을 쓸 조회면 그 키를, 아니면 None. 현재 시점과 테스트 모드는 저장하지 않는다."""
-        if (
-            self.baseline_cache is None
-            or query.baseline_id is None
-            or bool(getattr(settings, "offline_mode", False))
-        ):
+        server = self._baseline_server(settings)
+        if server is None or query.baseline_id is None:
             return None
+        base_url, username = server
         return BaselineCacheKey(
-            base_url=str(getattr(settings, "base_url", "") or "").strip().rstrip("/"),
-            username=str(getattr(settings, "username", "") or "").strip(),
+            base_url=base_url,
+            username=username,
             tracker_id=query.tracker_id,
             baseline_id=query.baseline_id,
             query=f"{query.build_cbql()} | {query.sort}",
         )
+
+    def _index_baseline_items(
+        self,
+        key: BaselineCacheKey,
+        items: tuple[TrackerItemSummary, ...],
+        received_at: str,
+    ) -> None:
+        """받은 Baseline 아이템 목록을 상세용으로 기억한다. 최근 목록 몇 개만 남긴다."""
+        self._baseline_item_index.pop(key, None)
+        self._baseline_item_index[key] = ({item.item_id: item.raw_reference for item in items}, received_at)
+        while len(self._baseline_item_index) > MAX_INDEXED_BASELINE_LISTS:
+            del self._baseline_item_index[next(iter(self._baseline_item_index))]
+
+    def _indexed_baseline_item(
+        self,
+        settings,
+        baseline_id: int,
+        item_id: int,
+    ) -> tuple[dict[str, Any], str] | None:
+        """이미 받은 그 Baseline 아이템 목록에 있는 원본과 받은 시각. 없으면 None."""
+        server = self._baseline_server(settings)
+        if server is None:
+            return None
+        for key, (items, received_at) in reversed(self._baseline_item_index.items()):
+            if (key.base_url, key.username) == server and key.baseline_id == baseline_id and item_id in items:
+                return items[item_id], received_at
+        return None
 
     def _saved_baseline_items(
         self,
@@ -559,6 +600,7 @@ class TrackerQueryService:
         items = tuple(
             TrackerItemSummary.from_raw(item, tracker_id=query.tracker_id) for item in entry.items
         )
+        self._index_baseline_items(key, items, entry.saved_at)
         return items, entry.saved_at
 
     @staticmethod
@@ -597,6 +639,7 @@ class TrackerQueryService:
         )
         if key is not None and cache is not None:
             cache.save(key, [item.raw_reference for item in items])
+            self._index_baseline_items(key, items, datetime.now(UTC).isoformat(timespec="seconds"))
         return items, ""
 
     def load_baseline_hierarchy_snapshot(
@@ -877,11 +920,25 @@ class TrackerQueryService:
         item_id: int,
         *,
         baseline_id: int | None = None,
+        refresh: bool = False,
     ) -> TrackerItemDetail:
+        """아이템 상세. Baseline은 이미 받은 그 Baseline 아이템 목록에 있으면 서버에 묻지 않는다.
+
+        목록은 같은 아이템 모델의 `/v3/items/query` 전체 필드 응답이다.
+        `refresh`면 목록을 건너뛰고 단건으로 받는다.
+        """
         client = self._client(settings, "load_item_detail")
         normalized_baseline_id = (
             None if baseline_id is None else int(baseline_id)
         )
+        if normalized_baseline_id is not None and not refresh:
+            indexed = self._indexed_baseline_item(settings, normalized_baseline_id, int(item_id))
+            if indexed is not None:
+                indexed_item, received_at = indexed
+                return replace(
+                    self._detail_from_raw(settings, client, indexed_item),
+                    baseline_list_received_at=received_at,
+                )
         raw_item = self._run(
             "load_item_detail",
             lambda: (
@@ -898,7 +955,10 @@ class TrackerQueryService:
                 "아이템 상세 응답 형식을 해석할 수 없습니다.",
                 operation="load_item_detail",
             )
+        return self._detail_from_raw(settings, client, raw_item)
 
+    def _detail_from_raw(self, settings, client, raw_item: dict[str, Any]) -> TrackerItemDetail:
+        """아이템 원본에 소속 트래커 정보를 붙여 상세를 만든다. 트래커 정보는 세션에 한 번만 받는다."""
         tracker = as_mapping(raw_item.get("tracker"))
         tracker_payload: dict[str, Any] = dict(tracker)
         tracker_id = tracker.get("id")

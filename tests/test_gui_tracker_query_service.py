@@ -14,6 +14,7 @@ from src.gui.tracker_query_models import TrackerQueryErrorKind
 from src.gui.tracker_query_models import TrackerQueryGroup
 from src.gui.tracker_query_models import TrackerQueryServiceError
 from src.gui.tracker_query_models import TrackerSearchMode
+from src.gui.tracker_query_service import MAX_INDEXED_BASELINE_LISTS
 from src.gui.tracker_query_service import TrackerQueryService
 from src.gui.tracker_query_service import classify_tracker_query_error
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
@@ -172,6 +173,32 @@ class PaginatedSearchClient(QueryFakeClient):
                 for item_id in ids
             ],
         }
+
+
+class BaselineDetailFakeClient(QueryFakeClient):
+    """Baseline 목록과 단건 상세가 같은 아이템 모델로 오는 서버."""
+
+    @staticmethod
+    def _item(item_id: int) -> dict:
+        return {
+            "id": item_id,
+            "name": "Steering",
+            "description": "Description",
+            "descriptionFormat": "PlainText",
+            "version": 4,
+            "tracker": {"id": 20, "name": "Requirements"},
+            "status": {"id": 1, "name": "Open"},
+            "customFields": [{"fieldId": 90, "name": "Risk", "type": "TextFieldValue", "value": "High"}],
+            "password": "must-not-leak",
+        }
+
+    def search_items(self, *, query_string, baseline_id=None, page, page_size):
+        self.__class__.calls.append(("search", query_string, baseline_id, page, page_size))
+        return {"page": page, "pageSize": page_size, "total": 1, "items": [self._item(1001)]}
+
+    def get_item(self, item_id: int, baseline_id=None):
+        self.__class__.calls.append(("item", item_id, baseline_id))
+        return self._item(item_id)
 
 
 class TrackerMetadataFailureFakeClient(QueryFakeClient):
@@ -420,6 +447,69 @@ class TrackerQueryServiceTest(unittest.TestCase):
             ]
             self.assertEqual(len(baseline_searches), 1)
             self.assertEqual(len(current_searches), 2)
+
+    def test_baseline_details_come_from_the_received_items_until_refresh(self) -> None:
+        """Baseline 계층·저장본으로 받은 아이템은 상세를 다시 묻지 않는다. 다시 조회만 단건으로 받는다."""
+        BaselineDetailFakeClient.reset()
+
+        def item_calls() -> list[tuple]:
+            return [call for call in BaselineDetailFakeClient.calls if call[0] == "item"]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            cache = BaselineItemCache(Path(tmp_dir))
+            first = TrackerQueryService(client_factory=BaselineDetailFakeClient, baseline_cache=cache)
+            first.load_baseline_hierarchy_snapshot(self.settings, 20, 11)
+
+            listed = first.load_detail(self.settings, 1001, baseline_id=11)
+
+            self.assertEqual(item_calls(), [])
+            self.assertTrue(listed.baseline_list_received_at)
+            single = first.load_detail(self.settings, 1001, baseline_id=11, refresh=True)
+            self.assertEqual(item_calls(), [("item", 1001, 11)])
+            self.assertEqual(single.baseline_list_received_at, "")
+            # 목록과 단건이 같은 아이템 모델이므로 상세 내용도 같다.
+            self.assertEqual(listed.summary, single.summary)
+            self.assertEqual(listed.description, single.description)
+            self.assertEqual(listed.custom_fields, single.custom_fields)
+            self.assertNotIn("must-not-leak", str(listed.raw_payload))
+
+            # 앱을 다시 켜서 저장본으로 계층만 열어도 상세를 묻지 않는다.
+            again = TrackerQueryService(client_factory=BaselineDetailFakeClient, baseline_cache=cache)
+            snapshot = again.load_saved_baseline_hierarchy(self.settings, 20, 11)
+            assert snapshot is not None
+
+            saved = again.load_detail(self.settings, 1001, baseline_id=11)
+
+            self.assertEqual(saved.baseline_list_received_at, snapshot.saved_at)
+            self.assertEqual(len(item_calls()), 1)
+
+            # 현재 상태, 목록에 없는 아이템, 다른 Baseline은 단건으로 받는다.
+            again.load_detail(self.settings, 1001)
+            again.load_detail(self.settings, 1002, baseline_id=11)
+            again.load_detail(self.settings, 1001, baseline_id=12)
+
+            self.assertEqual(
+                item_calls()[1:],
+                [("item", 1001, None), ("item", 1002, 11), ("item", 1001, 12)],
+            )
+
+    def test_only_recent_baseline_lists_are_kept_for_details(self) -> None:
+        BaselineDetailFakeClient.reset()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = TrackerQueryService(
+                client_factory=BaselineDetailFakeClient,
+                baseline_cache=BaselineItemCache(Path(tmp_dir)),
+            )
+            for baseline_id in range(1, MAX_INDEXED_BASELINE_LISTS + 2):
+                service.load_baseline_hierarchy_snapshot(self.settings, 20, baseline_id)
+
+            service.load_detail(self.settings, 1001, baseline_id=MAX_INDEXED_BASELINE_LISTS + 1)
+            service.load_detail(self.settings, 1001, baseline_id=1)
+
+            self.assertEqual(
+                [call for call in BaselineDetailFakeClient.calls if call[0] == "item"],
+                [("item", 1001, 1)],
+            )
 
     def test_test_mode_baselines_are_not_saved(self) -> None:
         offline = GuiSettings(
