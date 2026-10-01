@@ -18,15 +18,12 @@ from dataclasses import dataclass
 
 
 try:
-    from PySide6.QtWidgets import QAbstractItemView
     from PySide6.QtWidgets import QComboBox
     from PySide6.QtWidgets import QDialog
     from PySide6.QtWidgets import QFileDialog
     from PySide6.QtWidgets import QHBoxLayout
-    from PySide6.QtWidgets import QHeaderView
     from PySide6.QtWidgets import QLabel
     from PySide6.QtWidgets import QPushButton
-    from PySide6.QtWidgets import QTreeWidget
     from PySide6.QtWidgets import QTreeWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
@@ -50,6 +47,7 @@ from .tracker_hierarchy_export import build_tracker_hierarchy_export_snapshot
 from .tracker_hierarchy_export import export_tracker_hierarchy_xlsx
 from .tracker_hierarchy_export import hierarchy_export_fields_from_schema
 from .tracker_hierarchy_export_dialog import TrackerHierarchyExportFieldDialog
+from .tracker_item_tree import TrackerItemTree
 from .tracker_query_models import ProjectSummary
 from .tracker_query_models import TrackerItemDetail
 from .tracker_query_models import TrackerItemSummary
@@ -131,16 +129,7 @@ class TrackerHierarchyPanel(QWidget):
         action_toolbar.addWidget(self.hierarchy_export_button)
         layout.addLayout(action_toolbar)
 
-        self.item_tree = QTreeWidget(self)
-        self.item_tree.setObjectName("tracker_item_tree")
-        self.item_tree.setColumnCount(2)
-        self.item_tree.setHeaderLabels(["ID", "요약"])
-        self.item_tree.setAlternatingRowColors(True)
-        self.item_tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.item_tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.item_tree.setUniformRowHeights(True)
-        self.item_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.item_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.item_tree = TrackerItemTree(self)
         self.item_tree.itemExpanded.connect(self.load_children)
         self.item_tree.itemSelectionChanged.connect(self._on_tree_selection_changed)
         layout.addWidget(self.item_tree, 1)
@@ -201,7 +190,8 @@ class TrackerHierarchyPanel(QWidget):
                     version=summary.version,
                 )
                 item.setData(0, ITEM_SUMMARY_ROLE, updated)
-                item.setText(1, updated.name)
+                item.setText(0, updated.name)
+                item.setToolTip(0, updated.name)
             for child_index in range(item.childCount()):
                 update_tree_item(item.child(child_index))
 
@@ -657,12 +647,9 @@ class TrackerHierarchyPanel(QWidget):
         self._host.submit("hierarchy_export", export, completed, failed)
 
     def tree_item(self, summary: TrackerItemSummary) -> QTreeWidgetItem:
-        item = QTreeWidgetItem(
-            [
-                str(summary.item_id),
-                summary.name,
-            ]
-        )
+        item = QTreeWidgetItem([summary.name, str(summary.item_id)])
+        # 깊은 계층에서는 요약 칸이 좁아져 잘리므로 전체 요약을 툴팁으로 둔다.
+        item.setToolTip(0, summary.name)
         item.setData(0, ITEM_SUMMARY_ROLE, summary)
         children_known = summary.child_count is not None or any(
             key in summary.raw_reference for key in ("hasChildren", "leaf", "children")
@@ -675,7 +662,7 @@ class TrackerHierarchyPanel(QWidget):
 
     @staticmethod
     def placeholder_item(text: str) -> QTreeWidgetItem:
-        placeholder = QTreeWidgetItem(["", text])
+        placeholder = QTreeWidgetItem([text, ""])
         placeholder.setData(0, PLACEHOLDER_ROLE, True)
         placeholder.setDisabled(True)
         return placeholder

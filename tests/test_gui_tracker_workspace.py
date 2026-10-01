@@ -372,9 +372,9 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.tracker_combo.currentData(), 24680001)
         self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 2)
         self.assertEqual(self.page.hierarchy_panel.item_tree.columnCount(), 2)
-        self.assertEqual(self.page.hierarchy_panel.item_tree.headerItem().text(0), "ID")
-        self.assertEqual(self.page.hierarchy_panel.item_tree.headerItem().text(1), "요약")
-        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(0), "9001001")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.headerItem().text(0), "요약")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.headerItem().text(1), "ID")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(1), "9001001")
         self.assertIn("전체 표시", self.page.hierarchy_panel.tree_status_label.text())
         self.assertIn("Offline Requirements", self.page.search_panel.search_scope_label.text())
         self.assertTrue(self.page.search_panel.search_button.isEnabled())
@@ -404,8 +404,9 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 1)
         self.assertTrue(self.page.hierarchy_panel.hierarchy_export_button.isEnabled())
         root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
-        self.assertEqual(root.text(0), "9001001")
-        self.assertEqual(root.text(1), "Vehicle requirements baseline")
+        self.assertEqual(root.text(0), "Vehicle requirements baseline")
+        self.assertEqual(root.toolTip(0), "Vehicle requirements baseline")
+        self.assertEqual(root.text(1), "9001001")
         self.assertEqual(root.childCount(), 2)
         self.assertTrue(root.data(0, CHILDREN_LOADED_ROLE))
         self.page.hierarchy_panel.load_children(root)
@@ -1132,8 +1133,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(self.service.child_load_count, 1)
         self.assertEqual(root.childCount(), 2)
-        self.assertEqual(root.child(0).text(0), "9001002")
-        self.assertEqual(root.child(1).text(0), "9001003")
+        self.assertEqual(root.child(0).text(1), "9001002")
+        self.assertEqual(root.child(1).text(1), "9001003")
 
         self.page.hierarchy_panel.load_children(root)
 
@@ -1141,7 +1142,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         steering = root.child(1)
         self.page.hierarchy_panel.load_children(steering)
         self.assertEqual(self.service.child_load_count, 2)
-        self.assertEqual(steering.child(0).text(0), "9001004")
+        self.assertEqual(steering.child(0).text(1), "9001004")
 
     def test_tree_selection_loads_read_only_detail_and_masked_raw_json(self) -> None:
         self.page.activate()
@@ -1546,7 +1547,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         return next(
             item
             for item in tree_items(dialog.item_tree)
-            if item.text(0) == str(item_id)
+            if item.text(1) == str(item_id)
         )
 
     def test_detail_dialog_lists_the_tracker_tree_and_opens_selected_items(self) -> None:
@@ -1564,7 +1565,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertIn("Offline Requirements", dialog.tree_label.text())
         self.assertEqual(dialog.item_tree.topLevelItemCount(), workspace_tree.topLevelItemCount())
         self.assertTrue(dialog.item_tree.topLevelItem(0).isExpanded())
-        self.assertEqual(dialog.item_tree.currentItem().text(0), "9001001")
+        self.assertEqual(dialog.item_tree.currentItem().text(1), "9001001")
 
         dialog.item_tree.setCurrentItem(self._dialog_tree_item(dialog, 9001002))
         self._app.processEvents()
@@ -1576,7 +1577,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self._app.processEvents()
 
         self.assertEqual(dialog.detail.item_id, 9001001)
-        self.assertEqual(dialog.item_tree.currentItem().text(0), "9001001")
+        self.assertEqual(dialog.item_tree.currentItem().text(1), "9001001")
 
         # 아직 받지 않은 하위는 펼칠 때 작업공간과 같은 조회로 불러온다.
         steering = self._dialog_tree_item(dialog, 9001003)
@@ -1584,7 +1585,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self._app.processEvents()
 
         self.assertEqual(steering.childCount(), 1)
-        self.assertEqual(steering.child(0).text(0), "9001004")
+        self.assertEqual(steering.child(0).text(1), "9001004")
 
     def test_children_arriving_after_the_dialog_closes_are_only_cached(self) -> None:
         """새 창이 파괴된 뒤 하위 조회가 끝나도 사라진 트리 항목은 건드리지 않고 캐시만 남긴다."""
@@ -2154,9 +2155,9 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Steering response test")
         self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 1)
         root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
-        self.assertEqual(root.text(0), "9101001")
+        self.assertEqual(root.text(1), "9101001")
         self.assertEqual(root.childCount(), 1)
-        self.assertEqual(root.child(0).text(0), "9101002")
+        self.assertEqual(root.child(0).text(1), "9101002")
         self.assertIn("ID 직접 접근 경로", self.page.hierarchy_panel.tree_status_label.text())
 
     def test_search_requires_filter_instead_of_loading_entire_tracker(self) -> None:
@@ -2322,7 +2323,8 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.page.detail_panel.editor_panel.save_button.click()
 
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Changed summary")
-        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(1), "Changed summary")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(0), "Changed summary")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).toolTip(0), "Changed summary")
         update_calls = [call for call in EditableWorkspaceClient.calls if call[0] == "update"]
         self.assertEqual(update_calls[0][2][0]["fieldId"], 3)
 
@@ -2357,7 +2359,7 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.page.detail_panel.editor_panel.save_button.click()
 
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Original summary")
-        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(1), "Original summary")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(0), "Original summary")
         self.assertIn("다른 사용자가", self.page.workspace_status_label.text())
         self.assertFalse(
             any(call[0] == "update" for call in EditableWorkspaceClient.calls)
@@ -2418,7 +2420,7 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.assertEqual(create_call[3], 1001)
         root = self.page.hierarchy_panel.item_tree.topLevelItem(0)
         self.assertEqual(root.childCount(), 1)
-        self.assertEqual(root.child(0).text(0), "1002")
+        self.assertEqual(root.child(0).text(1), "1002")
         self.assertEqual(self.page.detail_panel.detail_id_badge.text(), "#1002")
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Created child")
         self.assertIn("생성했습니다", self.page.workspace_status_label.text())

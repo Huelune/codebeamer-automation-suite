@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from collections.abc import Iterable
 from collections.abc import Sequence
-from dataclasses import replace
 from typing import Any
 
 
@@ -1722,28 +1721,7 @@ class TrackerWorkspacePage(QWidget):
         summary = detail.summary
         if summary.tracker_id is not None:
             self._invalidate_tracker_cache(summary.tracker_id)
-
-        def update_tree_item(item: QTreeWidgetItem | None) -> None:
-            if item is None:
-                return
-            existing = item.data(0, ITEM_SUMMARY_ROLE)
-            if isinstance(existing, TrackerItemSummary) and existing.item_id == detail.item_id:
-                updated = replace(
-                    existing,
-                    name=summary.name,
-                    status=summary.status,
-                    assignees=summary.assignees,
-                    modified_at=summary.modified_at,
-                    version=summary.version,
-                )
-                item.setData(0, ITEM_SUMMARY_ROLE, updated)
-                item.setText(1, updated.name)
-            for child_index in range(item.childCount()):
-                update_tree_item(item.child(child_index))
-
-        for top_index in range(self.hierarchy_panel.item_tree.topLevelItemCount()):
-            update_tree_item(self.hierarchy_panel.item_tree.topLevelItem(top_index))
-
+        self.hierarchy_panel.refresh_item(detail)
         self.search_panel.refresh_item(detail)
 
     def _remove_visible_item(self, item_id: int) -> None:
