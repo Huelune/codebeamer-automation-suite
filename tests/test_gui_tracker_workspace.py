@@ -1495,6 +1495,68 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(len(detail_kwargs["image_resources"]), 1)
         detail_dialog.return_value.exec.assert_called_once()
 
+    def test_attachment_preview_skips_images_already_in_the_description(self) -> None:
+        """본문에 나온 그림은 첨부 영역에 다시 보이지 않는다. 원문 보기와 크게 보기는 전부 보인다."""
+        self.settings.offline_mode = False
+        self.settings.base_url = "https://example.test/cb"
+        self.settings.username = "sample"
+        self.settings.password = "placeholder"
+        self.page.content_service.download_attachment = (
+            lambda _settings, attachment, *, max_bytes: AttachmentResource(
+                f"attachment-{attachment.attachment_id}", "image/png", _png_bytes(4, 4)
+            )
+        )
+
+        def detail(description: str) -> TrackerItemDetail:
+            return TrackerItemDetail.from_raw(
+                {
+                    "id": 1212,
+                    "name": "Wiki images",
+                    "version": 1,
+                    "description": description,
+                    "descriptionFormat": "Wiki",
+                    "tracker": {
+                        "id": 24680001,
+                        "name": "Offline Requirements",
+                        "project": {"id": 246800, "name": "Offline Project"},
+                    },
+                    "attachments": [
+                        {"id": 51, "name": "diagram.png", "mimeType": "image/png"},
+                        {"id": 52, "name": "extra.png", "mimeType": "image/png"},
+                    ],
+                }
+            )
+
+        panel = self.page.detail_panel
+        panel.render_detail(detail("[!diagram.png!]"))
+        self._app.processEvents()
+
+        self.assertTrue(panel.attachment_preview.isVisible())
+        self.assertNotIn("attachment-51", panel.attachment_preview.text())
+        self.assertIn("attachment-52", panel.attachment_preview.text())
+        self.assertEqual(len(panel.detail_description._images), 1)
+
+        # 원문 보기에는 본문 그림이 없으므로 첨부 영역에 모두 보인다.
+        panel.description_source_toggle.setChecked(True)
+        self.assertIn("attachment-51", panel.attachment_preview.text())
+        self.assertIn("attachment-52", panel.attachment_preview.text())
+        panel.description_source_toggle.setChecked(False)
+        self.assertNotIn("attachment-51", panel.attachment_preview.text())
+
+        with patch("src.gui.tracker_detail_panel.WikiContentDialog") as dialog_class:
+            panel._open_attachment_preview()
+        enlarged = dialog_class.call_args.args[2].html
+        self.assertIn("attachment-51", enlarged)
+        self.assertIn("attachment-52", enlarged)
+
+        # 그림이 모두 본문에 있으면 첨부 영역은 숨기고 크게 보기 버튼만 남긴다.
+        panel.render_detail(detail("[!diagram.png!] [!extra.png!]"))
+        self._app.processEvents()
+
+        self.assertFalse(panel.attachment_preview.isVisible())
+        self.assertTrue(panel.attachment_preview_button.isVisible())
+        self.assertTrue(panel.attachment_preview_button.isEnabled())
+
     def test_wiki_description_shows_attachment_images_in_place(self) -> None:
         """wiki2html 없이도 `[!파일명#해시!]` 자리에 첨부 이미지가 보인다."""
         self.settings.offline_mode = False

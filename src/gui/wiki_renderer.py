@@ -209,6 +209,19 @@ def _matching_attachment(
     return candidates[0] if candidates else None
 
 
+def referenced_attachment_ids(
+    markup: Any,
+    attachments: Iterable[AttachmentSummary],
+) -> frozenset[int]:
+    """원문의 이미지 자리가 가리키는 첨부 ID. 본문에 이미 나오는 첨부를 가려낼 때 쓴다."""
+    attachment_list = list(attachments)
+    return frozenset(
+        attachment.attachment_id
+        for reference in wiki_image_references(markup)
+        if (attachment := _matching_attachment(reference, attachment_list)) is not None
+    )
+
+
 def resolve_wiki_images(
     markup: Any,
     attachments: Iterable[AttachmentSummary],

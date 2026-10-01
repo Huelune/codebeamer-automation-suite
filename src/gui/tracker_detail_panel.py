@@ -69,6 +69,7 @@ from .wiki_renderer import attachment_for_link
 from .wiki_renderer import codebeamer_wiki_to_html
 from .wiki_renderer import is_explicit_wiki_type
 from .wiki_renderer import payload_uses_wiki
+from .wiki_renderer import referenced_attachment_ids
 from .wiki_renderer import resolve_wiki_images
 
 
@@ -129,6 +130,8 @@ class TrackerDetailPanel(QFrame):
         self._description_uses_wiki = False
         self._description_render_result: WikiRenderResult | None = None
         self._attachments: tuple[AttachmentSummary, ...] = ()
+        # 미리 받는 이미지 첨부. 첨부 영역은 이 중 본문에 나오지 않는 것만 보인다.
+        self._preview_candidates: tuple[AttachmentSummary, ...] = ()
         self._attachment_preview_resources: dict[str, AttachmentResource] = {}
         # 받았지만 그리지 못한 이미지. 설명 본문 자리에 이유를 보여 줄 때만 쓴다.
         self._failed_preview_resources: dict[str, AttachmentResource] = {}
@@ -525,8 +528,10 @@ class TrackerDetailPanel(QFrame):
             else:
                 self.detail_description.setHtml(codebeamer_wiki_to_html(self._description_text))
             self._add_description_images()
+            self._refresh_attachment_preview()
             return
         self.detail_description.setPlainText(self._description_text)
+        self._refresh_attachment_preview()
 
     @staticmethod
     def wiki_context(
@@ -816,6 +821,7 @@ class TrackerDetailPanel(QFrame):
     ) -> None:
         settings = self.settings_provider()
         if bool(settings.offline_mode) or self._detail_baseline_id is not None:
+            self._preview_candidates = ()
             self._attachment_preview_resources.clear()
             self._failed_preview_resources.clear()
             self.attachment_preview_button.setEnabled(False)
@@ -839,6 +845,7 @@ class TrackerDetailPanel(QFrame):
             and (attachment.size is None or attachment.size <= MAX_INLINE_IMAGE_BYTES)
         ][:available_slots]
         if not candidates:
+            self._preview_candidates = ()
             self._attachment_preview_resources.clear()
             self._failed_preview_resources.clear()
             self.attachment_preview_button.setEnabled(False)
@@ -847,22 +854,12 @@ class TrackerDetailPanel(QFrame):
             self.attachment_preview.setVisible(False)
             return
 
-        blocks = []
-        for attachment in candidates:
-            resource_key = f"attachment-{attachment.attachment_id}"
-            blocks.append(
-                "<p><b>"
-                f"{escape(attachment.name)}"
-                "</b><br>"
-                f'<img src="cb-attachment://{resource_key}" alt="{escape(attachment.name)}">'
-                "</p>"
-            )
+        self._preview_candidates = tuple(candidates)
         self._attachment_preview_resources.clear()
         self._failed_preview_resources.clear()
         self.attachment_preview_button.setEnabled(False)
         self.attachment_preview_button.setVisible(True)
-        self.attachment_preview.setHtml("".join(blocks))
-        self.attachment_preview.setVisible(True)
+        self._refresh_attachment_preview()
         item_id = detail.item_id
         version = detail.version
 
@@ -911,10 +908,34 @@ class TrackerDetailPanel(QFrame):
                 failed,
             )
 
+    @staticmethod
+    def _attachment_preview_html(attachments: tuple[AttachmentSummary, ...]) -> str:
+        return "".join(
+            "<p><b>"
+            f"{escape(attachment.name)}"
+            "</b><br>"
+            f'<img src="cb-attachment://attachment-{attachment.attachment_id}" alt="{escape(attachment.name)}">'
+            "</p>"
+            for attachment in attachments
+        )
+
+    def _refresh_attachment_preview(self) -> None:
+        """본문에 이미 나온 그림은 빼고 나머지 이미지 첨부만 첨부 영역에 보인다.
+
+        원문 보기 중에는 본문에 그림이 없으므로 모두 보인다. 이미지 크게 보기 창은 늘 전부 보인다.
+        """
+        shown = self._preview_candidates
+        if self._description_uses_wiki and not self.description_source_toggle.isChecked():
+            in_description = referenced_attachment_ids(self._description_text, shown)
+            shown = tuple(value for value in shown if value.attachment_id not in in_description)
+        # 받아 둔 그림은 문서 리소스로 남아 있으므로 HTML만 바꿔도 다시 받지 않는다.
+        self.attachment_preview.setHtml(self._attachment_preview_html(shown))
+        self.attachment_preview.setVisible(bool(shown))
+
     def _open_attachment_preview(self, _checked: bool = False) -> None:
         if not self._attachment_preview_resources:
             return
-        result = WikiRenderResult(html=self.attachment_preview.text())
+        result = WikiRenderResult(html=self._attachment_preview_html(self._preview_candidates))
         dialog = WikiContentDialog("첨부 이미지", "", result, self)
         dialog.resize(1100, 760)
         for resource in self._attachment_preview_resources.values():
@@ -1016,6 +1037,7 @@ class TrackerDetailPanel(QFrame):
         self._inline_resource_reservations.clear()
         self._loaded_inline_resources.clear()
         self._attachments = ()
+        self._preview_candidates = ()
         self._attachment_preview_resources.clear()
         self._failed_preview_resources.clear()
         self.attachment_preview_button.setEnabled(False)
@@ -1133,6 +1155,7 @@ class TrackerDetailPanel(QFrame):
         self._description_render_result = None
         self._description_image_keys.clear()
         self._attachments = ()
+        self._preview_candidates = ()
         self._attachment_preview_resources.clear()
         self._failed_preview_resources.clear()
         self._inline_image_bytes = 0

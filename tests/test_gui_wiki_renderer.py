@@ -8,6 +8,7 @@ from src.gui.tracker_content_models import WikiLink
 from src.gui.wiki_renderer import codebeamer_wiki_to_html
 from src.gui.wiki_renderer import is_explicit_wiki_type
 from src.gui.wiki_renderer import payload_uses_wiki
+from src.gui.wiki_renderer import referenced_attachment_ids
 from src.gui.wiki_renderer import resolve_wiki_images
 from src.gui.wiki_renderer import sanitize_server_wiki_html
 from src.gui.wiki_renderer import sanitize_wiki_style
@@ -305,6 +306,19 @@ class WikiRendererTest(unittest.TestCase):
                 wiki_image_resource_key("diagram.png", ""): b"third",
             },
         )
+
+    def test_referenced_attachments_follow_the_same_match_as_images(self) -> None:
+        """본문이 가리키는 첨부는 그림 자리와 같은 규칙으로 고른다. 외부 주소와 없는 파일은 빠진다."""
+        attachments = (
+            AttachmentSummary(attachment_id=1, name="image.png", md5="aaaa0000aaaa0000"),
+            AttachmentSummary(attachment_id=2, name="image.png", md5="bbbb1111bbbb1111"),
+            AttachmentSummary(attachment_id=3, name="Diagram.PNG"),
+            AttachmentSummary(attachment_id=4, name="unused.png"),
+        )
+        markup = "[!image.png#bbbb1111bbbb1111!] [!diagram.png!] [!https://example.test/x.png!] [!missing.png!]"
+
+        self.assertEqual(referenced_attachment_ids(markup, attachments), frozenset({2, 3}))
+        self.assertEqual(referenced_attachment_ids("본문", attachments), frozenset())
 
     def test_wiki_images_inside_table_plugin_cells_are_found(self) -> None:
         markup = "[{Table\n\n|(background:white)[!cell.png#0123456789abcdef!]\n|text\n}]"
