@@ -42,6 +42,7 @@ from typing import Any
 from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
+from .baseline_cache import describe_saved_at
 from .settings_store import GuiSettings
 from .tracker_baseline_compare import TrackerBaseline
 from .tracker_hierarchy import TrackerHierarchySnapshot
@@ -339,13 +340,49 @@ class TrackerHierarchyPanel(QWidget):
         self.tree_status_label.setText(
             "선택한 Baseline의 전체 계층을 보려면 'Baseline 계층 조회'를 누르세요."
         )
+        self._open_saved_baseline_hierarchy(tracker.tracker_id, baseline_id)
+
+    def _open_saved_baseline_hierarchy(self, tracker_id: int, baseline_id: int) -> None:
+        """예전에 받아 둔 저장본이 있으면 버튼을 누르지 않아도 바로 연다. 서버에는 묻지 않는다."""
+        settings = self.settings_provider()
+        key = (tracker_id, baseline_id)
+
+        def loaded(snapshot: TrackerHierarchySnapshot | None) -> None:
+            current = self._host.current_tracker()
+            if (
+                snapshot is None
+                or current is None
+                or current.tracker_id != key[0]
+                or self.selected_baseline_id() != key[1]
+                or key in self._baseline_hierarchy_cache
+            ):
+                return
+            self._baseline_hierarchy_cache[key] = snapshot
+            self.reload_roots_button.setText("Baseline 계층 다시 불러오기")
+            self._host.set_available(True)
+            self._render_baseline_hierarchy(snapshot)
+            self._host.set_workspace_status(
+                f"Baseline #{key[1]}의 계층 {len(snapshot.nodes):,}개 아이템을 "
+                f"저장본({describe_saved_at(snapshot.saved_at)} 받음)에서 바로 열었습니다."
+            )
+
+        # 저장본을 못 읽어도 'Baseline 계층 조회'로 받을 수 있으므로 오류를 띄우지 않는다.
+        self._host.submit(
+            "baseline_saved_hierarchy",
+            lambda: self.service.load_saved_baseline_hierarchy(settings, key[0], key[1]),
+            loaded,
+            lambda _exc: None,
+        )
 
     def _reload_selected_hierarchy(self) -> None:
         baseline_id = self.selected_baseline_id()
         if baseline_id is None:
             self.load_roots(force=True)
             return
-        self._load_baseline_hierarchy(baseline_id, force=True)
+        # 이미 연 Baseline을 다시 불러올 때만 저장본을 무시하고 새로 받는다.
+        tracker = self._host.current_tracker()
+        opened = tracker is not None and (tracker.tracker_id, baseline_id) in self._baseline_hierarchy_cache
+        self._load_baseline_hierarchy(baseline_id, force=opened)
 
     def _load_baseline_hierarchy(
         self,
@@ -384,9 +421,16 @@ class TrackerHierarchyPanel(QWidget):
             self.reload_roots_button.setText("Baseline 계층 다시 불러오기")
             self._host.set_available(True)
             self._render_baseline_hierarchy(snapshot)
-            self._host.set_workspace_status(
-                f"Baseline #{key[1]}의 계층 {len(snapshot.nodes):,}개 아이템을 불러왔습니다."
-            )
+            if snapshot.saved_at:
+                self._host.set_workspace_status(
+                    f"Baseline #{key[1]}의 계층 {len(snapshot.nodes):,}개 아이템을 "
+                    f"저장본({describe_saved_at(snapshot.saved_at)} 받음)에서 불러왔습니다. "
+                    "새로 받으려면 'Baseline 계층 다시 불러오기'를 누르세요."
+                )
+            else:
+                self._host.set_workspace_status(
+                    f"Baseline #{key[1]}의 계층 {len(snapshot.nodes):,}개 아이템을 불러왔습니다."
+                )
 
         def failed(exc: Exception) -> None:
             if self._baseline_hierarchy_loading_key == key:
@@ -410,6 +454,8 @@ class TrackerHierarchyPanel(QWidget):
                 key[0],
                 key[1],
                 page_size=HIERARCHY_FETCH_PAGE_SIZE,
+                # 다시 불러오기는 저장본을 무시하고 새로 받아 덮어쓴다.
+                refresh=force,
             ),
             loaded,
             failed,
@@ -434,8 +480,11 @@ class TrackerHierarchyPanel(QWidget):
             else:
                 tree_items[node.parent_id].addChild(tree_item)
         self.item_tree.blockSignals(False)
+        saved_note = (
+            f" · 저장본 {describe_saved_at(snapshot.saved_at)}" if snapshot.saved_at else ""
+        )
         self.tree_status_label.setText(
-            f"Baseline 계층 · 최상위 {root_count}개 · 전체 {len(snapshot.nodes):,}개"
+            f"Baseline 계층 · 최상위 {root_count}개 · 전체 {len(snapshot.nodes):,}개{saved_note}"
             if snapshot.nodes
             else "선택한 Baseline에 아이템이 없습니다."
         )

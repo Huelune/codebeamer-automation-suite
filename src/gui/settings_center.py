@@ -29,6 +29,7 @@ from src.api_monitor import API_MONITOR_DEFAULT_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MAX_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MIN_SLOW_THRESHOLD_MS
 
+from .baseline_cache import BaselineItemCache
 from .settings_store import CREDENTIAL_STORAGE_LOCAL
 from .settings_store import CREDENTIAL_STORAGE_NONE
 from .settings_store import CREDENTIAL_STORAGE_OS
@@ -73,11 +74,13 @@ class SettingsCenterPage(QWidget):
         api_monitor_requested=None,
         busy_started=None,
         busy_finished=None,
+        baseline_cache: BaselineItemCache | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("settings_center_page")
         self.settings_store = settings_store
+        self.baseline_cache = baseline_cache
         self.on_applied = on_applied
         self.connection_tester = connection_tester
         self.api_monitor_requested = api_monitor_requested
@@ -472,10 +475,46 @@ class SettingsCenterPage(QWidget):
         action_row.addStretch(1)
         card_layout.addLayout(action_row)
         layout.addWidget(card)
+
+        cache_card, cache_layout = self._new_card(page)
+        self.baseline_cache_label = QLabel("")
+        self.baseline_cache_label.setObjectName("section_label")
+        self.baseline_cache_label.setWordWrap(True)
+        cache_layout.addWidget(self.baseline_cache_label)
+        cache_row = QHBoxLayout()
+        self.baseline_cache_clear_button = QPushButton("Baseline 저장본 비우기")
+        self.baseline_cache_clear_button.clicked.connect(self._clear_baseline_cache)
+        cache_row.addWidget(self.baseline_cache_clear_button)
+        cache_row.addStretch(1)
+        cache_layout.addLayout(cache_row)
+        cache_card.setVisible(self.baseline_cache is not None)
+        layout.addWidget(cache_card)
+        self._refresh_baseline_cache_label()
+
         layout.addStretch(1)
         self.import_button.clicked.connect(self._choose_import_path)
         self.export_button.clicked.connect(self._choose_export_path)
         return page
+
+    def _refresh_baseline_cache_label(self) -> None:
+        cache = self.baseline_cache
+        if cache is None:
+            return
+        size_mb = cache.total_bytes() / (1024 * 1024)
+        self.baseline_cache_label.setText(
+            "한 번 받은 Baseline 전체 아이템을 이 PC에 저장해 계층과 비교를 바로 엽니다. "
+            f"지금 {size_mb:,.1f} MB를 쓰고 있고, "
+            f"{cache.max_bytes // (1024 * 1024):,} MB를 넘으면 오래 쓰지 않은 것부터 지웁니다."
+        )
+        self.baseline_cache_clear_button.setEnabled(size_mb > 0)
+
+    def _clear_baseline_cache(self) -> None:
+        cache = self.baseline_cache
+        if cache is None:
+            return
+        removed = cache.clear()
+        self._refresh_baseline_cache_label()
+        self.status_label.setText(f"Baseline 저장본 {removed}개를 지웠습니다.")
 
     def _build_developer_page(self) -> QWidget:
         page, layout = self._new_category_page(
@@ -532,6 +571,9 @@ class SettingsCenterPage(QWidget):
         for item, button in self.category_buttons.items():
             button.setChecked(item == category)
         self.reset_category_button.setEnabled(category != SETTINGS_CATEGORY_DATA)
+        if category == SETTINGS_CATEGORY_DATA:
+            # 저장본은 작업공간을 쓰는 동안 늘어나므로 열 때마다 사용량을 다시 센다.
+            self._refresh_baseline_cache_label()
         self._refresh_validation_controls()
 
     def _active_profile(self) -> ConnectionProfile | None:

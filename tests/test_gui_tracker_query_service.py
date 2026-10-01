@@ -5,7 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from src.gui.baseline_cache import BaselineItemCache
 from src.gui.settings_store import GuiSettings
+from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_query_models import TrackerQuery
 from src.gui.tracker_query_models import TrackerQueryCondition
 from src.gui.tracker_query_models import TrackerQueryErrorKind
@@ -365,6 +367,74 @@ class TrackerQueryServiceTest(unittest.TestCase):
         self.assertEqual([node.depth for node in snapshot.nodes], [0, 1])
         self.assertTrue(any(call[0] == "search" for call in BulkHierarchyClient.calls))
         self.assertTrue(any(call[0] == "roots" for call in BulkHierarchyClient.calls))
+
+    def test_baseline_items_are_saved_once_and_reused_after_restart(self) -> None:
+        """Baseline은 바뀌지 않으므로 한 번 받은 전체 아이템을 저장해 다음에는 서버에 묻지 않는다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            cache = BaselineItemCache(Path(tmp_dir))
+            first = TrackerQueryService(client_factory=QueryFakeClient, baseline_cache=cache)
+
+            fresh = first.load_baseline_hierarchy_snapshot(self.settings, 20, 11)
+            searches = [call for call in QueryFakeClient.calls if call[0] == "search"]
+
+            # 앱을 다시 켠 것처럼 새 서비스로 같은 Baseline을 연다.
+            again = TrackerQueryService(client_factory=QueryFakeClient, baseline_cache=cache)
+            saved = again.load_baseline_hierarchy_snapshot(self.settings, 20, 11)
+
+            self.assertEqual(fresh.saved_at, "")
+            self.assertTrue(saved.saved_at)
+            self.assertEqual(
+                [node.item.item_id for node in saved.nodes],
+                [node.item.item_id for node in fresh.nodes],
+            )
+            self.assertEqual([call for call in QueryFakeClient.calls if call[0] == "search"], searches)
+
+            refreshed = again.load_baseline_hierarchy_snapshot(self.settings, 20, 11, refresh=True)
+
+            self.assertEqual(refreshed.saved_at, "")
+            self.assertEqual(
+                len([call for call in QueryFakeClient.calls if call[0] == "search"]),
+                len(searches) * 2,
+            )
+
+    def test_comparison_reuses_saved_baselines_but_always_fetches_the_current_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = TrackerQueryService(
+                client_factory=QueryFakeClient,
+                baseline_cache=BaselineItemCache(Path(tmp_dir)),
+            )
+
+            for _ in range(2):
+                service.compare_tracker_at_sources(
+                    self.settings,
+                    20,
+                    reference_source=BaselineComparisonSource(),
+                    comparison_source=BaselineComparisonSource(baseline_id=11),
+                )
+
+            baseline_searches = [
+                call for call in QueryFakeClient.calls if call[0] == "search" and call[2] == 11
+            ]
+            current_searches = [
+                call for call in QueryFakeClient.calls if call[0] == "search" and call[2] is None
+            ]
+            self.assertEqual(len(baseline_searches), 1)
+            self.assertEqual(len(current_searches), 2)
+
+    def test_test_mode_baselines_are_not_saved(self) -> None:
+        offline = GuiSettings(
+            offline_mode=True,
+            offline_schema_path=str(SAMPLE_DIR / "offline_schema.json"),
+            offline_tracker_configuration_path=str(SAMPLE_DIR / "offline_tracker_configuration.json"),
+            offline_query_data_path=str(SAMPLE_DIR / "offline_tracker_items.json"),
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            cache = BaselineItemCache(Path(tmp_dir))
+            service = TrackerQueryService(baseline_cache=cache)
+
+            service.load_baseline_hierarchy_snapshot(offline, 24680001, 24681001)
+
+            self.assertEqual(cache.total_bytes(), 0)
 
     def test_baseline_hierarchy_and_detail_keep_the_selected_baseline(self) -> None:
         class BaselineHierarchyClient(QueryFakeClient):

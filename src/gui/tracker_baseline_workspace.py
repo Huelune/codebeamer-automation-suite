@@ -495,7 +495,9 @@ class BaselineWorkspacePanel(QWidget):
                 "Baseline 전체 비교",
                 (
                     "현재 트래커의 전체 아이템을 두 기준에서 조회합니다.\n"
-                    "아이템 수에 따라 시간이 오래 걸리고 서버 요청이 여러 번 발생할 수 있습니다.\n\n"
+                    "Baseline은 저장본이 있으면 바로 쓰고, 없으면 받아서 저장합니다.\n"
+                    "현재 상태는 매번 받으므로 아이템 수에 따라 시간이 오래 걸리고 "
+                    "서버 요청이 여러 번 발생할 수 있습니다.\n\n"
                     f"기준: {reference_label}\n"
                     f"비교: {comparison_label}\n\n"
                     "전체 비교를 실행하시겠습니까?"
