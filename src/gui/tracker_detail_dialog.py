@@ -82,8 +82,8 @@ class DetailDialogController:
         dialog.navigate_forward_requested.connect(
             lambda: self.navigate_history(dialog, session, back=False)
         )
-        # Baseline 상세는 과거 시점이라, 트리로 현재 아이템을 열면 두 시점이 섞인다.
-        if panel.baseline_id is None:
+        # 작업공간 트리가 상세와 같은 시점일 때만 둔다. 다른 시점의 트리로 옮기면 두 시점이 섞인다.
+        if self.page.hierarchy_panel.selected_baseline_id() == panel.baseline_id:
             self.attach_item_tree(dialog, session)
         dialog.finished.connect(lambda _result: session.invalidate())
         dialog.exec()
@@ -115,11 +115,10 @@ class DetailDialogController:
             and isinstance(summary := item.data(0, ITEM_SUMMARY_ROLE), TrackerItemSummary)
         }
         tracker = self.page._current_tracker
-        dialog.set_tree_items(
-            items,
-            expanded_ids=expanded_ids,
-            title=f"{tracker.name} 계층" if tracker is not None else "트래커 계층",
-        )
+        title = f"{tracker.name} 계층" if tracker is not None else "트래커 계층"
+        if hierarchy.selected_baseline_id() is not None:
+            title += f" · {hierarchy.hierarchy_source_combo.currentText()}"
+        dialog.set_tree_items(items, expanded_ids=expanded_ids, title=title)
         dialog.item_tree.itemExpanded.connect(hierarchy.load_children)
         dialog.tree_item_selected.connect(
             lambda item_id: self.navigate(dialog, session, item_id)
@@ -272,7 +271,8 @@ class DetailDialogController:
 
         self.page._submit(
             "detail_dialog_item",
-            lambda: self.page.service.load_detail(settings, item_id),
+            # Baseline 창은 트리로 옮겨도 같은 Baseline 시점을 연다.
+            lambda: self.page.service.load_detail(settings, item_id, baseline_id=dialog.baseline_id),
             loaded,
             failed,
         )
@@ -298,11 +298,16 @@ class DetailDialogController:
             self.page._submit(
                 "detail_dialog_wiki",
                 lambda: self.page.content_service.render_wiki(
-                    settings, self.page.detail_panel.wiki_context(detail, None), detail.description
+                    settings,
+                    self.page.detail_panel.wiki_context(detail, dialog.baseline_id),
+                    detail.description,
                 ),
                 lambda result: dialog.set_description_html(result.html) if current() else None,
                 lambda _exc: None,
             )
+        # 작업공간과 같이 과거 첨부 revision을 확인할 수 없어 Baseline 첨부는 불러오지 않는다.
+        if dialog.baseline_id is not None:
+            return
 
         def attachments_loaded(attachments: tuple[AttachmentSummary, ...]) -> None:
             if not current():

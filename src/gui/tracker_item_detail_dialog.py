@@ -164,11 +164,7 @@ class TrackerItemDetailDialog(QDialog):
         self.back_button.clicked.connect(self.navigate_back_requested.emit)
         self.forward_button.clicked.connect(self.navigate_forward_requested.emit)
 
-        self.heading = QLabel(
-            f"#{detail.item_id} · {detail.summary.name}"
-            + (f" · Baseline #{baseline_id}" if baseline_id is not None else ""),
-            self,
-        )
+        self.heading = QLabel(self._heading_text(detail), self)
         self.heading.setObjectName("tracker_detail_title")
         layout.addWidget(self.heading)
         self.context_label = QLabel(
@@ -215,18 +211,7 @@ class TrackerItemDetailDialog(QDialog):
         layout.addWidget(body, 1)
 
         if baseline_id is not None:
-            context_message = (
-                "과거 시점의 관계·이력 조회를 지원하지 않습니다. "
-                "현재 상태를 대신 조회하지 않습니다."
-            )
-            self.relations_status.setText(context_message)
-            self.history_status.setText(context_message)
-            self.relations_retry.setEnabled(False)
-            self.history_retry.setEnabled(False)
-            self.comments_status.setText(
-                "과거 시점의 댓글 조회를 지원하지 않습니다. 현재 댓글을 대신 조회하지 않습니다."
-            )
-            self.comments_retry.setEnabled(False)
+            self._show_baseline_context_notice()
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         close_button = buttons.button(QDialogButtonBox.StandardButton.Close)
@@ -241,6 +226,8 @@ class TrackerItemDetailDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         self.tree_label = QLabel("트래커 계층", pane)
         self.tree_label.setObjectName("tracker_detail_section_title")
+        # Baseline 이름까지 붙으면 길어지므로 제목이 트리 폭을 넓히지 않게 줄을 바꾼다.
+        self.tree_label.setWordWrap(True)
         layout.addWidget(self.tree_label)
         self.item_tree = TrackerItemTree(pane)
         self.item_tree.setMinimumWidth(220)
@@ -293,6 +280,25 @@ class TrackerItemDetailDialog(QDialog):
         summary = selected[0].data(0, ITEM_SUMMARY_ROLE) if selected else None
         if isinstance(summary, TrackerItemSummary):
             self.tree_item_selected.emit(summary.item_id)
+
+    def _heading_text(self, detail: TrackerItemDetail) -> str:
+        suffix = f" · Baseline #{self.baseline_id}" if self.baseline_id is not None else ""
+        return f"#{detail.item_id} · {detail.summary.name}{suffix}"
+
+    def _show_baseline_context_notice(self) -> None:
+        """과거 시점에는 관계·이력·댓글을 조회하지 않는다. 현재 상태로 대신 채우지 않는다."""
+        context_message = (
+            "과거 시점의 관계·이력 조회를 지원하지 않습니다. "
+            "현재 상태를 대신 조회하지 않습니다."
+        )
+        self.relations_status.setText(context_message)
+        self.history_status.setText(context_message)
+        self.relations_retry.setEnabled(False)
+        self.history_retry.setEnabled(False)
+        self.comments_status.setText(
+            "과거 시점의 댓글 조회를 지원하지 않습니다. 현재 댓글을 대신 조회하지 않습니다."
+        )
+        self.comments_retry.setEnabled(False)
 
     def _open_codebeamer_link(self, kind: str, target_id: int, name: str) -> None:
         """아이템 링크는 이 창에서 열고, 첨부 링크는 저장한다."""
@@ -619,7 +625,7 @@ class TrackerItemDetailDialog(QDialog):
         self.attachments = attachments
         self.image_resources = {resource.resource_key: resource for resource in image_resources}
         self.setWindowTitle(f"아이템 상세 · #{detail.item_id} {detail.summary.name}")
-        self.heading.setText(f"#{detail.item_id} · {detail.summary.name}")
+        self.heading.setText(self._heading_text(detail))
         self.context_label.setText(
             "  ›  ".join(
                 value
@@ -651,6 +657,9 @@ class TrackerItemDetailDialog(QDialog):
         self.set_comments(ItemCommentsSnapshot())
         self._comments_state = "idle"
         self.comments_status.setText("탭을 열면 댓글을 조회합니다.")
+        if self.baseline_id is not None:
+            # Baseline 창 안에서 옮겨 다녀도 같은 과거 시점이므로 안내를 그대로 둔다.
+            self._show_baseline_context_notice()
         self.tabs.setCurrentIndex(0)
         self.select_tree_item(detail.item_id)
 
