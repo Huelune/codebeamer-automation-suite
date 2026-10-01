@@ -1764,19 +1764,89 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         # 창이 사라진 뒤 이미지 받기가 끝나도 오류 없이 넘어간다.
         tasks.pop(0).finish()
 
-    def test_baseline_detail_dialog_has_no_tracker_tree(self) -> None:
-        """Baseline 상세 창에서 트리로 현재 아이템을 열면 두 시점이 섞이므로 트리를 두지 않는다."""
+    def _show_baseline_hierarchy(self, baseline_id: int = 24681001) -> None:
+        hierarchy = self.page.hierarchy_panel
+        hierarchy.hierarchy_source_combo.setCurrentIndex(hierarchy.hierarchy_source_combo.findData(baseline_id))
+        hierarchy.reload_roots_button.click()
+        self._app.processEvents()
+        self.assertEqual(hierarchy.selected_baseline_id(), baseline_id)
+        self.assertEqual(hierarchy.item_tree.topLevelItemCount(), 1)
+
+    def test_detail_dialog_has_no_tree_from_another_point_in_time(self) -> None:
+        """상세와 작업공간 트리의 시점이 다르면 트리를 두지 않는다. 트리로 옮기면 두 시점이 섞인다."""
         self.page.activate()
         workspace_tree = self.page.hierarchy_panel.item_tree
         workspace_tree.setCurrentItem(workspace_tree.topLevelItem(0))
         self._app.processEvents()
         panel = self.page.detail_panel
+        # 현재 상태 트리 옆의 Baseline 상세
         panel.render_detail(panel.current_detail, baseline_id=24681001)
 
         dialog = self._open_real_detail_dialog()
 
         self.assertFalse(dialog.tree_pane.isVisible())
         self.assertEqual(dialog.item_tree.topLevelItemCount(), 0)
+        dialog.close()
+
+        # Baseline 트리 옆의 현재 상태 상세
+        self._show_baseline_hierarchy()
+        workspace_tree.setCurrentItem(workspace_tree.topLevelItem(0))
+        self._app.processEvents()
+        panel.render_detail(panel.current_detail, baseline_id=None)
+
+        dialog = self._open_real_detail_dialog()
+
+        self.assertFalse(dialog.tree_pane.isVisible())
+        self.assertEqual(dialog.item_tree.topLevelItemCount(), 0)
+
+    def test_baseline_detail_dialog_lists_the_baseline_tree_and_stays_at_that_baseline(self) -> None:
+        """Baseline 상세 창도 그 Baseline 계층을 옆에 두고, 트리로 옮겨도 같은 Baseline 시점을 연다."""
+        load_detail = self.service.load_detail
+        requested_baselines: list[int | None] = []
+
+        def recording_load_detail(settings, item_id, *, baseline_id=None):
+            requested_baselines.append(baseline_id)
+            return load_detail(settings, item_id, baseline_id=baseline_id)
+
+        self.service.load_detail = recording_load_detail  # type: ignore[method-assign]
+        attachment_requests: list[int] = []
+        self.page.content_service.load_attachments = (  # type: ignore[method-assign]
+            lambda _settings, item_id, **_kwargs: attachment_requests.append(item_id) or ()
+        )
+        self.page.activate()
+        self._show_baseline_hierarchy()
+        workspace_tree = self.page.hierarchy_panel.item_tree
+        root = workspace_tree.topLevelItem(0)
+        workspace_tree.setCurrentItem(root.child(0))
+        self._app.processEvents()
+        self.assertEqual(self.page.detail_panel.baseline_id, 24681001)
+
+        dialog = self._open_real_detail_dialog()
+
+        self.assertTrue(dialog.tree_pane.isVisible())
+        self.assertIn("Offline Requirements Baseline", dialog.tree_label.text())
+        # Baseline 이름이 붙어 길어진 제목이 트리 칸을 처음 폭(300px)보다 넓히지 않는다.
+        self.assertLessEqual(dialog.tree_pane.minimumSizeHint().width(), 300)
+        self.assertEqual(dialog.item_tree.currentItem().text(1), "9001002")
+        requested_baselines.clear()
+
+        dialog.item_tree.setCurrentItem(self._dialog_tree_item(dialog, 9001003))
+        self._app.processEvents()
+
+        self.assertEqual(requested_baselines, [24681001])
+        self.assertEqual(dialog.detail.item_id, 9001003)
+        self.assertEqual(dialog.detail.summary.name, "Steering system baseline")
+        self.assertIn("Baseline #24681001", dialog.heading.text())
+        self.assertIn("과거 시점", dialog.relations_status.text())
+        self.assertIn("과거 시점", dialog.comments_status.text())
+        self.assertEqual(attachment_requests, [])
+
+        dialog.back_button.click()
+        self._app.processEvents()
+
+        self.assertEqual(dialog.detail.item_id, 9001002)
+        self.assertEqual(requested_baselines, [24681001, 24681001])
+        self.assertEqual(dialog.item_tree.currentItem().text(1), "9001002")
 
     def test_wiki_field_dialog_is_built_with_the_real_class(self) -> None:
         """Wiki 필드 창도 진짜 클래스로 만들어 본다.
