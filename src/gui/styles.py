@@ -324,6 +324,7 @@ QTreeWidget#tracker_item_tree {
     alternate-background-color: #F8FBFD;
     selection-background-color: #DCEFFD;
     selection-color: #13263A;
+    qproperty-guide_color: #C3D1DE;
 }
 
 QTreeWidget#tracker_item_tree::item {
@@ -1043,6 +1044,7 @@ QTreeWidget#tracker_item_tree {
     border: 1px solid #D3E7E9;
     alternate-background-color: #F7FCFC;
     selection-background-color: #D9F0EF;
+    qproperty-guide_color: #B5D6D9;
 }
 
 QTreeWidget#tracker_item_tree::item:hover {

@@ -27,7 +27,6 @@ try:
     from PySide6.QtWidgets import QTableWidget
     from PySide6.QtWidgets import QTableWidgetItem
     from PySide6.QtWidgets import QTabWidget
-    from PySide6.QtWidgets import QTreeWidget
     from PySide6.QtWidgets import QTreeWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
@@ -40,6 +39,7 @@ from .tracker_content_models import AttachmentResource
 from .tracker_content_models import AttachmentSummary
 from .tracker_item_context_models import ItemHistorySnapshot
 from .tracker_item_context_models import ItemRelationsSnapshot
+from .tracker_item_tree import TrackerItemTree
 from .tracker_query_models import TrackerItemDetail
 from .tracker_query_models import TrackerItemSummary
 from .tracker_workspace_support import ITEM_SUMMARY_ROLE
@@ -239,10 +239,7 @@ class TrackerItemDetailDialog(QDialog):
         self.tree_label = QLabel("트래커 계층", pane)
         self.tree_label.setObjectName("tracker_detail_section_title")
         layout.addWidget(self.tree_label)
-        self.item_tree = QTreeWidget(pane)
-        # 작업공간 계층 트리와 같은 모양을 쓴다.
-        self.item_tree.setObjectName("tracker_item_tree")
-        self.item_tree.setHeaderLabels(["ID", "요약"])
+        self.item_tree = TrackerItemTree(pane)
         self.item_tree.setMinimumWidth(220)
         self.item_tree.itemSelectionChanged.connect(self._on_tree_selection_changed)
         layout.addWidget(self.item_tree, 1)
@@ -266,7 +263,6 @@ class TrackerItemDetailDialog(QDialog):
             if isinstance(summary, TrackerItemSummary) and summary.item_id in expanded_ids:
                 item.setExpanded(True)
         self.item_tree.blockSignals(False)
-        self.item_tree.resizeColumnToContents(0)
         self.tree_pane.setVisible(bool(items))
         self.select_tree_item(self.detail.item_id)
 

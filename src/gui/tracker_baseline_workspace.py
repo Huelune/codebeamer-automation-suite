@@ -31,7 +31,6 @@ try:
     from PySide6.QtWidgets import QSplitter
     from PySide6.QtWidgets import QTableWidget
     from PySide6.QtWidgets import QTabWidget
-    from PySide6.QtWidgets import QTreeWidget
     from PySide6.QtWidgets import QTreeWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
@@ -56,6 +55,7 @@ from .tracker_baseline_export_dialog import BaselineExportFieldDialog
 from .tracker_baseline_panel import BASELINE_KIND_ACCENTS
 from .tracker_baseline_panel import BASELINE_KIND_BADGES
 from .tracker_baseline_panel import BaselineComparisonPanel
+from .tracker_item_tree import TrackerItemTree
 from .tracker_query_models import ProjectSummary
 from .tracker_query_models import TrackerItemSummary
 from .tracker_query_models import TrackerSummary
@@ -134,13 +134,7 @@ class BaselineWorkspacePanel(QWidget):
         hierarchy_tab = QWidget(self.baseline_browser_tabs)
         hierarchy_layout = QVBoxLayout(hierarchy_tab)
         hierarchy_layout.setContentsMargins(0, 0, 0, 0)
-        self.baseline_item_tree = QTreeWidget(hierarchy_tab)
-        self.baseline_item_tree.setColumnCount(2)
-        self.baseline_item_tree.setHeaderLabels(["ID", "요약"])
-        self.baseline_item_tree.setAlternatingRowColors(True)
-        self.baseline_item_tree.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.baseline_item_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.baseline_item_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.baseline_item_tree = TrackerItemTree(hierarchy_tab)
         self.baseline_item_tree.itemExpanded.connect(self._on_baseline_tree_item_expanded)
         self.baseline_item_tree.itemSelectionChanged.connect(self._on_baseline_tree_selection_changed)
         hierarchy_layout.addWidget(self.baseline_item_tree, 1)
