@@ -4,6 +4,7 @@ import base64
 import os
 import unittest
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -89,12 +90,10 @@ class _SignalStub:
     def connect(self, callback) -> None:
         self._callbacks.append(callback)
 
-    def emit(self, value=None) -> None:
+    def emit(self, *args) -> None:
+        # 조회 결과가 None인 경우도 있으므로 받은 인자를 그대로 넘긴다.
         for callback in tuple(self._callbacks):
-            if value is None:
-                callback()
-            else:
-                callback(value)
+            callback(*args)
 
 
 class _DeferredTask:
@@ -380,6 +379,38 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertTrue(self.page.search_panel.search_button.isEnabled())
         self.assertFalse(self.page.create_item_button.isEnabled())
 
+    def test_saved_baseline_hierarchy_opens_at_once_and_reload_fetches_again(self) -> None:
+        """저장본이 있는 Baseline은 고르기만 해도 열리고, 다시 불러오기만 저장본을 무시한다."""
+        load_snapshot = self.service.load_baseline_hierarchy_snapshot
+        refresh_flags: list[object] = []
+
+        def recording_load(settings, tracker_id, baseline_id, **kwargs):
+            refresh_flags.append(kwargs.get("refresh"))
+            return load_snapshot(settings, tracker_id, baseline_id, **kwargs)
+
+        self.service.load_baseline_hierarchy_snapshot = recording_load
+        self.service.load_saved_baseline_hierarchy = lambda settings, tracker_id, baseline_id: replace(
+            load_snapshot(settings, tracker_id, baseline_id),
+            saved_at="2026-09-30T05:00:00+00:00",
+        )
+        self.page.activate()
+        panel = self.page.hierarchy_panel
+
+        panel.hierarchy_source_combo.setCurrentIndex(panel.hierarchy_source_combo.findData(24681001))
+        self._app.processEvents()
+
+        self.assertEqual(panel.item_tree.topLevelItemCount(), 1)
+        self.assertIn("저장본 2026-09-30", panel.tree_status_label.text())
+        self.assertIn("저장본", self.page.workspace_status_label.text())
+        self.assertEqual(panel.reload_roots_button.text(), "Baseline 계층 다시 불러오기")
+        self.assertEqual(refresh_flags, [])
+
+        panel.reload_roots_button.click()
+        self._app.processEvents()
+
+        self.assertEqual(refresh_flags, [True])
+        self.assertNotIn("저장본", panel.tree_status_label.text())
+
     def test_baseline_source_loads_full_read_only_hierarchy_and_detail(self) -> None:
         self.page.activate()
 
@@ -447,12 +478,14 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             self.page.hierarchy_panel.hierarchy_source_combo.findData(baseline_id)
         )
         self.page.hierarchy_panel.reload_roots_button.click()
-        self.assertEqual(len(tasks), 1)
+        # 출처를 고를 때 저장본을 먼저 찾고, 조회 버튼으로 전체를 받는다.
+        self.assertEqual(len(tasks), 2)
 
         self.page.hierarchy_panel.hierarchy_source_combo.setCurrentIndex(0)
         self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 2)
 
-        tasks[0].finish()
+        for task in tasks:
+            task.finish()
         self._app.processEvents()
 
         self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 2)

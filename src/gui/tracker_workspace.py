@@ -90,6 +90,7 @@ REQUEST_BUSY_MESSAGES = {
     "hierarchy_export_fields": "계층 내보내기 필드 정보를 확인하는 중입니다.",
     "hierarchy_export": "트래커 전체 계층 Excel 파일을 생성하는 중입니다.",
     "baseline_hierarchy": "선택한 Baseline의 전체 계층을 불러오는 중입니다.",
+    "baseline_saved_hierarchy": "저장해 둔 Baseline 계층을 여는 중입니다.",
     "direct": "아이템 ID의 위치와 계층을 확인하는 중입니다.",
     "editor_schema": "수정 가능한 필드를 확인하는 중입니다.",
     "required_fields": "새 아이템 필수 필드를 확인하는 중입니다.",

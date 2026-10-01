@@ -22,6 +22,8 @@ class TrackerHierarchyNode:
 class TrackerHierarchySnapshot:
     tracker_id: int
     nodes: tuple[TrackerHierarchyNode, ...]
+    # Baseline 저장본으로 만든 계층이면 그 저장본을 서버에서 받은 시각. 새로 받았으면 빈 문자열.
+    saved_at: str = ""
 
 
 def build_tracker_hierarchy(

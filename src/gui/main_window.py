@@ -19,6 +19,8 @@ from .activity_history import ActivityHistoryStore
 from .activity_history import ActivityRecord
 from .activity_history import default_activity_history_path
 from .activity_history_page import ActivityHistoryPage
+from .baseline_cache import BaselineItemCache
+from .baseline_cache import default_baseline_cache_dir
 from .batch_window import BatchUploadWindow
 from .developer_tool_panels import ExcelToolPanel
 from .developer_tool_panels import PayloadToolPanel
@@ -32,6 +34,7 @@ from .settings_store import GuiSettings
 from .settings_store import GuiSettingsStore
 from .tracker_bulk_update import BulkUpdateRunStore
 from .tracker_bulk_update import default_bulk_update_runs_path
+from .tracker_query_service import TrackerQueryService
 from .tracker_workspace import TrackerWorkspacePage
 from .window_support import _estimate_upload_remaining_seconds
 from .window_support import _format_clock_text
@@ -223,6 +226,9 @@ class MainWindow(QMainWindow):
         self.bulk_run_store = BulkUpdateRunStore(
             default_bulk_update_runs_path(self.settings_store.root_dir)
         )
+        self.baseline_cache = BaselineItemCache(
+            default_baseline_cache_dir(self.settings_store.root_dir)
+        )
         self.activity_page = ActivityHistoryPage(
             self.activity_store,
             bulk_retry_requested=self._open_bulk_retry,
@@ -231,6 +237,7 @@ class MainWindow(QMainWindow):
 
         self.tracker_workspace_page = TrackerWorkspacePage(
             settings_provider=self.settings_store.load,
+            service=TrackerQueryService(baseline_cache=self.baseline_cache),
             open_settings=self._open_global_settings,
             activity_recorder=self._record_activity,
             bulk_run_store=self.bulk_run_store,
@@ -268,6 +275,7 @@ class MainWindow(QMainWindow):
             api_monitor_requested=self._show_developer_tools,
             busy_started=self._begin_busy,
             busy_finished=self._end_busy,
+            baseline_cache=self.baseline_cache,
             parent=content,
         )
 

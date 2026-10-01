@@ -9,9 +9,12 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from src.gui.baseline_cache import BaselineCacheKey
+from src.gui.baseline_cache import BaselineItemCache
 from src.gui.main_window import ROUTE_BATCH_UPLOAD
 from src.gui.main_window import ROUTE_SETTINGS
 from src.gui.main_window import MainWindow
+from src.gui.settings_center import SETTINGS_CATEGORY_DATA
 from src.gui.settings_center import SETTINGS_CATEGORY_DEVELOPER
 from src.gui.settings_center import SETTINGS_CATEGORY_LABELS
 from src.gui.settings_center import SETTINGS_CATEGORY_TEST_MODE
@@ -80,6 +83,34 @@ class GuiSettingsCenterTest(unittest.TestCase):
             os_index = page.credential_storage_combo.findData(CREDENTIAL_STORAGE_OS)
             self.assertGreaterEqual(os_index, 0)
             self.assertFalse(page.credential_storage_combo.model().item(os_index).isEnabled())
+
+    def test_data_page_shows_baseline_cache_usage_and_clears_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            cache = BaselineItemCache(Path(tmp_dir) / "baseline_cache")
+            page = SettingsCenterPage(self._store(Path(tmp_dir)), baseline_cache=cache)
+            self.assertFalse(page.baseline_cache_clear_button.isEnabled())
+            cache.save(
+                BaselineCacheKey("https://example.test", "tester", 20, 11, "tracker.id = 20"),
+                [{"id": 1, "name": "Sample"}],
+            )
+
+            # 작업공간을 쓰는 동안 늘어난 사용량은 데이터 관리 화면을 열 때 다시 센다.
+            page.show_category(SETTINGS_CATEGORY_DATA)
+
+            self.assertTrue(page.baseline_cache_clear_button.isEnabled())
+            self.assertIn("MB를 쓰고 있고", page.baseline_cache_label.text())
+            page.baseline_cache_clear_button.click()
+
+            self.assertEqual(cache.total_bytes(), 0)
+            self.assertFalse(page.baseline_cache_clear_button.isEnabled())
+            self.assertIn("1개를 지웠습니다", page.status_label.text())
+
+    def test_data_page_hides_baseline_cache_without_a_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            page = SettingsCenterPage(self._store(Path(tmp_dir)))
+            page.show_category(SETTINGS_CATEGORY_DATA)
+
+            self.assertFalse(page.baseline_cache_clear_button.isVisibleTo(page))
 
     def test_developer_settings_are_saved_applied_and_can_open_monitor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

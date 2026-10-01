@@ -8,6 +8,8 @@ from typing import Any
 
 from src.codebeamer_client import CodebeamerClient
 
+from .baseline_cache import BaselineCacheKey
+from .baseline_cache import BaselineItemCache
 from .payload_values import as_mapping
 from .service_core import _build_gui_client
 from .tracker_baseline_compare import BaselineComparisonResult
@@ -81,9 +83,17 @@ def classify_tracker_query_error(exc: Exception) -> tuple[TrackerQueryErrorKind,
 class TrackerQueryService:
     """트래커 조회 응답을 UI 독립 모델로 정규화한다."""
 
-    def __init__(self, client_factory=CodebeamerClient, logger=None) -> None:
+    def __init__(
+        self,
+        client_factory=CodebeamerClient,
+        logger=None,
+        *,
+        baseline_cache: BaselineItemCache | None = None,
+    ) -> None:
         self.client_factory = client_factory
         self.logger = logger
+        # Baseline 시점 전체 아이템 저장본. 없으면 매번 서버에서 받는다.
+        self.baseline_cache = baseline_cache
         self._tracker_cache: dict[tuple[tuple[Any, ...], int], dict[str, Any]] = {}
         self._schema_cache: dict[tuple[tuple[Any, ...], int], dict[str, Any]] = {}
 
@@ -518,6 +528,77 @@ class TrackerQueryService:
             tracker_id=normalized_tracker_id,
         )
 
+    def _baseline_cache_key(self, settings, query: TrackerQuery) -> BaselineCacheKey | None:
+        """저장본을 쓸 조회면 그 키를, 아니면 None. 현재 시점과 테스트 모드는 저장하지 않는다."""
+        if (
+            self.baseline_cache is None
+            or query.baseline_id is None
+            or bool(getattr(settings, "offline_mode", False))
+        ):
+            return None
+        return BaselineCacheKey(
+            base_url=str(getattr(settings, "base_url", "") or "").strip().rstrip("/"),
+            username=str(getattr(settings, "username", "") or "").strip(),
+            tracker_id=query.tracker_id,
+            baseline_id=query.baseline_id,
+            query=f"{query.build_cbql()} | {query.sort}",
+        )
+
+    def _saved_baseline_items(
+        self,
+        settings,
+        query: TrackerQuery,
+    ) -> tuple[tuple[TrackerItemSummary, ...], str] | None:
+        """저장본이 있으면 (아이템, 받은 시각), 없으면 None. 서버에는 묻지 않는다."""
+        key = self._baseline_cache_key(settings, query)
+        if key is None or self.baseline_cache is None:
+            return None
+        entry = self.baseline_cache.load(key)
+        if entry is None:
+            return None
+        items = tuple(
+            TrackerItemSummary.from_raw(item, tracker_id=query.tracker_id) for item in entry.items
+        )
+        return items, entry.saved_at
+
+    @staticmethod
+    def _baseline_items_query(tracker_id: int, baseline_id: int | None, page_size: int) -> TrackerQuery:
+        return TrackerQuery(
+            tracker_id=tracker_id,
+            page=1,
+            page_size=page_size,
+            sort="item.id ASC",
+            baseline_id=baseline_id,
+        )
+
+    def _load_baseline_items(
+        self,
+        settings,
+        query: TrackerQuery,
+        *,
+        page_size: int,
+        refresh: bool,
+    ) -> tuple[tuple[TrackerItemSummary, ...], str]:
+        """Baseline 시점 전체 아이템. 두 번째 값은 저장본을 쓴 경우 그 저장본을 받은 시각이다.
+
+        저장본이 있으면 서버에 묻지 않는다. `refresh`면 저장본을 무시하고 새로 받아 덮어쓴다.
+        """
+        if not refresh:
+            saved = self._saved_baseline_items(settings, query)
+            if saved is not None:
+                return saved
+        key = self._baseline_cache_key(settings, query)
+        cache = self.baseline_cache
+        items = self.load_all_search_items(
+            settings,
+            query,
+            page_size=page_size,
+            require_full_items=True,
+        )
+        if key is not None and cache is not None:
+            cache.save(key, [item.raw_reference for item in items])
+        return items, ""
+
     def load_baseline_hierarchy_snapshot(
         self,
         settings,
@@ -525,24 +606,44 @@ class TrackerQueryService:
         baseline_id: int,
         *,
         page_size: int = 500,
+        refresh: bool = False,
     ) -> TrackerHierarchySnapshot:
         """현재 계층 API를 섞지 않고 Baseline 전체 item으로 계층을 만든다."""
         normalized_tracker_id = int(tracker_id)
-        normalized_baseline_id = int(baseline_id)
-        items = self.load_all_search_items(
+        items, saved_at = self._load_baseline_items(
             settings,
-            TrackerQuery(
-                tracker_id=normalized_tracker_id,
-                page=1,
-                page_size=page_size,
-                sort="item.id ASC",
-                baseline_id=normalized_baseline_id,
-            ),
+            self._baseline_items_query(normalized_tracker_id, int(baseline_id), page_size),
             page_size=page_size,
-            require_full_items=True,
+            refresh=refresh,
         )
+        return self._baseline_hierarchy(items, normalized_tracker_id, saved_at)
+
+    def load_saved_baseline_hierarchy(
+        self,
+        settings,
+        tracker_id: int,
+        baseline_id: int,
+    ) -> TrackerHierarchySnapshot | None:
+        """저장본이 있을 때만 Baseline 계층을 만든다. 서버에는 묻지 않아 바로 열 수 있다."""
+        normalized_tracker_id = int(tracker_id)
+        saved = self._saved_baseline_items(
+            settings,
+            self._baseline_items_query(normalized_tracker_id, int(baseline_id), 500),
+        )
+        if saved is None:
+            return None
+        items, saved_at = saved
+        return self._baseline_hierarchy(items, normalized_tracker_id, saved_at)
+
+    @staticmethod
+    def _baseline_hierarchy(
+        items: tuple[TrackerItemSummary, ...],
+        tracker_id: int,
+        saved_at: str,
+    ) -> TrackerHierarchySnapshot:
         try:
-            return build_tracker_hierarchy(items, tracker_id=normalized_tracker_id)
+            snapshot = build_tracker_hierarchy(items, tracker_id=tracker_id)
+            return replace(snapshot, saved_at=saved_at)
         except TrackerHierarchyError as exc:
             raise TrackerQueryServiceError(
                 TrackerQueryErrorKind.SERVER,
@@ -681,7 +782,11 @@ class TrackerQueryService:
         comparison_source: BaselineComparisonSource,
         page_size: int = 500,
     ) -> BaselineComparisonResult:
-        """두 기준의 트래커 전체 아이템을 query로 조회해 한 번에 비교한다."""
+        """두 기준의 트래커 전체 아이템을 query로 조회해 한 번에 비교한다.
+
+        Baseline 쪽은 바뀌지 않으므로 저장본을 쓰고, 현재 쪽은 늘 서버에서 받는다.
+        저장본을 새로 받으려면 계층 탭에서 그 Baseline을 다시 불러온다.
+        """
         if reference_source == comparison_source:
             raise TrackerQueryServiceError(
                 TrackerQueryErrorKind.INVALID_QUERY,
@@ -693,18 +798,13 @@ class TrackerQueryService:
         def load_source(
             source: BaselineComparisonSource,
         ) -> tuple[TrackerItemSummary, ...]:
-            return self.load_all_search_items(
+            items, _saved_at = self._load_baseline_items(
                 settings,
-                TrackerQuery(
-                    tracker_id=normalized_tracker_id,
-                    page=1,
-                    page_size=page_size,
-                    sort="item.id ASC",
-                    baseline_id=source.baseline_id,
-                ),
+                self._baseline_items_query(normalized_tracker_id, source.baseline_id, page_size),
                 page_size=page_size,
-                require_full_items=True,
+                refresh=False,
             )
+            return items
 
         reference = load_source(reference_source)
         comparison = load_source(comparison_source)
