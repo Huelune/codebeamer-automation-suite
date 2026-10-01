@@ -65,14 +65,17 @@ class ZoomableImageView(QGraphicsView):
 
     def set_image(self, data: bytes) -> bool:
         image = QImage.fromData(data)
-        self._scene.clear()
-        self._pixmap_item = None
+        self.clear_image()
         if image.isNull():
             return False
         self._pixmap_item = self._scene.addPixmap(QPixmap.fromImage(image))
         self._scene.setSceneRect(self._pixmap_item.boundingRect())
         self.fit_image()
         return True
+
+    def clear_image(self) -> None:
+        self._scene.clear()
+        self._pixmap_item = None
 
     def fit_image(self) -> None:
         if self._pixmap_item is None:
@@ -633,6 +636,8 @@ class TrackerItemDetailDialog(QDialog):
                 if value
             )
         )
+        # 문서에 넣어 둔 그림은 HTML을 바꿔도 남으므로 앞 아이템의 그림을 먼저 비운다.
+        self.description_view.clear()
         self.description_view.setHtml(description_html)
         for resource in self.image_resources.values():
             self.description_view.add_attachment_resource(resource)
@@ -722,11 +727,14 @@ class TrackerItemDetailDialog(QDialog):
         if controls_enabled:
             self._show_selected_image(0)
         else:
+            # 다른 아이템으로 옮겨 왔으면 앞 아이템의 그림이 남지 않게 비운다.
+            self.image_view.clear_image()
             self.image_status.setText("표시할 수 있는 이미지 첨부가 없습니다.")
 
     def _show_selected_image(self, _index: int) -> None:
         resource = self.image_resources.get(str(self.image_combo.currentData() or ""))
         if resource is None:
+            self.image_view.clear_image()
             self.image_status.setText("표시할 수 있는 이미지 첨부가 없습니다.")
             return
         if self.image_view.set_image(resource.data):
