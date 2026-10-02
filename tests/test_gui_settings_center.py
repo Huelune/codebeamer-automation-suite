@@ -22,6 +22,8 @@ from src.gui.settings_center import SettingsCenterPage
 from src.gui.settings_store import CREDENTIAL_STORAGE_NONE
 from src.gui.settings_store import CREDENTIAL_STORAGE_OS
 from src.gui.settings_store import GuiSettingsStore
+from src.gui.workspace_favorites import FavoriteItem
+from src.gui.workspace_favorites import WorkspaceFavorites
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
@@ -111,6 +113,43 @@ class GuiSettingsCenterTest(unittest.TestCase):
             page.show_category(SETTINGS_CATEGORY_DATA)
 
             self.assertFalse(page.baseline_cache_clear_button.isVisibleTo(page))
+
+    def test_saving_settings_keeps_what_the_workspace_saved_meanwhile(self) -> None:
+        """설정 화면을 연 뒤 작업공간이 저장한 최근 트래커와 즐겨찾기를 설정 저장이 되돌리지 않는다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            store = self._store(Path(tmp_dir))
+            page = SettingsCenterPage(store)
+            favorites = WorkspaceFavorites().with_item(FavoriteItem(9001002, "Brake"))
+            store.save_workspace_recent_trackers([{"project_id": 1, "tracker_id": 11}])
+            store.save_workspace_favorites("test-mode", favorites)
+
+            page.theme_combo.setCurrentIndex(1)
+            self.assertTrue(page.save_changes(), page.status_label.text())
+
+            saved = store.load_app_settings()
+            self.assertEqual(saved.workspace_recent_trackers, [{"project_id": 1, "tracker_id": 11}])
+            self.assertEqual(saved.workspace_favorites, {"test-mode": favorites.to_payload()})
+
+    def test_imported_favorites_replace_the_saved_ones(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            source = self._store(root / "source")
+            imported = WorkspaceFavorites().with_item(FavoriteItem(9001003, "Steering"))
+            source.save_workspace_favorites("test-mode", imported)
+            export_path = root / "exported.json"
+            source.export_app_settings(export_path)
+            store = self._store(root / "target")
+            store.save_workspace_favorites("test-mode", WorkspaceFavorites().with_item(FavoriteItem(1)))
+            store.save_workspace_recent_trackers([{"project_id": 1, "tracker_id": 11}])
+            page = SettingsCenterPage(store)
+
+            page.import_from_path(export_path)
+            self.assertTrue(page.save_changes(), page.status_label.text())
+
+            saved = store.load_app_settings()
+            self.assertEqual(saved.workspace_favorites, {"test-mode": imported.to_payload()})
+            # 내보내기에 없는 최근 트래커는 가져오기로 지우지 않는다.
+            self.assertEqual(saved.workspace_recent_trackers, [{"project_id": 1, "tracker_id": 11}])
 
     def test_developer_settings_are_saved_applied_and_can_open_monitor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -20,6 +20,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QImage
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QDialog
 from PySide6.QtWidgets import QMessageBox
 from shiboken6 import isValid
@@ -35,6 +36,7 @@ from src.gui.tracker_content_models import AttachmentSummary
 from src.gui.tracker_content_models import WikiRenderResult
 from src.gui.tracker_content_models import WikiResourceReference
 from src.gui.tracker_detail_panel import ATTACHMENT_VISIBLE_ROWS
+from src.gui.tracker_favorites_panel import UNAVAILABLE_TEXT
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_create_dialog import TrackerItemCreateRequest
 from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
@@ -51,6 +53,9 @@ from src.gui.tracker_workspace import TrackerWorkspacePage
 from src.gui.tracker_workspace_support import tree_items
 from src.gui.wiki_content_view import WikiContentDialog
 from src.gui.wiki_renderer import wiki_image_resource_key
+from src.gui.workspace_favorites import TEST_MODE_FAVORITES_KEY
+from src.gui.workspace_favorites import FavoriteItem
+from src.gui.workspace_favorites import WorkspaceFavorites
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
@@ -1662,6 +1667,190 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             # 진짜 창이라 닫아 둔다. 파괴는 부모인 page 가 맡는다.
             opened[0].close()
             self._app.processEvents()
+
+    def _favorites_page(self, stored: dict | None = None) -> tuple[TrackerWorkspacePage, list, dict]:
+        """즐겨찾기를 읽고 저장하는 작업공간. 저장 호출과 설정 파일 대신 쓰는 dict를 돌려준다."""
+        holder = {"value": dict(stored or {})}
+        saved: list[tuple[str, WorkspaceFavorites]] = []
+        page = TrackerWorkspacePage(
+            settings_provider=lambda: self.settings,
+            service=self.service,
+            favorites_loader=lambda: holder["value"],
+            favorites_saver=lambda key, favorites: saved.append((key, favorites)),
+            synchronous=True,
+        )
+        self.addCleanup(page.deleteLater)
+        self.addCleanup(page.close)
+        page.resize(1280, 860)
+        page.show()
+        page.activate()
+        self._app.processEvents()
+        return page, saved, holder
+
+    @staticmethod
+    def _favorite_cell(table, row: int, column: int = 0):
+        return table.visualItemRect(table.item(row, column)).center()
+
+    def test_item_favorites_are_added_from_the_detail_and_opened_from_the_tab(self) -> None:
+        page, saved, _holder = self._favorites_page()
+        tree = page.hierarchy_panel.item_tree
+        tree.setCurrentItem(tree.topLevelItem(0))
+        self._app.processEvents()
+        star = page.detail_panel.detail_favorite_button
+        self.assertTrue(star.isEnabled())
+        self.assertEqual(star.text(), "☆")
+
+        star.click()
+
+        key, favorites = saved[-1]
+        self.assertEqual(key, TEST_MODE_FAVORITES_KEY)
+        self.assertEqual(
+            favorites.items[0],
+            FavoriteItem(9001001, "Vehicle requirements", "Offline Requirements", "Offline Vehicle Project"),
+        )
+        self.assertEqual(star.text(), "★")
+        table = page.favorites_panel.item_table
+        self.assertEqual(table.rowCount(), 1)
+        self.assertEqual(
+            [table.item(0, column).text() for column in range(3)],
+            ["Vehicle requirements", "9001001", "Offline Requirements"],
+        )
+
+        # 다른 아이템을 보다가 즐겨찾기 탭에서 연다. 한 번 누르면 고르기만 한다.
+        page.search_panel.search_table.clearSelection()
+        page.detail_panel.reset_detail()
+        page.browser_tabs.setCurrentWidget(page.favorites_panel)
+        self._app.processEvents()
+        QTest.mouseClick(table.viewport(), Qt.MouseButton.LeftButton, pos=self._favorite_cell(table, 0))
+        self.assertIsNone(page.detail_panel.current_detail)
+        self.assertTrue(page.favorites_panel.open_button.isEnabled())
+
+        QTest.mouseDClick(table.viewport(), Qt.MouseButton.LeftButton, pos=self._favorite_cell(table, 0))
+        self._app.processEvents()
+
+        self.assertEqual(page.detail_panel.current_detail.item_id, 9001001)
+        self.assertIs(page.browser_tabs.currentWidget(), page.hierarchy_panel)
+        self.assertEqual(page.detail_panel.detail_favorite_button.text(), "★")
+
+        page.browser_tabs.setCurrentWidget(page.favorites_panel)
+        table.setFocus()
+        table.selectRow(0)
+        page.detail_panel.reset_detail()
+        QTest.keyClick(table, Qt.Key.Key_Return)
+        self._app.processEvents()
+        self.assertEqual(page.detail_panel.current_detail.item_id, 9001001)
+
+        page.browser_tabs.setCurrentWidget(page.favorites_panel)
+        table.selectRow(0)
+        page.favorites_panel.remove_button.click()
+
+        self.assertEqual(table.rowCount(), 0)
+        self.assertTrue(saved[-1][1].is_empty())
+        self.assertEqual(page.detail_panel.detail_favorite_button.text(), "☆")
+        self.assertTrue(page.favorites_panel.hint_label.isVisibleTo(page.favorites_panel))
+
+    def test_tracker_favorites_are_pinned_on_top_and_listed_in_the_tab(self) -> None:
+        page, saved, _holder = self._favorites_page()
+        combo = page.tracker_combo
+        button = page.tracker_favorite_button
+        self.assertEqual(page._current_tracker.tracker_id, 24680001)
+        self.assertTrue(button.isEnabled())
+
+        # 다른 트래커를 고정하면 콤보 맨 위에 ★로 둔다.
+        test_cases = combo.findData(24680002)
+        combo.setCurrentIndex(test_cases)
+        page._on_tracker_activated(test_cases)
+        self._app.processEvents()
+        button.click()
+
+        self.assertEqual(saved[-1][1].trackers[0].tracker_id, 24680002)
+        self.assertEqual(combo.itemData(0), 24680002)
+        self.assertTrue(combo.itemText(0).startswith("★ Offline Test Cases"))
+        self.assertEqual(combo.currentData(), 24680002)
+        self.assertEqual(button.text(), "★")
+        table = page.favorites_panel.tracker_table
+        self.assertEqual(
+            [table.item(0, column).text() for column in range(2)],
+            ["Offline Test Cases", "Offline Vehicle Project"],
+        )
+
+        # 다른 트래커를 보다가 탭에서 고정 트래커를 연다.
+        requirements = combo.findData(24680001)
+        combo.setCurrentIndex(requirements)
+        page._on_tracker_activated(requirements)
+        self._app.processEvents()
+        self.assertEqual(button.text(), "☆")
+        page.browser_tabs.setCurrentWidget(page.favorites_panel)
+        table.selectRow(0)
+        page.favorites_panel.open_button.click()
+        self._app.processEvents()
+
+        self.assertEqual(page._current_tracker.tracker_id, 24680002)
+        self.assertIs(page.browser_tabs.currentWidget(), page.hierarchy_panel)
+
+        button.click()
+
+        self.assertEqual(saved[-1][1].trackers, ())
+        self.assertFalse(combo.itemText(combo.findData(24680002)).startswith("★"))
+        self.assertEqual(combo.currentData(), 24680002)
+
+    def test_favorites_that_cannot_be_opened_are_marked_and_names_follow_the_item(self) -> None:
+        stored = WorkspaceFavorites().with_item(FavoriteItem(99999999, "Removed item")).with_item(
+            FavoriteItem(9001001, "Old name", "Old tracker")
+        )
+        page, saved, _holder = self._favorites_page({TEST_MODE_FAVORITES_KEY: stored.to_payload()})
+        panel = page.favorites_panel
+        table = panel.item_table
+        self.assertEqual(table.item(0, 0).text(), "Old name")
+
+        page.browser_tabs.setCurrentWidget(panel)
+        table.selectRow(1)
+        panel.open_button.click()
+        self._app.processEvents()
+
+        self.assertEqual(table.item(1, 2).text(), UNAVAILABLE_TEXT)
+        self.assertEqual(saved, [])
+
+        page.browser_tabs.setCurrentWidget(panel)
+        table.selectRow(0)
+        panel.open_button.click()
+        self._app.processEvents()
+
+        # 열린 아이템의 지금 이름으로 목록을 맞추고, 자리는 그대로 둔다.
+        self.assertEqual(table.item(0, 0).text(), "Vehicle requirements")
+        self.assertEqual(table.item(0, 2).text(), "Offline Requirements")
+        self.assertEqual([item.item_id for item in saved[-1][1].items], [9001001, 99999999])
+        self.assertEqual(table.item(1, 2).text(), UNAVAILABLE_TEXT)
+
+    def test_baseline_detail_star_shows_state_but_cannot_change_it(self) -> None:
+        stored = WorkspaceFavorites().with_item(FavoriteItem(9001001, "Vehicle requirements"))
+        page, saved, _holder = self._favorites_page({TEST_MODE_FAVORITES_KEY: stored.to_payload()})
+        hierarchy = page.hierarchy_panel
+        hierarchy.hierarchy_source_combo.setCurrentIndex(hierarchy.hierarchy_source_combo.findData(24681001))
+        hierarchy.reload_roots_button.click()
+        self._app.processEvents()
+        hierarchy.item_tree.setCurrentItem(hierarchy.item_tree.topLevelItem(0))
+        self._app.processEvents()
+        star = page.detail_panel.detail_favorite_button
+
+        self.assertEqual(page.detail_panel.baseline_id, 24681001)
+        self.assertEqual(star.text(), "★")
+        self.assertFalse(star.isEnabled())
+        self.assertIn("Baseline", star.toolTip())
+        # Baseline 이름으로 즐겨찾기 이름을 바꾸지 않는다.
+        self.assertEqual(saved, [])
+
+    def test_applying_settings_reloads_favorites(self) -> None:
+        page, _saved, holder = self._favorites_page()
+        self.assertEqual(page.favorites_panel.item_table.rowCount(), 0)
+        holder["value"] = {
+            TEST_MODE_FAVORITES_KEY: WorkspaceFavorites().with_item(FavoriteItem(9001002, "Brake system")).to_payload()
+        }
+
+        page.on_settings_applied()
+        self._app.processEvents()
+
+        self.assertEqual(page.favorites_panel.item_table.item(0, 0).text(), "Brake system")
 
     def _open_real_detail_dialog(self) -> TrackerItemDetailDialog:
         """exec 만 막고 진짜 상세 창을 연다. 조회 결과가 반영되도록 화면에 띄워 둔다."""

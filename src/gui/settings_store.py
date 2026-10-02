@@ -21,6 +21,8 @@ from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 from .payload_values import as_mapping
 from .styles import DEFAULT_GUI_THEME
 from .styles import normalize_gui_theme_name
+from .workspace_favorites import WorkspaceFavorites
+from .workspace_favorites import normalized_favorites_by_server
 
 
 APP_DIR_NAME = ".codebeamer-automation-suite"
@@ -118,6 +120,8 @@ class AppSettings:
     default_tracker_id: str = ""
     # 작업공간에서 연 트래커. 최근 것이 앞이고 업로드 기본값과 따로 둔다.
     workspace_recent_trackers: list[dict[str, int]] = field(default_factory=list)
+    # 작업공간 즐겨찾기. 서버·사용자 키마다 {"items": [...], "trackers": [...]}이고 설정 내보내기에 담는다.
+    workspace_favorites: dict[str, dict[str, list[dict[str, Any]]]] = field(default_factory=dict)
     migrated_from_legacy: bool = False
 
     def active_profile(self) -> ConnectionProfile | None:
@@ -563,6 +567,17 @@ class GuiSettingsStore:
         app_settings.workspace_recent_trackers = _normalized_recent_trackers(entries)
         self.save_app_settings(app_settings)
 
+    def save_workspace_favorites(self, key: str, favorites: WorkspaceFavorites) -> None:
+        """한 서버·사용자의 즐겨찾기만 바꾼다. 다른 서버의 즐겨찾기는 그대로 둔다."""
+        app_settings = self.ensure_app_settings()
+        stored = dict(app_settings.workspace_favorites)
+        if favorites.is_empty():
+            stored.pop(key, None)
+        else:
+            stored[key] = favorites.to_payload()
+        app_settings.workspace_favorites = stored
+        self.save_app_settings(app_settings)
+
     def export_app_settings(self, path: Path, settings: AppSettings | None = None) -> None:
         value = self._normalize_app_settings(settings or self.load_app_settings())
         payload = {
@@ -593,6 +608,8 @@ class GuiSettingsStore:
             "offline_query_data_path": value.offline_query_data_path,
             "default_project_id": value.default_project_id,
             "default_tracker_id": value.default_tracker_id,
+            # 즐겨찾기는 다른 PC로 옮겨도 쓸모가 있어 담는다. 최근 트래커는 이 PC 사용 기록이라 뺀다.
+            "workspace_favorites": value.workspace_favorites,
         }
         self._write_json_atomic(Path(path), payload)
 
@@ -1077,6 +1094,7 @@ class GuiSettingsStore:
             workspace_recent_trackers=_normalized_recent_trackers(
                 settings.workspace_recent_trackers
             ),
+            workspace_favorites=normalized_favorites_by_server(settings.workspace_favorites),
             migrated_from_legacy=bool(settings.migrated_from_legacy),
         )
 
@@ -1137,6 +1155,7 @@ class GuiSettingsStore:
             "default_project_id": settings.default_project_id,
             "default_tracker_id": settings.default_tracker_id,
             "workspace_recent_trackers": settings.workspace_recent_trackers,
+            "workspace_favorites": settings.workspace_favorites,
             "migrated_from_legacy": settings.migrated_from_legacy,
         }
 
@@ -1232,6 +1251,7 @@ class GuiSettingsStore:
             workspace_recent_trackers=_normalized_recent_trackers(
                 payload.get("workspace_recent_trackers")
             ),
+            workspace_favorites=normalized_favorites_by_server(payload.get("workspace_favorites")),
             migrated_from_legacy=bool(payload.get("migrated_from_legacy", False)),
         )
         return self._normalize_app_settings(settings)

@@ -88,6 +88,8 @@ class SettingsCenterPage(QWidget):
         self.busy_finished = busy_finished
         self.persisted_settings = settings_store.ensure_app_settings()
         self.draft_settings = deepcopy(self.persisted_settings)
+        # 가져온 설정의 즐겨찾기를 저장할 때 그대로 쓸지. 평소에는 작업공간이 저장한 값을 쓴다.
+        self._favorites_imported = False
         self.current_category = SETTINGS_CATEGORY_CONNECTION
         self.selected_profile_id = (
             self.draft_settings.active_profile_id
@@ -1096,7 +1098,14 @@ class SettingsCenterPage(QWidget):
         }
         try:
             self._validate_profiles_for_save()
+            # 최근 트래커와 즐겨찾기는 작업공간이 바로 저장한다. 편집 사본은 그 뒤 값을 모르므로
+            # 지금 저장된 값으로 바꿔 덮어쓰지 않게 한다. 가져온 즐겨찾기만 그대로 둔다.
+            stored = self.settings_store.load_app_settings()
+            self.draft_settings.workspace_recent_trackers = stored.workspace_recent_trackers
+            if not self._favorites_imported:
+                self.draft_settings.workspace_favorites = stored.workspace_favorites
             self.settings_store.save_app_settings(self.draft_settings)
+            self._favorites_imported = False
             self.persisted_settings = self.settings_store.load_app_settings()
             for profile in self.persisted_settings.profiles:
                 if profile.credential_storage == CREDENTIAL_STORAGE_NONE:
@@ -1141,6 +1150,7 @@ class SettingsCenterPage(QWidget):
     def discard_changes(self) -> None:
         self.persisted_settings = self.settings_store.load_app_settings()
         self.draft_settings = deepcopy(self.persisted_settings)
+        self._favorites_imported = False
         self.selected_profile_id = (
             self.draft_settings.active_profile_id
             or (self.draft_settings.profiles[0].profile_id if self.draft_settings.profiles else "")
@@ -1247,6 +1257,7 @@ class SettingsCenterPage(QWidget):
         imported.window_is_fullscreen = self.draft_settings.window_is_fullscreen
         imported.navigation_collapsed = self.draft_settings.navigation_collapsed
         self.draft_settings = imported
+        self._favorites_imported = True
         self.selected_profile_id = (
             imported.active_profile_id
             or (imported.profiles[0].profile_id if imported.profiles else "")
