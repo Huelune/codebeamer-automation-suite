@@ -449,7 +449,7 @@ class TrackerQueryServiceTest(unittest.TestCase):
             self.assertEqual(len(current_searches), 2)
 
     def test_baseline_details_come_from_the_received_items_until_refresh(self) -> None:
-        """Baseline 계층·저장본으로 받은 아이템은 상세를 다시 묻지 않는다. 다시 조회만 단건으로 받는다."""
+        """Baseline 계층·저장본으로 받은 아이템은 상세를 다시 묻지 않는다. `refresh`만 단건으로 받는다."""
         BaselineDetailFakeClient.reset()
 
         def item_calls() -> list[tuple]:

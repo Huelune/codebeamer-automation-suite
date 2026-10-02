@@ -1031,7 +1031,7 @@ class TrackerDetailPanel(QFrame):
             warning_lines.insert(
                 1,
                 f"받아 둔 Baseline 목록({describe_saved_at(detail.baseline_list_received_at)} 받음)에서 열었습니다. "
-                "새로 받으려면 '다시 조회'를 누르세요.",
+                f"새로 받으려면 '{self.detail_refresh_button.text()}' 버튼을 누르세요.",
             )
         warnings = "\n".join(warning_lines)
         self.detail_warning.setText(warnings)
