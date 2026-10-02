@@ -90,6 +90,10 @@ Baseline 내용은 만든 뒤 바뀌지 않으므로, Baseline 시점 전체 `it
 - 서버가 준 원본 `items`를 그대로 저장하고 읽을 때 다시 해석합니다. 파일 안의 형식 번호나 조건이 다르거나
   파일이 깨졌으면 쓰지 않고, 깨진 파일은 지웁니다.
 - Baseline 단일 계층과 전체 비교의 Baseline 쪽만 저장본을 씁니다. 현재 상태와 테스트 모드는 저장하지 않습니다.
+- 받은 목록(저장본에서 연 것 포함)은 최근 8개까지 메모리에 아이템 ID로 색인합니다. 그 Baseline 아이템 상세는
+  `GET /v3/items/{id}?baselineId=` 단건 조회 대신 이 목록에서 만듭니다. 목록은 같은 아이템 모델의
+  `/v3/items/query` 전체 필드 응답입니다. 상세 영역에는 목록을 받은 시각을 알리고, `다시 조회`(`refresh=True`)만
+  단건으로 서버에서 받습니다. 목록에 없는 아이템이나 다른 Baseline은 지금처럼 단건으로 조회합니다.
 - 전체가 500MB를 넘으면 가장 오래 쓰지 않은 저장본부터 지우고, 설정 > 데이터 관리에서 사용량을 보고 비울 수 있습니다.
 - 저장은 부가 기능이라 폴더를 만들 수 없거나 쓰기에 실패해도 조회를 끊지 않습니다.
 - 응답에 담긴 사용자·선택지·참조 아이템 이름이 조회 시점 값이라면, 저장본에는 받은 시점의 이름이 남습니다.
@@ -166,7 +170,7 @@ Qt widget은 서버 원본 dict를 직접 탐색하지 않고 위 모델만 사�
 - 계층 Excel의 고정 열은 ID, Summary, 계층 단계, 상위 아이템 ID입니다. 일반 schema 필드는 기본 선택하고 TableField는 기본 해제하며, 선택 시 내부 행·열 순서를 보존합니다.
 - 계층 Excel의 TrackerItemChoiceField는 참조 ID나 tracker 정보 없이 각 참조 아이템의 `name`만 줄 단위로 표시합니다.
 - 기본 계층 탭에서 Baseline을 선택하면 저장본이 있을 때는 서버에 묻지 않고 바로 열고, 없으면 사용자가 계층 조회 버튼을 누른 경우에만 해당 시점의 전체 `items` 페이지를 수집해 저장합니다. 이미 연 Baseline에서 `Baseline 계층 다시 불러오기`를 누르면 저장본을 무시하고 새로 받아 덮어씁니다. 저장본으로 연 계층은 트리 위 상태 줄에 받은 시각을 표시합니다. root는 parent가 없는 item에서 도출하고, children의 명시 순서와 ordinal/ID fallback으로 트리를 구성합니다. 이 과정에서 현재 시점 root/children API나 아이템별 상세 API를 사용하지 않습니다.
-- Baseline 트리의 상세는 동일한 `baselineId`를 유지하며 읽기 전용으로 표시합니다. 관계 충돌, 순환, 누락 참조 또는 tracker 외부 참조가 있으면 현재 계층으로 대체하지 않고 조회를 중단합니다.
+- Baseline 트리의 상세는 동일한 `baselineId`를 유지하며 읽기 전용으로 표시합니다. 받아 둔 Baseline 목록에 있는 아이템은 서버에 다시 묻지 않고, `다시 조회`만 단건으로 받습니다. 관계 충돌, 순환, 누락 참조 또는 tracker 외부 참조가 있으면 현재 계층으로 대체하지 않고 조회를 중단합니다.
 - Baseline 단일 계층 Excel은 먼저 조회해 캐시한 `TrackerHierarchySnapshot`과 tracker schema를 기존 계층 workbook 생성기에 전달합니다. 필드 선택과 TableField 행 구조, TrackerItemChoiceField 이름 표시 규칙을 그대로 유지하며 내보내기 때문에 전체 query나 아이템별 상세를 다시 호출하지 않습니다. 내보내기 정보 시트에는 Baseline 이름과 ID를 기록합니다.
 - tracker 검색은 선택 tracker ID로 `TrackerQuery`를 만들며 빈 검색 조건은 화면에서 차단합니다.
 - ID 바로 열기는 `resolve_item_context()` 후 `load_ancestor_path()`를 호출해 선택 컨텍스트와 경로를 함께 전환합니다.

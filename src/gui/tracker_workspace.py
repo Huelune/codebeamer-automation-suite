@@ -1291,9 +1291,11 @@ class TrackerWorkspacePage(QWidget):
                 self.settings_provider(),
                 selected_item_id,
             )
+            # 다시 조회는 받아 둔 Baseline 아이템 목록을 건너뛰고 서버에서 받는다.
             self.detail_panel.load_detail(
                 selected_item_id,
                 baseline_id=self.detail_panel.baseline_id,
+                refresh=True,
             )
 
     def _create_item(self) -> None:

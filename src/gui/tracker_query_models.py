@@ -515,6 +515,8 @@ class TrackerItemDetail:
     builtin_fields: dict[str, Any] = field(default_factory=dict, compare=False)
     raw_payload: dict[str, Any] = field(default_factory=dict, compare=False)
     warnings: tuple[str, ...] = field(default_factory=tuple)
+    # Baseline 계층·비교로 받아 둔 아이템 목록에서 꺼낸 상세면 그 목록을 받은 시각. 단건 조회면 빈 값.
+    baseline_list_received_at: str = ""
 
     @property
     def item_id(self) -> int:

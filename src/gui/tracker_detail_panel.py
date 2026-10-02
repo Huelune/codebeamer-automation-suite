@@ -43,6 +43,7 @@ except ImportError as exc:  # pragma: no cover - GUI dependency guard
 
 from .activity_history import ActivityOperation
 from .activity_history import ActivityResult
+from .baseline_cache import describe_saved_at
 from .settings_store import GuiSettings
 from .tracker_content_models import ATTACHMENT_IMAGE_MIME_TYPES
 from .tracker_content_models import ATTACHMENT_IMAGE_SUFFIXES
@@ -463,7 +464,9 @@ class TrackerDetailPanel(QFrame):
         item_id: int,
         *,
         baseline_id: int | None = None,
+        refresh: bool = False,
     ) -> None:
+        """상세를 불러온다. `refresh`면 받아 둔 Baseline 아이템 목록 대신 서버에서 단건으로 받는다."""
         normalized_id = int(item_id)
         normalized_baseline_id = None if baseline_id is None else int(baseline_id)
         self._selected_item_id = normalized_id
@@ -505,6 +508,7 @@ class TrackerDetailPanel(QFrame):
                     settings,
                     normalized_id,
                     baseline_id=normalized_baseline_id,
+                    refresh=refresh,
                 )
             ),
             loaded,
@@ -1022,6 +1026,12 @@ class TrackerDetailPanel(QFrame):
             warning_lines.insert(
                 0,
                 f"읽기 전용 · Baseline #{baseline_id} 시점의 상세입니다.",
+            )
+        if detail.baseline_list_received_at:
+            warning_lines.insert(
+                1,
+                f"받아 둔 Baseline 목록({describe_saved_at(detail.baseline_list_received_at)} 받음)에서 열었습니다. "
+                "새로 받으려면 '다시 조회'를 누르세요.",
             )
         warnings = "\n".join(warning_lines)
         self.detail_warning.setText(warnings)
