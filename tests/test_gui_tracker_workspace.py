@@ -1862,7 +1862,7 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(dialog.item_tree.topLevelItemCount(), 0)
 
     def test_baseline_detail_from_received_items_says_so_and_refresh_asks_the_server(self) -> None:
-        """받아 둔 Baseline 목록에서 꺼낸 상세는 그렇다고 알리고, 다시 조회만 서버에서 새로 받는다."""
+        """받아 둔 Baseline 목록에서 꺼낸 상세는 그렇다고 알리고, 상세 새로고침만 서버에서 새로 받는다."""
         load_detail = self.service.load_detail
         refresh_flags: list[bool] = []
 
@@ -1882,7 +1882,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(refresh_flags, [False])
         self.assertIn("읽기 전용 · Baseline #24681001", panel.detail_warning.text())
         self.assertIn("받아 둔 Baseline 목록(2026-09-30", panel.detail_warning.text())
-        self.assertIn("'다시 조회'", panel.detail_warning.text())
+        # 안내가 가리키는 버튼이 실제로 있는 버튼이어야 한다.
+        self.assertIn(f"'{panel.detail_refresh_button.text()}' 버튼", panel.detail_warning.text())
 
         panel.detail_refresh_button.click()
         self._app.processEvents()
