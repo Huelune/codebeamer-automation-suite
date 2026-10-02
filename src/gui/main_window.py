@@ -244,6 +244,8 @@ class MainWindow(QMainWindow):
             bulk_chunk_size_saver=self.settings_store.save_bulk_update_chunk_size,
             recent_trackers=self.settings_store.load_app_settings().workspace_recent_trackers,
             recent_trackers_saver=self.settings_store.save_workspace_recent_trackers,
+            favorites_loader=lambda: self.settings_store.load_app_settings().workspace_favorites,
+            favorites_saver=self.settings_store.save_workspace_favorites,
             busy_started=self._begin_busy,
             busy_finished=self._end_busy,
             error_notifier=self._show_error_dialog,

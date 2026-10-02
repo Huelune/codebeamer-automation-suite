@@ -100,6 +100,10 @@ class DetailPanelHost:
     set_editor_expanded: Callable[[bool], None]
     # 설명 속 아이템 링크를 누르면 작업공간에서 그 아이템을 연다.
     open_item: Callable[[int], None]
+    # 즐겨찾기. 상세를 그릴 때 상태를 묻고, 즐겨찾기면 목록의 이름을 지금 본 값으로 맞춘다.
+    is_favorite_item: Callable[[int], bool]
+    favorite_item_shown: Callable[[TrackerItemDetail], None]
+    set_favorite_item: Callable[[TrackerItemDetail, bool], None]
 
 
 class TrackerDetailPanel(QFrame):
@@ -151,6 +155,11 @@ class TrackerDetailPanel(QFrame):
         detail_layout.setSpacing(8)
 
         detail_heading = QHBoxLayout()
+        self.detail_favorite_button = QPushButton("☆", self)
+        self.detail_favorite_button.setObjectName("tracker_favorite_toggle")
+        self.detail_favorite_button.setCheckable(True)
+        self.detail_favorite_button.clicked.connect(self._toggle_favorite)
+        detail_heading.addWidget(self.detail_favorite_button)
         self.detail_title = QLabel("아이템 상세")
         self.detail_title.setObjectName("tracker_detail_title")
         detail_heading.addWidget(self.detail_title, 1)
@@ -289,6 +298,23 @@ class TrackerDetailPanel(QFrame):
     def selected_item_id(self) -> int | None:
         """마지막으로 고른 아이템. 다시 조회할 때 쓴다."""
         return self._selected_item_id
+
+    def set_favorite_state(self, favorite: bool, *, enabled: bool) -> None:
+        """☆ 버튼 모양. Baseline 상세는 과거 시점이라 추가·해제를 막고 상태만 보인다."""
+        button = self.detail_favorite_button
+        button.setChecked(favorite)
+        button.setText("★" if favorite else "☆")
+        button.setEnabled(enabled)
+        if not enabled and self._current_detail is not None:
+            button.setToolTip("Baseline 상세에서는 즐겨찾기를 바꾸지 않습니다. 현재 상태 상세에서 바꾸세요.")
+        else:
+            button.setToolTip("즐겨찾기에서 빼기" if favorite else "즐겨찾기에 추가")
+
+    def _toggle_favorite(self, checked: bool) -> None:
+        detail = self._current_detail
+        if detail is None or self._detail_baseline_id is not None:
+            return
+        self._host.set_favorite_item(detail, checked)
 
     def show_detail(self, detail: TrackerItemDetail) -> None:
         """다른 화면에서 연 아이템을 설명 탭에 바로 띄운다."""
@@ -1036,6 +1062,10 @@ class TrackerDetailPanel(QFrame):
         warnings = "\n".join(warning_lines)
         self.detail_warning.setText(warnings)
         self.detail_warning.setVisible(bool(warnings))
+        favorite = self._host.is_favorite_item(detail.item_id)
+        if favorite and not historical:
+            self._host.favorite_item_shown(detail)
+        self.set_favorite_state(favorite, enabled=not historical)
         self._description_text = detail.description
         self._description_uses_wiki = is_explicit_wiki_type(detail.description_format)
         self._description_render_result = None
@@ -1177,6 +1207,7 @@ class TrackerDetailPanel(QFrame):
         self.description_source_toggle.blockSignals(False)
         self.description_source_toggle.setVisible(False)
         self.detail_title.setText("아이템 상세")
+        self.set_favorite_state(False, enabled=False)
         self.detail_refresh_button.setEnabled(False)
         self.detail_open_button.setEnabled(False)
         self.detail_refresh_button.setToolTip(
