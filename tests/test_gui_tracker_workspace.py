@@ -50,6 +50,7 @@ from src.gui.tracker_query_service import TrackerQueryService
 from src.gui.tracker_workspace import CHILDREN_LOADED_ROLE
 from src.gui.tracker_workspace import ITEM_SUMMARY_ROLE
 from src.gui.tracker_workspace import TrackerWorkspacePage
+from src.gui.tracker_workspace_support import BASELINE_COMPARISON_ROLE
 from src.gui.tracker_workspace_support import tree_items
 from src.gui.wiki_content_view import WikiContentDialog
 from src.gui.wiki_renderer import wiki_image_resource_key
@@ -799,6 +800,71 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.baseline_workspace._baseline_selected_item_id, 9001001)
         self.assertGreater(panel.detail.rowCount(), 0)
         self.assertEqual(len(calls), 1)
+
+    def _select_comparison_row(self, item_id: int) -> None:
+        table = self.page.baseline_workspace.baseline_result_table
+        for row in range(table.rowCount()):
+            comparison = table.item(row, 1).data(BASELINE_COMPARISON_ROLE)
+            if comparison is not None and comparison.item_id == item_id:
+                table.selectRow(row)
+                self._app.processEvents()
+                return
+        self.fail(f"#{item_id}이 비교 결과에 없습니다.")
+
+    def test_comparison_history_shows_field_changes_between_the_two_points(self) -> None:
+        """비교 결과에서 고른 아이템의 두 시점 사이 버전별 필드 변경을 이력 탭을 열 때만 조회해 보인다."""
+        load_history = self.page.context_service.load_history
+        requested: list[tuple[int, int | None]] = []
+
+        def recording_load_history(settings, item_id, item_version, **kwargs):
+            requested.append((item_id, item_version))
+            return load_history(settings, item_id, item_version, **kwargs)
+
+        self.page.context_service.load_history = recording_load_history  # type: ignore[method-assign]
+        self.page.activate()
+        self.page.workspace_mode_tabs.setCurrentIndex(self.page.baseline_mode_index)
+        self._app.processEvents()
+        panel = self.page.baseline_workspace.baseline_comparison_panel
+        panel.after_combo.setCurrentIndex(panel.after_combo.findData(24681001))
+        panel.run_button.click()
+        self._app.processEvents()
+        self._select_comparison_row(9001001)
+
+        # 필드 비교만 볼 때는 이력을 묻지 않는다.
+        self.assertEqual(requested, [])
+        self.assertIn("탭을 열면", panel.history_status.text())
+
+        panel.detail_tabs.setCurrentWidget(panel.history_tab)
+        self._app.processEvents()
+
+        self.assertEqual(requested, [(9001001, 3)])
+        self.assertEqual(panel.history_status.text(), "#9001001 · 버전 1 → 3 사이 변경 2건")
+        view = panel.history_view
+        self.assertEqual(
+            [view.topLevelItem(index).text(0) for index in range(view.topLevelItemCount())],
+            [
+                "버전 3 · 2026-07-20 09:00 · Sample User A · 필드 1개",
+                "버전 2 · 2026-07-19 08:00 · Sample User B · 필드 2개",
+            ],
+        )
+        risk = view.topLevelItem(0).child(0)
+        self.assertEqual([risk.text(column) for column in range(3)], ["Risk Level", "-", "Medium"])
+        summary = view.topLevelItem(1).child(0)
+        self.assertEqual(
+            [summary.text(column) for column in range(3)],
+            ["Summary", "Vehicle requirements baseline", "Vehicle requirements"],
+        )
+
+        # 탭을 연 채 다른 아이템을 고르면 그 아이템 이력을 묻는다.
+        self._select_comparison_row(9001003)
+
+        self.assertEqual(requested[-1], (9001003, 4))
+        self.assertEqual(panel.history_status.text(), "#9001003 · 버전 1 → 4 사이 변경 3건")
+
+        # 앞 아이템의 늦은 응답은 지금 고른 아이템 이력을 덮지 않는다.
+        panel.set_history(9001001, load_history(self.settings, 9001001, 3))
+        self.assertIn("#9001003", panel.history_status.text())
+        self.assertEqual(view.topLevelItemCount(), 3)
 
     def test_baseline_confirmation_cancel_does_not_call_full_compare(self) -> None:
         self.page.activate()
@@ -2080,6 +2146,30 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(refresh_flags, [False, True])
         self.assertEqual(panel.baseline_id, 24681001)
         self.assertNotIn("받아 둔 Baseline 목록", panel.detail_warning.text())
+
+    def test_baseline_detail_dialog_history_marks_changes_after_the_baseline(self) -> None:
+        """Baseline 상세 창도 변경 이력을 조회하고, 그 Baseline 버전 뒤의 변경을 나눠 보인다."""
+        self.page.activate()
+        self._show_baseline_hierarchy()
+        workspace_tree = self.page.hierarchy_panel.item_tree
+        workspace_tree.setCurrentItem(workspace_tree.topLevelItem(0))
+        self._app.processEvents()
+        dialog = self._open_real_detail_dialog()
+
+        dialog.tabs.setCurrentWidget(dialog.history_tab)
+        self._app.processEvents()
+
+        self.assertEqual(dialog.detail.version, 1)
+        self.assertEqual(dialog.history_status.text(), "변경 이력 2건 · 이 Baseline 이후 2건")
+        view = dialog.history_view
+        self.assertEqual(
+            [view.topLevelItem(index).text(0) for index in range(view.topLevelItemCount())],
+            [
+                "[Baseline 이후] 버전 3 · 2026-07-20 09:00 · Sample User A · 필드 1개",
+                "[Baseline 이후] 버전 2 · 2026-07-19 08:00 · Sample User B · 필드 2개",
+            ],
+        )
+        self.assertIn("관계 조회를 지원하지 않습니다", dialog.relations_status.text())
 
     def test_baseline_detail_dialog_lists_the_baseline_tree_and_stays_at_that_baseline(self) -> None:
         """Baseline 상세 창도 그 Baseline 계층을 옆에 두고, 트리로 옮겨도 같은 Baseline 시점을 연다."""

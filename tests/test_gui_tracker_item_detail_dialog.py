@@ -12,6 +12,7 @@ from PySide6.QtCore import QUrl
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
 from src.gui.tracker_content_models import AttachmentSummary
+from src.gui.tracker_item_context_models import ItemHistorySnapshot
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
 from src.gui.tracker_query_models import TrackerItemDetail
@@ -126,7 +127,8 @@ class TrackerItemDetailDialogTest(unittest.TestCase):
         self.assertEqual(opened, [1206])
         dialog.close()
 
-    def test_baseline_context_tabs_never_request_current_context(self) -> None:
+    def test_baseline_dialog_loads_history_but_not_current_relations(self) -> None:
+        """관계는 현재 것만 있어 Baseline 창에서 묻지 않는다. 이력은 전체 이력이라 묻고 Baseline 이후를 나눈다."""
         dialog = TrackerItemDetailDialog(self.detail(), description_html="", baseline_id=7)
         requested = []
         dialog.context_tab_requested.connect(lambda kind, force: requested.append((kind, force)))
@@ -135,8 +137,46 @@ class TrackerItemDetailDialogTest(unittest.TestCase):
         dialog.tabs.setCurrentWidget(dialog.history_tab)
         self.app.processEvents()
 
-        self.assertEqual(requested, [])
-        self.assertIn("현재 상태를 대신 조회하지 않습니다", dialog.history_status.text())
+        self.assertEqual(requested, [("history", False)])
+        self.assertIn("현재 상태를 대신 조회하지 않습니다", dialog.relations_status.text())
+
+        dialog.set_history(
+            ItemHistorySnapshot.from_raw(
+                {
+                    "versions": [
+                        {
+                            "itemRevision": {"version": version},
+                            "modifiedAt": f"2026-07-2{version}T09:00:00",
+                            "modifiedBy": {"name": "Sample User A"},
+                            "changes": [
+                                {
+                                    "field": {"id": 3, "name": "Summary"},
+                                    "oldValue": {"fieldId": 3, "value": f"v{version - 1}"},
+                                    "newValue": {"fieldId": 3, "value": f"v{version}"},
+                                }
+                            ],
+                        }
+                        for version in (5, 4, 3)
+                    ]
+                }
+            )
+        )
+
+        view = dialog.history_view
+        rows = [view.topLevelItem(index).text(0) for index in range(view.topLevelItemCount())]
+        # 이 창은 Baseline 시점인 버전 4다. 그 뒤 버전 5만 Baseline 이후로 나눈다.
+        self.assertEqual(
+            rows,
+            [
+                "[Baseline 이후] 버전 5 · 2026-07-25 09:00 · Sample User A · 필드 1개",
+                "── Baseline #7 시점 (버전 4) ──",
+                "버전 4 · 2026-07-24 09:00 · Sample User A · 필드 1개",
+                "버전 3 · 2026-07-23 09:00 · Sample User A · 필드 1개",
+            ],
+        )
+        change = dialog.history_view.topLevelItem(0).child(0)
+        self.assertEqual([change.text(column) for column in range(3)], ["Summary", "v4", "v5"])
+        self.assertIn("이 Baseline 이후 1건", dialog.history_status.text())
         dialog.close()
 
     def test_comments_tab_loads_lazily_and_renders_reply_attachment(self) -> None:
@@ -190,7 +230,7 @@ class TrackerItemDetailDialogTest(unittest.TestCase):
         dialog.replace_detail(self.detail(), description_html="<p>교체</p>")
 
         self.assertEqual(dialog.relations_table.rowCount(), 0)
-        self.assertEqual(dialog.history_table.rowCount(), 0)
+        self.assertEqual(dialog.history_view.topLevelItemCount(), 0)
         self.assertEqual(dialog.comment_views, {})
         self.assertEqual(dialog._comments_state, "idle")
         self.assertIn("탭을 열면", dialog.comments_status.text())

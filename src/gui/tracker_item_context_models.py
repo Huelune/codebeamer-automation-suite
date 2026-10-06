@@ -84,12 +84,48 @@ class ItemRelationsSnapshot:
         )
 
 
+def _field_value(value: Any) -> Any:
+    """이력의 oldValue·newValue는 아이템 필드와 같은 모양이다. 그 안의 값만 꺼낸다."""
+    if not isinstance(value, dict):
+        return value
+    if "values" in value:
+        return value.get("values")
+    return value.get("value")
+
+
+@dataclass(frozen=True)
+class ItemFieldChange:
+    """한 버전에서 바뀐 필드 하나. 값은 화면에서 비교 화면과 같은 방식으로 글자로 바꾼다."""
+
+    field_name: str
+    old_value: Any = None
+    new_value: Any = None
+    field_id: int | None = None
+
+    @classmethod
+    def from_raw(cls, raw: dict[str, Any]) -> ItemFieldChange:
+        field_reference = as_mapping(raw.get("field"))
+        old_value = as_mapping(raw.get("oldValue"))
+        new_value = as_mapping(raw.get("newValue"))
+        return cls(
+            field_name=_text(
+                raw.get("name") or field_reference.get("name") or new_value.get("name") or old_value.get("name")
+            )
+            or "이름 없는 필드",
+            old_value=_field_value(raw.get("oldValue")),
+            new_value=_field_value(raw.get("newValue")),
+            field_id=optional_int(field_reference.get("id") or new_value.get("fieldId") or old_value.get("fieldId")),
+        )
+
+
 @dataclass(frozen=True)
 class ItemHistoryEntry:
     version: int | None
     modified_at: str = ""
     modified_by: str = ""
     change_summary: str = ""
+    # 버전에서 바뀐 필드. 서버가 `changes`를 주지 않으면 비어 있다.
+    changes: tuple[ItemFieldChange, ...] = ()
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> ItemHistoryEntry:
@@ -104,6 +140,9 @@ class ItemHistoryEntry:
             modified_at=_text(raw.get("modifiedAt") or revision.get("modifiedAt")),
             modified_by=_person_name(raw.get("modifiedBy") or revision.get("modifiedBy")),
             change_summary=_text(summary_value),
+            changes=tuple(
+                ItemFieldChange.from_raw(change) for change in raw.get("changes") or [] if isinstance(change, dict)
+            ),
         )
 
 
@@ -146,4 +185,10 @@ class ItemHistorySnapshot:
         return cls(tuple(entries), current_version=current_version)
 
 
-__all__ = ["ItemHistoryEntry", "ItemHistorySnapshot", "ItemRelationSummary", "ItemRelationsSnapshot"]
+__all__ = [
+    "ItemFieldChange",
+    "ItemHistoryEntry",
+    "ItemHistorySnapshot",
+    "ItemRelationSummary",
+    "ItemRelationsSnapshot",
+]

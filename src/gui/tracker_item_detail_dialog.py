@@ -33,6 +33,7 @@ try:
 except ImportError as exc:  # pragma: no cover
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
+from .item_change_history_view import ItemChangeHistoryView
 from .tracker_comment_models import ItemComment
 from .tracker_comment_models import ItemCommentsSnapshot
 from .tracker_content_models import AttachmentResource
@@ -286,15 +287,15 @@ class TrackerItemDetailDialog(QDialog):
         return f"#{detail.item_id} · {detail.summary.name}{suffix}"
 
     def _show_baseline_context_notice(self) -> None:
-        """과거 시점에는 관계·이력·댓글을 조회하지 않는다. 현재 상태로 대신 채우지 않는다."""
-        context_message = (
-            "과거 시점의 관계·이력 조회를 지원하지 않습니다. "
-            "현재 상태를 대신 조회하지 않습니다."
+        """과거 시점에는 관계·댓글을 조회하지 않는다. 현재 상태로 대신 채우지 않는다.
+
+        변경 이력은 시점과 관계없는 아이템 전체 이력이라 조회하고, Baseline 이후 변경을 따로 표시한다.
+        """
+        self.relations_status.setText(
+            "과거 시점의 관계 조회를 지원하지 않습니다. 현재 상태를 대신 조회하지 않습니다."
         )
-        self.relations_status.setText(context_message)
-        self.history_status.setText(context_message)
         self.relations_retry.setEnabled(False)
-        self.history_retry.setEnabled(False)
+        self.history_status.setText("탭을 열면 변경 이력을 조회합니다. 이 Baseline 이후의 변경은 따로 표시합니다.")
         self.comments_status.setText(
             "과거 시점의 댓글 조회를 지원하지 않습니다. 현재 댓글을 대신 조회하지 않습니다."
         )
@@ -348,19 +349,16 @@ class TrackerItemDetailDialog(QDialog):
         self.history_retry.clicked.connect(lambda: self.context_tab_requested.emit("history", True))
         toolbar.addWidget(self.history_retry)
         layout.addLayout(toolbar)
-        self.history_table = QTableWidget(0, 4, tab)
-        self.history_table.setHorizontalHeaderLabels(["버전", "수정 시각", "수정자", "변경 요약"])
-        self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.history_table.verticalHeader().setVisible(False)
-        self.history_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        layout.addWidget(self.history_table, 1)
+        self.history_view = ItemChangeHistoryView(tab)
+        layout.addWidget(self.history_view, 1)
         return tab
 
     def _context_tab_changed(self, _index: int) -> None:
-        if self.baseline_id is not None:
-            return
-        if self.tabs.currentWidget() is self.relations_tab and self._context_states["relations"] == "idle":
+        if (
+            self.baseline_id is None
+            and self.tabs.currentWidget() is self.relations_tab
+            and self._context_states["relations"] == "idle"
+        ):
             self.set_context_loading("relations")
             self.context_tab_requested.emit("relations", False)
         elif self.tabs.currentWidget() is self.history_tab and self._context_states["history"] == "idle":
@@ -406,18 +404,19 @@ class TrackerItemDetailDialog(QDialog):
 
     def set_history(self, snapshot: ItemHistorySnapshot) -> None:
         self._context_states["history"] = "loaded"
-        self.history_table.setRowCount(len(snapshot.entries))
-        for row, entry in enumerate(snapshot.entries):
-            version_text = str(entry.version) if entry.version is not None else "-"
-            if entry.version is not None and entry.version == snapshot.current_version:
-                version_text += " (현재)"
-            for column, value in enumerate(
-                (version_text, entry.modified_at or "-", entry.modified_by or "-", entry.change_summary or "-")
-            ):
-                self.history_table.setItem(row, column, QTableWidgetItem(value))
-        self.history_status.setText(
-            f"변경 이력 {len(snapshot.entries)}건" if snapshot.entries else "변경 이력이 없습니다."
-        )
+        baseline_version = self.detail.version if self.baseline_id is not None else None
+        if baseline_version is None:
+            self.history_view.show_entries(snapshot.entries, current_version=snapshot.current_version)
+            status = f"변경 이력 {len(snapshot.entries)}건" if snapshot.entries else "변경 이력이 없습니다."
+        else:
+            # 이력은 아이템 전체 이력이다. 이 창의 버전이 Baseline 시점이므로 그 뒤 변경을 나눠 보인다.
+            self.history_view.show_entries(
+                snapshot.entries,
+                baseline=(baseline_version, f"Baseline #{self.baseline_id}"),
+            )
+            later = sum(entry.version is not None and entry.version > baseline_version for entry in snapshot.entries)
+            status = f"변경 이력 {len(snapshot.entries)}건 · 이 Baseline 이후 {later}건"
+        self.history_status.setText(status)
         self.history_retry.hide()
 
     def _open_selected_relation(self, index) -> None:
@@ -649,7 +648,7 @@ class TrackerItemDetailDialog(QDialog):
         self._context_states = {"relations": "idle", "history": "idle"}
         self._comments_state = "idle"
         self.relations_table.setRowCount(0)
-        self.history_table.setRowCount(0)
+        self.history_view.clear()
         self.relations_status.setText("탭을 열면 관계·참조를 조회합니다.")
         self.history_status.setText("탭을 열면 변경 이력을 조회합니다.")
         self.relations_retry.hide()

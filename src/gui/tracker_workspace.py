@@ -483,6 +483,7 @@ class TrackerWorkspacePage(QWidget):
             host=host,
             settings_provider=self.settings_provider,
             service=self.service,
+            context_service=self.context_service,
         )
 
     def _reset_baseline_state(self, message: str) -> None:

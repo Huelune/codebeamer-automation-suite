@@ -54,7 +54,13 @@
 버전에 따라 숫자 또는 문자열일 수 있으므로 문자열 식별자로 유지하고, `itemRevision.id`가 양의 정수로
 확인된 항목만 상세 이동을 허용합니다. 목록을 표시하기 위한 관계별 추가 상세 요청은 하지 않습니다.
 관계·이력 캐시는 연결 설정, item ID와 version으로 구분하며 설정 변경과 명시적 상세 새로고침 때
-무효화합니다. Baseline 상세에서는 현재 상태 endpoint를 호출하지 않습니다.
+무효화합니다. Baseline 상세에서는 현재 상태 관계 endpoint를 호출하지 않습니다.
+
+변경 이력 응답의 `versions[].changes[]`는 필드(`field`·`name`)와 `oldValue`·`newValue`를 아이템 필드 값과 같은
+모양으로 담습니다. `ItemHistoryEntry.changes`가 그 안의 `value`·`values`를 그대로 들고, 화면은 Baseline 비교와 같은
+`display_tracker_value`로 글자로 바꿉니다. 이력은 시점과 관계없는 아이템 전체 이력이라 Baseline 상세 창은 그
+Baseline 버전 이후 변경을 나눠 보이고, Baseline 비교의 `변경 이력` 탭은 두 시점 버전 사이(앞 버전 제외, 뒤 버전 포함)
+만 고릅니다. 한쪽에만 있는 아이템은 처음부터 그 버전까지 보입니다.
 
 댓글은 상세 창의 댓글 탭을 처음 열 때만 현재 item ID와 version 기준으로 조회합니다. `replyTo`가 확인된
 댓글은 부모 아래에 시간순으로 묶고, Wiki 형식 본문은 기존 HTML 정제와 로컬 fallback을 사용합니다.
