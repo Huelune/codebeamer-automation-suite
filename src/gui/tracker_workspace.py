@@ -45,6 +45,8 @@ from .tracker_content_service import TrackerContentService
 from .tracker_detail_dialog import DetailDialogController
 from .tracker_detail_panel import DetailPanelHost
 from .tracker_detail_panel import TrackerDetailPanel
+from .tracker_favorites_panel import FavoritesPanelHost
+from .tracker_favorites_panel import TrackerFavoritesPanel
 from .tracker_hierarchy_export import TrackerHierarchyExportError
 from .tracker_hierarchy_panel import HierarchyPanelHost
 from .tracker_hierarchy_panel import TrackerHierarchyPanel
@@ -71,6 +73,11 @@ from .tracker_workspace_support import ITEM_SUMMARY_ROLE
 from .tracker_workspace_support import PLACEHOLDER_ROLE
 from .tracker_workspace_support import DirectItemResult
 from .worker import BackgroundTask
+from .workspace_favorites import FavoriteItem
+from .workspace_favorites import FavoriteTracker
+from .workspace_favorites import WorkspaceFavorites
+from .workspace_favorites import favorites_key
+from .workspace_favorites import normalized_favorites_by_server
 
 
 REQUEST_BUSY_MESSAGES = {
@@ -145,6 +152,8 @@ class TrackerWorkspacePage(QWidget):
         bulk_request_provider: Callable[..., BulkUpdateRequest | None] | None = None,
         recent_trackers: Sequence[dict[str, int]] = (),
         recent_trackers_saver: Callable[[list[dict[str, int]]], None] | None = None,
+        favorites_loader: Callable[[], object] | None = None,
+        favorites_saver: Callable[[str, WorkspaceFavorites], None] | None = None,
         busy_started: Callable[[str], object] | None = None,
         busy_finished: Callable[[object], None] | None = None,
         error_notifier: Callable[[str, str], None] | None = None,
@@ -174,6 +183,14 @@ class TrackerWorkspacePage(QWidget):
         # 최근에 연 트래커. 최근 것이 앞이고 {"project_id", "tracker_id"} 모양이다.
         self._recent_trackers = [dict(entry) for entry in recent_trackers]
         self.recent_trackers_saver = recent_trackers_saver
+        # 서버·사용자별 즐겨찾기. 시작할 때와 설정을 적용할 때 읽고, 바꿀 때마다 저장한다.
+        self.favorites_loader = favorites_loader
+        self.favorites_saver = favorites_saver
+        self._favorites_by_server = self._load_favorites()
+        # 이번 세션에 열지 못한 즐겨찾기 아이템. 다시 열리면 지운다.
+        self._unavailable_favorite_ids: set[int] = set()
+        # 트래커 콤보 맨 위에 둔 즐겨찾기 트래커. 바뀔 때만 콤보를 다시 채운다.
+        self._combo_pinned_ids: tuple[int, ...] = ()
         self.busy_started = busy_started
         self.busy_finished = busy_finished
         self.error_notifier = error_notifier
@@ -198,6 +215,7 @@ class TrackerWorkspacePage(QWidget):
 
         self._build_ui()
         self._reset_workspace("프로젝트와 트래커를 불러오면 조회를 시작할 수 있습니다.")
+        self._show_favorites()
 
     def _build_ui(self) -> None:
         root_layout = QVBoxLayout(self)
@@ -281,6 +299,11 @@ class TrackerWorkspacePage(QWidget):
                 lambda: self._restore_combo_text(self.tracker_combo)
             )
         context_layout.addWidget(self.tracker_combo, 1)
+        self.tracker_favorite_button = QPushButton("☆", context_card)
+        self.tracker_favorite_button.setObjectName("tracker_favorite_toggle")
+        self.tracker_favorite_button.setCheckable(True)
+        self.tracker_favorite_button.clicked.connect(self._set_tracker_favorite)
+        context_layout.addWidget(self.tracker_favorite_button)
 
         self.create_item_button = QPushButton("새 아이템", context_card)
         self.create_item_button.setObjectName("primary_button")
@@ -338,6 +361,16 @@ class TrackerWorkspacePage(QWidget):
         self.browser_tabs.addTab(self.hierarchy_panel, "계층")
         self.search_panel = self._build_search_panel()
         self.browser_tabs.addTab(self.search_panel, "트래커 검색")
+        self.favorites_panel = TrackerFavoritesPanel(
+            self,
+            host=FavoritesPanelHost(
+                open_item=self.open_item_by_id,
+                open_tracker=self._open_favorite_tracker,
+                remove_item=self._remove_favorite_item,
+                remove_tracker=self._remove_favorite_tracker,
+            ),
+        )
+        self.browser_tabs.addTab(self.favorites_panel, "즐겨찾기")
         browser_layout.addWidget(self.browser_tabs, 1)
 
         self.detail_panel = self._build_detail_panel(splitter)
@@ -396,6 +429,9 @@ class TrackerWorkspacePage(QWidget):
             open_detail_dialog=self.detail_dialog.open_dialog,
             set_editor_expanded=self._set_editor_expanded,
             open_item=self.open_item_by_id,
+            is_favorite_item=lambda item_id: self._favorites().has_item(item_id),
+            favorite_item_shown=self._favorite_item_shown,
+            set_favorite_item=self._set_favorite_item,
         )
         return TrackerDetailPanel(
             parent,
@@ -550,6 +586,10 @@ class TrackerWorkspacePage(QWidget):
         del settings
         self._activated = False
         self._settings_fingerprint = None
+        # 가져온 설정의 즐겨찾기나 바뀐 서버·사용자의 즐겨찾기를 보여 준다.
+        self._favorites_by_server = self._load_favorites()
+        self._unavailable_favorite_ids.clear()
+        self._show_favorites()
         self.activate(force=True)
 
     def _clear_context_state(self) -> None:
@@ -610,6 +650,7 @@ class TrackerWorkspacePage(QWidget):
             and not historical
             and not self._create_busy
         )
+        self._update_tracker_favorite_button(self._favorites(settings))
 
     def _set_workspace_status(self, message: str, *, tone: str = "info") -> None:
         self.workspace_status_label.setText(str(message or ""))
@@ -1103,26 +1144,157 @@ class TrackerWorkspacePage(QWidget):
             suffix = f" · {type_name}"
         return f"{tracker.name}  ·  {tracker.tracker_id}{suffix}"
 
-    def _fill_tracker_combo(self) -> None:
-        """최근에 연 트래커를 위에 두고, 구분선 아래에 나머지를 서버 순서대로 채운다."""
+    def _fill_tracker_combo(self, favorites: WorkspaceFavorites | None = None) -> None:
+        """즐겨찾기 트래커(★)와 최근에 연 트래커를 위에 두고, 구분선 아래에 나머지를 서버 순서대로 채운다."""
         by_id = {tracker.tracker_id: tracker for tracker in self._trackers}
+        pinned = [
+            by_id[favorite.tracker_id]
+            for favorite in (favorites or self._favorites()).trackers
+            if favorite.tracker_id in by_id
+        ]
+        shown_ids = {tracker.tracker_id for tracker in pinned}
         recent = [
             by_id[entry["tracker_id"]]
             for entry in self._recent_trackers
-            if entry.get("tracker_id") in by_id
+            if entry.get("tracker_id") in by_id and entry["tracker_id"] not in shown_ids
         ]
-        recent_ids = {tracker.tracker_id for tracker in recent}
-        rest = [tracker for tracker in self._trackers if tracker.tracker_id not in recent_ids]
+        shown_ids.update(tracker.tracker_id for tracker in recent)
+        rest = [tracker for tracker in self._trackers if tracker.tracker_id not in shown_ids]
         combo = self.tracker_combo
         combo.blockSignals(True)
         combo.clear()
-        for tracker in recent:
-            combo.addItem(self._tracker_combo_text(tracker), tracker.tracker_id)
-        if recent and rest:
-            combo.insertSeparator(combo.count())
-        for tracker in rest:
-            combo.addItem(self._tracker_combo_text(tracker), tracker.tracker_id)
+        for group, prefix in ((pinned, "★ "), (recent, ""), (rest, "")):
+            if not group:
+                continue
+            if combo.count():
+                combo.insertSeparator(combo.count())
+            for tracker in group:
+                combo.addItem(prefix + self._tracker_combo_text(tracker), tracker.tracker_id)
         combo.blockSignals(False)
+        self._combo_pinned_ids = tuple(tracker.tracker_id for tracker in pinned)
+
+    def _load_favorites(self) -> dict[str, dict[str, list[dict[str, Any]]]]:
+        if self.favorites_loader is None:
+            return {}
+        # 즐겨찾기는 부가 기능이다. 설정을 읽지 못해도 작업공간은 연다.
+        try:
+            return normalized_favorites_by_server(self.favorites_loader())
+        except Exception:
+            return {}
+
+    def _favorites(self, settings: GuiSettings | None = None) -> WorkspaceFavorites:
+        """지금 연결한 서버·사용자의 즐겨찾기. 이미 읽은 설정이 있으면 넘겨 다시 읽지 않는다."""
+        key = favorites_key(settings if settings is not None else self.settings_provider())
+        return WorkspaceFavorites.from_payload(self._favorites_by_server.get(key))
+
+    def _store_favorites(self, favorites: WorkspaceFavorites) -> None:
+        key = favorites_key(self.settings_provider())
+        if favorites.is_empty():
+            self._favorites_by_server.pop(key, None)
+        else:
+            self._favorites_by_server[key] = favorites.to_payload()
+        self._show_favorites()
+        if self.favorites_saver is None:
+            return
+        # 저장이 실패해도 이번 세션의 목록은 그대로 쓴다.
+        with contextlib.suppress(Exception):
+            self.favorites_saver(key, favorites)
+
+    def _show_favorites(self) -> None:
+        """즐겨찾기 탭, 트래커·상세 ☆, 트래커 콤보 고정 영역을 지금 즐겨찾기로 맞춘다."""
+        favorites = self._favorites()
+        self.favorites_panel.show_favorites(favorites, unavailable_item_ids=self._unavailable_favorite_ids)
+        self._update_tracker_favorite_button(favorites)
+        detail = self.detail_panel.current_detail
+        if detail is not None:
+            self.detail_panel.set_favorite_state(
+                favorites.has_item(detail.item_id),
+                enabled=self.detail_panel.baseline_id is None,
+            )
+        trackers = {tracker.tracker_id for tracker in self._trackers}
+        pinned = tuple(value.tracker_id for value in favorites.trackers if value.tracker_id in trackers)
+        if pinned != self._combo_pinned_ids:
+            self._fill_tracker_combo(favorites)
+            if self._current_tracker is not None:
+                self._select_combo_index(
+                    self.tracker_combo,
+                    self._combo_index_for_id(self.tracker_combo, self._current_tracker.tracker_id),
+                )
+
+    def _update_tracker_favorite_button(self, favorites: WorkspaceFavorites) -> None:
+        tracker = self._current_tracker
+        favorite = tracker is not None and favorites.has_tracker(tracker.tracker_id)
+        button = self.tracker_favorite_button
+        # 트래커를 고를 수 있을 때만 바꾼다. 소속 프로젝트를 모르면 다시 열 수 없어 고정하지 않는다.
+        button.setEnabled(
+            tracker is not None and tracker.project_id is not None and self.tracker_combo.isEnabled()
+        )
+        button.setChecked(favorite)
+        button.setText("★" if favorite else "☆")
+        button.setToolTip("즐겨찾기에서 트래커 빼기" if favorite else "트래커를 즐겨찾기에 고정")
+
+    def _set_tracker_favorite(self, favorite: bool) -> None:
+        tracker = self._current_tracker
+        if tracker is None or tracker.project_id is None:
+            return
+        favorites = self._favorites()
+        if favorite:
+            project_name = tracker.project_name or (
+                self._current_project.name if self._current_project is not None else ""
+            )
+            favorites = favorites.with_tracker(
+                FavoriteTracker(tracker.tracker_id, int(tracker.project_id), tracker.name, project_name)
+            )
+        else:
+            favorites = favorites.without_tracker(tracker.tracker_id)
+        self._store_favorites(favorites)
+
+    def _remove_favorite_tracker(self, tracker_id: int) -> None:
+        self._store_favorites(self._favorites().without_tracker(tracker_id))
+
+    def _open_favorite_tracker(self, tracker_id: int) -> None:
+        """현재 프로젝트 트래커면 바로 고르고, 아니면 소속 프로젝트로 옮겨 연다."""
+        index = self._combo_index_for_id(self.tracker_combo, tracker_id)
+        if index >= 0:
+            self._select_combo_index(self.tracker_combo, index)
+            self._on_tracker_activated(index)
+        else:
+            self._open_tracker_by_id(tracker_id)
+        self.browser_tabs.setCurrentIndex(0)
+
+    @staticmethod
+    def _favorite_item(detail: TrackerItemDetail) -> FavoriteItem:
+        summary = detail.summary
+        return FavoriteItem(
+            detail.item_id,
+            summary.name,
+            summary.tracker_name or "",
+            summary.project_name or "",
+        )
+
+    def _set_favorite_item(self, detail: TrackerItemDetail, favorite: bool) -> None:
+        favorites = self._favorites()
+        if favorite:
+            self._store_favorites(favorites.with_item(self._favorite_item(detail)))
+            self._set_workspace_status(f"#{detail.item_id}을(를) 즐겨찾기에 추가했습니다.")
+        else:
+            self._store_favorites(favorites.without_item(detail.item_id))
+            self._set_workspace_status(f"#{detail.item_id}을(를) 즐겨찾기에서 뺐습니다.")
+
+    def _remove_favorite_item(self, item_id: int) -> None:
+        self._unavailable_favorite_ids.discard(int(item_id))
+        self._store_favorites(self._favorites().without_item(item_id))
+
+    def _favorite_item_shown(self, detail: TrackerItemDetail) -> None:
+        """즐겨찾기 아이템이 열리면 열 수 없음 표시를 지우고 이름을 지금 본 값으로 맞춘다."""
+        was_unavailable = detail.item_id in self._unavailable_favorite_ids
+        self._unavailable_favorite_ids.discard(detail.item_id)
+        favorites = self._favorites()
+        item = self._favorite_item(detail)
+        if item not in favorites.items:
+            self._store_favorites(favorites.renamed_item(item))
+        elif was_unavailable:
+            self._show_favorites()
 
     @staticmethod
     def _select_combo_index(combo: QComboBox, index: int) -> None:
@@ -1565,6 +1737,10 @@ class TrackerWorkspacePage(QWidget):
 
         def failed(exc: Exception) -> None:
             self.direct_open_button.setEnabled(True)
+            if self._favorites().has_item(item_id):
+                # 지워졌거나 권한이 없을 수 있다. 즐겨찾기 목록에 열 수 없다고 표시한다.
+                self._unavailable_favorite_ids.add(item_id)
+                self._show_favorites()
             self._show_error(exc, prefix="ID 바로 열기 실패")
 
         self._submit("direct", resolve, loaded, failed)

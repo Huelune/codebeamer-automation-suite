@@ -18,6 +18,9 @@ from src.gui.settings_store import effective_gui_settings
 from src.gui.settings_store import profile_validation_signature
 from src.gui.settings_store import test_mode_validation_signature
 from src.gui.styles import DEFAULT_GUI_THEME
+from src.gui.workspace_favorites import FavoriteItem
+from src.gui.workspace_favorites import FavoriteTracker
+from src.gui.workspace_favorites import WorkspaceFavorites
 from src.upload_policy import UPLOAD_MODE_UPDATE as GUI_UPLOAD_MODE_UPDATE
 from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
@@ -679,6 +682,30 @@ class GuiAppSettingsStoreTest(unittest.TestCase):
             self.assertEqual(store.load().bulk_update_chunk_size, 2500)
             payload = json.loads(store.app_settings_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["bulk_update_chunk_size"], 2500)
+
+    def test_workspace_favorites_are_kept_per_server_and_travel_with_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            store = _DeterministicSettingsStore(
+                Path(tmp_dir), credential_store=_FakeCredentialStore()
+            )
+            store.ensure_app_settings()
+            first = WorkspaceFavorites().with_item(FavoriteItem(9001002, "Brake", "Requirements"))
+            other = WorkspaceFavorites().with_tracker(FavoriteTracker(24680001, 246800, "Requirements"))
+
+            store.save_workspace_favorites("https://example.test/cb|sample", first)
+            store.save_workspace_favorites("https://other.test/cb|sample", other)
+            # 비우면 그 서버만 지운다.
+            store.save_workspace_favorites("https://other.test/cb|sample", WorkspaceFavorites())
+
+            saved = store.load_app_settings().workspace_favorites
+            self.assertEqual(saved, {"https://example.test/cb|sample": first.to_payload()})
+
+            # 즐겨찾기는 다른 PC로 옮겨도 쓸 수 있으므로 설정 내보내기에 담는다.
+            export_path = Path(tmp_dir) / "exported.json"
+            store.export_app_settings(export_path)
+            exported = json.loads(export_path.read_text(encoding="utf-8"))
+            self.assertEqual(exported["workspace_favorites"], saved)
+            self.assertEqual(store.import_app_settings(export_path).workspace_favorites, saved)
 
     def test_workspace_recent_trackers_are_cleaned_up_and_kept_out_of_exports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
