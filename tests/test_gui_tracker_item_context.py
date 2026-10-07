@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import dataclass
 
+from src.gui.tracker_item_context_models import ItemFieldChange
 from src.gui.tracker_item_context_models import ItemHistorySnapshot
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_context_service import TrackerItemContextService
@@ -89,6 +90,68 @@ class TrackerItemContextModelsTest(unittest.TestCase):
         self.assertEqual(snapshot.entries[0].modified_by, "sample")
         self.assertEqual(snapshot.current_version, 3)
 
+    def test_history_reads_field_changes_of_each_version(self) -> None:
+        """실서버 `/v3/items/{id}/history` 응답 구조를 값만 바꿔 옮겼다."""
+        snapshot = ItemHistorySnapshot.from_raw(
+            {
+                "versions": [
+                    {
+                        "itemRevision": {"id": 9001001, "version": 3},
+                        "changes": [
+                            {
+                                "type": "TrackerItemChange",
+                                "field": {"id": 3, "name": "Summary", "type": "FieldReference", "trackerId": 24680001},
+                                "name": "Summary",
+                                "oldValue": {
+                                    "fieldId": 3,
+                                    "name": "Summary",
+                                    "value": "--",
+                                    "sharedFieldNames": [],
+                                    "type": "TextFieldValue",
+                                },
+                                "newValue": {
+                                    "fieldId": 3,
+                                    "name": "Summary",
+                                    "value": "Vehicle requirements",
+                                    "sharedFieldNames": [],
+                                    "type": "TextFieldValue",
+                                },
+                            },
+                            {
+                                "type": "TrackerItemChange",
+                                "field": {"id": 1000, "name": "Owners", "type": "FieldReference"},
+                                "oldValue": None,
+                                "newValue": {
+                                    "fieldId": 1000,
+                                    "name": "Owners",
+                                    "values": [{"id": 7001, "name": "Sample User A", "type": "UserReference"}],
+                                    "type": "ChoiceFieldValue",
+                                },
+                            },
+                            "not a change",
+                        ],
+                        "modifiedBy": {"id": 7001, "name": "Sample User A", "type": "UserReference"},
+                        "modifiedAt": "2026-07-20T10:45:36.456",
+                    }
+                ]
+            }
+        )
+
+        entry = snapshot.entries[0]
+        self.assertEqual(entry.modified_by, "Sample User A")
+        self.assertEqual(
+            entry.changes,
+            (
+                ItemFieldChange("Summary", "--", "Vehicle requirements", 3),
+                ItemFieldChange(
+                    "Owners",
+                    None,
+                    [{"id": 7001, "name": "Sample User A", "type": "UserReference"}],
+                    1000,
+                ),
+            ),
+        )
+
 
 class TrackerItemContextServiceTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -116,11 +179,10 @@ class TrackerItemContextServiceTest(unittest.TestCase):
 
         self.assertEqual(Client.history_calls, 3)
 
-    def test_baseline_context_is_rejected_before_client_call(self) -> None:
+    def test_baseline_relations_are_rejected_before_client_call(self) -> None:
+        """관계는 조회 시점의 것이라 Baseline에서 막는다. 이력은 시점과 관계없어 Baseline 화면도 쓴다."""
         with self.assertRaisesRegex(ValueError, "Baseline"):
             self.service.load_relations(self.settings, 1205, 3, baseline_id=7)
-        with self.assertRaisesRegex(ValueError, "Baseline"):
-            self.service.load_history(self.settings, 1205, 3, baseline_id=7)
 
         self.assertEqual(Client.relation_calls, 0)
         self.assertEqual(Client.history_calls, 0)

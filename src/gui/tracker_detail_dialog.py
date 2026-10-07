@@ -132,7 +132,8 @@ class DetailDialogController:
         *,
         force: bool = False,
     ) -> None:
-        if dialog.baseline_id is not None or kind not in {"relations", "history"}:
+        # 관계는 조회 시점의 것이라 Baseline 창에서 막는다. 이력은 아이템 전체 이력이라 Baseline 창도 조회한다.
+        if kind not in {"relations", "history"} or (dialog.baseline_id is not None and kind == "relations"):
             return
         detail = dialog.detail
         generation = session.generation

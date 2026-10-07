@@ -316,7 +316,8 @@ QLabel#api_monitor_collection_state[state="test"] {
     border-color: #F1D49A;
 }
 
-QTreeWidget#tracker_item_tree {
+QTreeWidget#tracker_item_tree,
+QTreeWidget#item_change_history {
     background: #FFFFFF;
     color: #13263A;
     border: 1px solid #D8E1EA;
@@ -324,14 +325,19 @@ QTreeWidget#tracker_item_tree {
     alternate-background-color: #F8FBFD;
     selection-background-color: #DCEFFD;
     selection-color: #13263A;
+}
+
+QTreeWidget#tracker_item_tree {
     qproperty-guide_color: #C3D1DE;
 }
 
-QTreeWidget#tracker_item_tree::item {
+QTreeWidget#tracker_item_tree::item,
+QTreeWidget#item_change_history::item {
     min-height: 26px;
 }
 
-QTreeWidget#tracker_item_tree::item:hover {
+QTreeWidget#tracker_item_tree::item:hover,
+QTreeWidget#item_change_history::item:hover {
     background: #EEF6FC;
 }
 
@@ -1040,14 +1046,19 @@ QLabel#api_monitor_collection_state {
     border-color: #BFE6E2;
 }
 
-QTreeWidget#tracker_item_tree {
+QTreeWidget#tracker_item_tree,
+QTreeWidget#item_change_history {
     border: 1px solid #D3E7E9;
     alternate-background-color: #F7FCFC;
     selection-background-color: #D9F0EF;
+}
+
+QTreeWidget#tracker_item_tree {
     qproperty-guide_color: #B5D6D9;
 }
 
-QTreeWidget#tracker_item_tree::item:hover {
+QTreeWidget#tracker_item_tree::item:hover,
+QTreeWidget#item_change_history::item:hover {
     background: #EEF8F9;
 }
 

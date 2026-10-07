@@ -84,10 +84,9 @@ class TrackerItemContextService:
         return result
 
     def load_history(
-        self, settings, item_id: int, item_version: int | None, *, baseline_id: int | None = None, force: bool = False
+        self, settings, item_id: int, item_version: int | None, *, force: bool = False
     ) -> ItemHistorySnapshot:
-        if baseline_id is not None:
-            raise ValueError("Baseline 시점의 변경 이력 조회는 지원하지 않습니다.")
+        """아이템의 전체 버전 이력. 시점과 관계없는 응답이라 Baseline 화면도 같은 결과를 쓴다."""
         key = self._key(settings, item_id, item_version)
         if not force and key in self._history_cache:
             return self._history_cache[key]

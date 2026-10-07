@@ -227,12 +227,90 @@
           "itemRevision": {"id": 9001001, "commonItemId": "offline-vehicle", "version": 3},
           "modifiedAt": "2026-07-20T09:00:00Z",
           "modifiedBy": {"id": 7001, "displayName": "Sample User A"},
-          "changeSummary": "Risk Level updated"
+          "changeSummary": "Risk Level updated",
+          "changes": [
+            {
+              "type": "TrackerItemChange",
+              "field": {"id": 101, "name": "Risk Level", "type": "FieldReference", "trackerId": 24680001},
+              "name": "Risk Level",
+              "oldValue": null,
+              "newValue": {"fieldId": 101, "name": "Risk Level", "value": "Medium", "sharedFieldNames": [], "type": "TextFieldValue"}
+            }
+          ]
         },
         {
           "itemRevision": {"id": 9001001, "commonItemId": "offline-vehicle", "version": 2},
           "modifiedAt": "2026-07-19T08:00:00Z",
-          "modifiedBy": {"id": 7002, "displayName": "Sample User B"}
+          "modifiedBy": {"id": 7002, "displayName": "Sample User B"},
+          "changes": [
+            {
+              "type": "TrackerItemChange",
+              "field": {"id": 3, "name": "Summary", "type": "FieldReference", "trackerId": 24680001},
+              "name": "Summary",
+              "oldValue": {"fieldId": 3, "name": "Summary", "value": "Vehicle requirements baseline", "sharedFieldNames": [], "type": "TextFieldValue"},
+              "newValue": {"fieldId": 3, "name": "Summary", "value": "Vehicle requirements", "sharedFieldNames": [], "type": "TextFieldValue"}
+            },
+            {
+              "type": "TrackerItemChange",
+              "field": {"id": 80, "name": "Description", "type": "FieldReference", "trackerId": 24680001},
+              "name": "Description",
+              "oldValue": {"fieldId": 80, "name": "Description", "value": "Historical top-level sample requirement.", "sharedFieldNames": [], "type": "WikiTextFieldValue"},
+              "newValue": {"fieldId": 80, "name": "Description", "value": "Top-level sample requirement for offline hierarchy testing.", "sharedFieldNames": [], "type": "WikiTextFieldValue"}
+            }
+          ]
+        }
+      ]
+    },
+    "9001003": {
+      "versions": [
+        {
+          "itemRevision": {"id": 9001003, "commonItemId": "offline-steering", "version": 4},
+          "modifiedAt": "2026-07-21T09:30:00Z",
+          "modifiedBy": {"id": 7001, "displayName": "Sample User A"},
+          "changes": [
+            {
+              "type": "TrackerItemChange",
+              "field": {"id": 101, "name": "Risk Level", "type": "FieldReference", "trackerId": 24680001},
+              "name": "Risk Level",
+              "oldValue": {"fieldId": 101, "name": "Risk Level", "value": "Medium", "sharedFieldNames": [], "type": "TextFieldValue"},
+              "newValue": {"fieldId": 101, "name": "Risk Level", "value": "High", "sharedFieldNames": [], "type": "TextFieldValue"}
+            },
+            {
+              "type": "TrackerItemChange",
+              "field": {"id": 80, "name": "Description", "type": "FieldReference", "trackerId": 24680001},
+              "name": "Description",
+              "oldValue": {"fieldId": 80, "name": "Description", "value": "Historical steering requirement.", "sharedFieldNames": [], "type": "WikiTextFieldValue"},
+              "newValue": {"fieldId": 80, "name": "Description", "value": "Sample steering requirement with one nested child.", "sharedFieldNames": [], "type": "WikiTextFieldValue"}
+            }
+          ]
+        },
+        {
+          "itemRevision": {"id": 9001003, "commonItemId": "offline-steering", "version": 3},
+          "modifiedAt": "2026-07-19T11:00:00Z",
+          "modifiedBy": {"id": 7001, "displayName": "Sample User A"},
+          "changes": [
+            {
+              "type": "TrackerItemChange",
+              "field": {"id": 101, "name": "Risk Level", "type": "FieldReference", "trackerId": 24680001},
+              "name": "Risk Level",
+              "oldValue": null,
+              "newValue": {"fieldId": 101, "name": "Risk Level", "value": "Medium", "sharedFieldNames": [], "type": "TextFieldValue"}
+            }
+          ]
+        },
+        {
+          "itemRevision": {"id": 9001003, "commonItemId": "offline-steering", "version": 2},
+          "modifiedAt": "2026-07-18T10:00:00Z",
+          "modifiedBy": {"id": 7002, "displayName": "Sample User B"},
+          "changes": [
+            {
+              "type": "TrackerItemChange",
+              "field": {"id": 3, "name": "Summary", "type": "FieldReference", "trackerId": 24680001},
+              "name": "Summary",
+              "oldValue": {"fieldId": 3, "name": "Summary", "value": "Steering system baseline", "sharedFieldNames": [], "type": "TextFieldValue"},
+              "newValue": {"fieldId": 3, "name": "Summary", "value": "Steering behavior", "sharedFieldNames": [], "type": "TextFieldValue"}
+            }
+          ]
         }
       ]
     }

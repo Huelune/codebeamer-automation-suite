@@ -49,6 +49,7 @@ from .tracker_baseline_compare import BaselineComparisonKind
 from .tracker_baseline_compare import BaselineComparisonResult
 from .tracker_baseline_compare import BaselineComparisonSource
 from .tracker_baseline_compare import TrackerBaseline
+from .tracker_baseline_compare import TrackerItemComparison
 from .tracker_baseline_export import baseline_export_fields
 from .tracker_baseline_export import export_baseline_comparison_xlsx
 from .tracker_baseline_export_dialog import BaselineExportFieldDialog
@@ -100,11 +101,14 @@ class BaselineWorkspacePanel(QWidget):
         host: BaselineWorkspaceHost,
         settings_provider: Callable[[], GuiSettings],
         service: Any,
+        context_service: Any,
     ) -> None:
         super().__init__(parent)
         self._host = host
         self.settings_provider = settings_provider
         self.service = service
+        # 비교 결과에서 고른 아이템의 변경 이력. 상세 창 이력 탭과 같은 조회·캐시를 쓴다.
+        self.context_service = context_service
 
         self._baseline_selected_item_id: int | None = None
         self._baseline_comparison_result: BaselineComparisonResult | None = None
@@ -214,6 +218,7 @@ class BaselineWorkspacePanel(QWidget):
             self._on_baseline_sources_changed,
             self._export_baseline_comparison,
             splitter,
+            request_history=self._load_comparison_history,
         )
         panel.setObjectName("tracker_baseline_comparison_panel")
         self.baseline_comparison_panel = panel
@@ -235,6 +240,23 @@ class BaselineWorkspacePanel(QWidget):
 
     def set_error(self, message: str) -> None:
         self.baseline_comparison_panel.set_error(message)
+
+    def _load_comparison_history(self, comparison: TrackerItemComparison) -> None:
+        """고른 아이템의 전체 이력을 받는다. 두 시점 사이 버전은 비교 패널이 고른다."""
+        settings = self.settings_provider()
+        item_id = comparison.item_id
+        versions = [
+            item.version
+            for item in (comparison.reference, comparison.comparison)
+            if item is not None and item.version is not None
+        ]
+        panel = self.baseline_comparison_panel
+        self._host.submit(
+            "baseline_item_history",
+            lambda: self.context_service.load_history(settings, item_id, max(versions, default=None)),
+            lambda snapshot: panel.set_history(item_id, snapshot),
+            lambda exc: panel.set_history_error(item_id, str(exc)),
+        )
 
     def reset_state(self, message: str) -> None:
         self._baseline_selected_item_id = None
