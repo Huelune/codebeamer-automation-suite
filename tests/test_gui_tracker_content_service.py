@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -127,6 +128,32 @@ class TrackerContentServiceTest(unittest.TestCase):
                 FakeContentClient.instances[0].download_calls,
                 [("/v3/attachments/28/content", 1024 * 1024 * 1024)],
             )
+
+
+    def test_cleared_render_cache_is_not_refilled_by_a_late_result(self) -> None:
+        """상세 새로고침으로 비운 뒤 늦게 끝난 렌더링이 옛 결과를 다시 넣지 않는다."""
+        entered = threading.Event()
+        release = threading.Event()
+
+        class SlowClient(FakeContentClient):
+            def render_wiki_to_html(self, project_id: int, **kwargs) -> str:
+                entered.set()
+                release.wait(5)
+                return super().render_wiki_to_html(project_id, **kwargs)
+
+        service = TrackerContentService(client_factory=SlowClient)
+        worker = threading.Thread(target=lambda: service.render_wiki(settings(), self.context, "text"))
+        worker.start()
+        self.assertTrue(entered.wait(5))
+        service.clear_item_cache(settings(), 1001)
+        release.set()
+        worker.join(5)
+        renders_before = sum(len(client.render_calls) for client in SlowClient.instances)
+
+        service.render_wiki(settings(), self.context, "text")
+
+        renders_after = sum(len(client.render_calls) for client in SlowClient.instances)
+        self.assertEqual(renders_after, renders_before + 1)
 
 
 if __name__ == "__main__":

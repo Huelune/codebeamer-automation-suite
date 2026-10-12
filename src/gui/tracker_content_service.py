@@ -10,6 +10,7 @@ from typing import Any
 from src.codebeamer_client import CodebeamerClient
 
 from .payload_values import optional_int
+from .service_cache import ServiceCache
 from .service_core import _build_gui_client
 from .tracker_content_models import AttachmentResource
 from .tracker_content_models import AttachmentSummary
@@ -49,9 +50,9 @@ class TrackerContentService:
     def __init__(self, client_factory=CodebeamerClient, logger=None) -> None:
         self.client_factory = client_factory
         self.logger = logger
-        self._render_cache: dict[tuple[Any, ...], WikiRenderResult] = {}
-        self._attachment_cache: dict[tuple[Any, ...], tuple[AttachmentSummary, ...]] = {}
-        self._resource_cache: dict[tuple[Any, ...], AttachmentResource] = {}
+        self._render_cache: ServiceCache[tuple[Any, ...], WikiRenderResult] = ServiceCache()
+        self._attachment_cache: ServiceCache[tuple[Any, ...], tuple[AttachmentSummary, ...]] = ServiceCache()
+        self._resource_cache: ServiceCache[tuple[Any, ...], AttachmentResource] = ServiceCache()
 
     @staticmethod
     def _settings_key(settings) -> tuple[Any, ...]:
@@ -71,12 +72,10 @@ class TrackerContentService:
     def clear_item_cache(self, settings, item_id: int) -> None:
         settings_key = self._settings_key(settings)
         normalized_item_id = int(item_id)
-        self._render_cache = {
-            key: value
-            for key, value in self._render_cache.items()
-            if not (key[0] == settings_key and key[2] == normalized_item_id)
-        }
-        self._attachment_cache.pop((settings_key, normalized_item_id), None)
+        self._render_cache.discard_where(
+            lambda key: key[0] == settings_key and key[2] == normalized_item_id
+        )
+        self._attachment_cache.discard_where(lambda key: key == (settings_key, normalized_item_id))
         self._resource_cache.clear()
 
     def _client(self, settings):
@@ -110,6 +109,7 @@ class TrackerContentService:
         cached = self._render_cache.get(key)
         if cached is not None:
             return cached
+        generation = self._render_cache.generation()
         try:
             raw_html = self._client(settings).render_wiki_to_html(
                 context.project_id,
@@ -138,7 +138,7 @@ class TrackerContentService:
                 used_fallback=True,
                 warning="서버 Wiki 렌더링에 실패해 제한된 로컬 렌더링을 사용합니다.",
             )
-        self._render_cache[key] = result
+        self._render_cache.put(key, result, generation)
         return result
 
     def load_attachments(
@@ -155,6 +155,7 @@ class TrackerContentService:
         cached = self._attachment_cache.get(key)
         if cached is not None:
             return cached
+        generation = self._attachment_cache.generation()
         payloads = _attachment_payloads((raw_payload or {}).get("attachments"))
         if not payloads and not bool(getattr(settings, "offline_mode", False)):
             payloads = _attachment_payloads(
@@ -178,7 +179,7 @@ class TrackerContentService:
                 )
             )
         result = tuple(attachments)
-        self._attachment_cache[key] = result
+        self._attachment_cache.put(key, result, generation)
         return result
 
     def download_resource(
@@ -200,6 +201,7 @@ class TrackerContentService:
         cached = self._resource_cache.get(key)
         if cached is not None:
             return cached
+        generation = self._resource_cache.generation()
         mime_type, data = self._client(settings).download_authenticated_resource(
             source_url,
             max_bytes=max_bytes,
@@ -208,7 +210,7 @@ class TrackerContentService:
         if image_only and normalized_mime not in _IMAGE_MIME_TYPES:
             raise ValueError("첨부 리소스가 지원되는 이미지 형식이 아닙니다.")
         result = AttachmentResource(resource_key, normalized_mime, data)
-        self._resource_cache[key] = result
+        self._resource_cache.put(key, result, generation)
         return result
 
     def download_attachment(
@@ -230,13 +232,14 @@ class TrackerContentService:
         cached = self._resource_cache.get(key)
         if cached is not None:
             return cached
+        generation = self._resource_cache.generation()
         mime_type, data = self._client(settings).download_attachment_content(
             attachment.attachment_id,
             max_bytes=max_bytes,
         )
         normalized_mime = mime_type.split(";", 1)[0].strip().casefold()
         result = AttachmentResource(resource_key, normalized_mime, data)
-        self._resource_cache[key] = result
+        self._resource_cache.put(key, result, generation)
         return result
 
     def save_attachment(

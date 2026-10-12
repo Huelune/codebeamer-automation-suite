@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import re
+import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
+from src.gui.baseline_cache import BaselineCacheKey
 from src.gui.baseline_cache import BaselineItemCache
 from src.gui.settings_store import GuiSettings
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
+from src.gui.tracker_query_models import TrackerItemSummary
 from src.gui.tracker_query_models import TrackerQuery
 from src.gui.tracker_query_models import TrackerQueryCondition
 from src.gui.tracker_query_models import TrackerQueryErrorKind
@@ -510,6 +515,48 @@ class TrackerQueryServiceTest(unittest.TestCase):
                 [call for call in BaselineDetailFakeClient.calls if call[0] == "item"],
                 [("item", 1001, 1)],
             )
+
+    def test_baseline_list_index_survives_concurrent_lists_and_details(self) -> None:
+        """여러 작업 스레드가 Baseline 목록을 기억하고 상세를 찾아도 예외가 나지 않는다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = TrackerQueryService(
+                client_factory=BaselineDetailFakeClient,
+                baseline_cache=BaselineItemCache(Path(tmp_dir)),
+            )
+        items = (TrackerItemSummary.from_raw({"id": 1001, "name": "Item"}),)
+        errors: list[BaseException] = []
+        stop = time.monotonic() + 0.3
+
+        def remember(offset: int) -> None:
+            try:
+                index = 0
+                while time.monotonic() < stop:
+                    key = BaselineCacheKey("https://example.test/cb", "sample", 20, offset * 100 + index % 40, "q")
+                    service._index_baseline_items(key, items, "2026-10-12T00:00:00+00:00")
+                    index += 1
+            except BaseException as exc:  # pragma: no cover - 실패 원인을 보존한다.
+                errors.append(exc)
+
+        def look_up() -> None:
+            try:
+                while time.monotonic() < stop:
+                    service._indexed_baseline_item(self.settings, 5, 1001)
+            except BaseException as exc:  # pragma: no cover
+                errors.append(exc)
+
+        previous = sys.getswitchinterval()
+        sys.setswitchinterval(1e-6)
+        try:
+            threads = [threading.Thread(target=remember, args=(offset,)) for offset in range(3)]
+            threads += [threading.Thread(target=look_up) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        finally:
+            sys.setswitchinterval(previous)
+
+        self.assertEqual(errors, [])
 
     def test_test_mode_baselines_are_not_saved(self) -> None:
         offline = GuiSettings(
