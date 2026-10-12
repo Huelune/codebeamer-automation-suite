@@ -560,6 +560,34 @@ class PayloadCacheWizardTest(unittest.TestCase):
         )
         self.assertEqual(len(upload_result["success_df"]), 2)
 
+    def test_create_stop_on_error_counts_failed_row_only_as_failed(self) -> None:
+        """오류 시 중단하면 실패 행은 실패로만, 실행하지 않은 행은 미해결로 남긴다."""
+        client = FailingCreateUpsertClient(self.schema)
+        wizard = CountingWizard(
+            client=client,
+            processor=HierarchyProcessor(summary_col="요약"),
+            mapper=self.mapper,
+        )
+        wizard.select_project(1)
+        wizard.select_tracker(2)
+        raw_df = pd.DataFrame([
+            {"요약": "REQ-1", "_excel_row": 2, "_summary_indent": 0},
+            {"요약": "REQ-2", "_excel_row": 3, "_summary_indent": 0},
+            {"요약": "REQ-3", "_excel_row": 4, "_summary_indent": 0},
+        ])
+        wizard.load_raw_dataframe(raw_df, list_cols=[])
+        wizard.load_schema_and_compare({"요약": "Summary"})
+        wizard.process_option_mapping({"요약": "Summary"})
+
+        result = wizard.upload(dry_run=False, continue_on_error=False)
+
+        self.assertEqual(result["failed_df"]["_row_id"].tolist(), [0])
+        unresolved = result["unresolved_df"]
+        self.assertEqual(unresolved["_row_id"].tolist(), [1, 2])
+        # 단계별 집계와 결과 화면이 쓰는 열을 채운다.
+        self.assertEqual(set(unresolved["phase"]), set(result["failed_df"]["phase"]))
+        self.assertTrue(unresolved["error"].str.contains("중단").all())
+
     def test_upsert_insert_stop_keeps_unattempted_update_for_retry(self) -> None:
         client = FailingCreateUpsertClient(self.schema)
         wizard = CountingWizard(

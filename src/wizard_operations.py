@@ -509,10 +509,16 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
                             "response_json": error_response_json,
                         })
 
-                    if not continue_on_error:
-                        return _finalize(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy())
-
                     pending.remove(row_id)
+                    if not continue_on_error:
+                        # 실패한 행은 실패로만 남기고, 실행하지 않은 행만 미해결로 돌려준다.
+                        stopped_df = ready_df[ready_df["_row_id"].isin(sorted(pending))].copy()
+                        if not stopped_df.empty:
+                            stopped_df["phase"] = phase_name
+                            stopped_df["status"] = UploadStatus.UNRESOLVED_PARENT.value
+                            stopped_df["error"] = "이전 생성 실패로 실행이 중단되었습니다."
+                        return _finalize(stopped_df)
+
                     progress = True
 
             if not progress:
