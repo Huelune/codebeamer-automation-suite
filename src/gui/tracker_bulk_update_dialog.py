@@ -244,6 +244,22 @@ class BulkUpdateProgressDialog(QDialog):
         self.cancel_button = QPushButton("남은 청크 중단", self)
         buttons.addWidget(self.cancel_button)
         layout.addLayout(buttons)
+        self._finished = False
+
+    def reject(self) -> None:
+        """Esc와 창 닫기는 남은 청크 중단 요청으로만 받는다.
+
+        창이 닫혀도 작업은 계속 돌기 때문에, 닫히면 끝난 줄 알고 다시 실행하게 된다.
+        """
+        if self._finished:
+            super().reject()
+        elif self.cancel_button.isEnabled():
+            self.cancel_button.click()
+
+    def finish(self) -> None:
+        """작업이 끝났을 때 진행 창을 닫는다."""
+        self._finished = True
+        self.accept()
 
     def update_event(self, event: dict) -> None:
         completed = int(event.get("completed") or 0)

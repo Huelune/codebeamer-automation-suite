@@ -40,6 +40,7 @@ from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
 from .settings_store import GuiSettings
+from .tracker_bulk_update import bulk_run_server_key
 from .tracker_bulk_update_dialog import BulkUpdateProgressDialog
 from .tracker_bulk_update_dialog import BulkUpdateRequest
 from .tracker_bulk_update_dialog import TrackerBulkUpdateDialog
@@ -278,7 +279,7 @@ class TrackerSearchPanel(QWidget):
         """수정 결과를 검색 결과 표에도 반영한다."""
         summary = detail.summary
         for row in range(self.search_table.rowCount()):
-            id_item = self.search_table.item(row, 0)
+            id_item = self.search_table.item(row, 1)
             if id_item is None:
                 continue
             existing = id_item.data(ITEM_SUMMARY_ROLE)
@@ -295,9 +296,9 @@ class TrackerSearchPanel(QWidget):
             id_item.setData(ITEM_SUMMARY_ROLE, updated)
             # 셀이 아직 만들어지지 않았으면 갱신할 대상이 없다.
             for column, text in (
-                (1, updated.name),
-                (2, updated.status or "-"),
-                (3, ", ".join(updated.assignees) or "-"),
+                (2, updated.name),
+                (3, updated.status or "-"),
+                (4, ", ".join(updated.assignees) or "-"),
             ):
                 cell = self.search_table.item(row, column)
                 if cell is not None:
@@ -305,7 +306,7 @@ class TrackerSearchPanel(QWidget):
 
     def remove_item(self, item_id: int) -> None:
         for row in range(self.search_table.rowCount() - 1, -1, -1):
-            id_item = self.search_table.item(row, 0)
+            id_item = self.search_table.item(row, 1)
             summary = id_item.data(ITEM_SUMMARY_ROLE) if id_item is not None else None
             if isinstance(summary, TrackerItemSummary) and summary.item_id == int(item_id):
                 self.search_table.removeRow(row)
@@ -630,10 +631,18 @@ class TrackerSearchPanel(QWidget):
             return
         if self.selected_count() <= 0:
             return
+        tracker = self._host.current_tracker()
+        query = self._last_search_query
+        if tracker is None or query is None or query.tracker_id != tracker.tracker_id:
+            # 선택은 지금 트래커의 검색 결과여야 한다. 아니면 새 트래커 schema 로 엉뚱한 아이템을 고친다.
+            self.reset_results("트래커가 바뀌어 검색 결과를 비웠습니다.")
+            self._host.set_workspace_status(
+                "선택한 검색 결과가 다른 트래커의 것이라 일괄 수정하지 않았습니다. "
+                "지금 트래커에서 다시 검색하세요.",
+                tone="warning",
+            )
+            return
         if self._all_search_selected:
-            query = self._last_search_query
-            if query is None:
-                return
             settings = self.settings_provider()
             exclusions = set(self._excluded_search_ids)
 
@@ -661,6 +670,8 @@ class TrackerSearchPanel(QWidget):
         initial_atomic: bool = True,
         initial_chunk_size: int | None = None,
     ) -> None:
+        if self._refuse_while_bulk_running():
+            return
         if self._host.selected_hierarchy_baseline_id() is not None:
             self._host.set_workspace_status(
                 "Baseline 조회 중에는 일괄 수정할 수 없습니다.",
@@ -719,6 +730,8 @@ class TrackerSearchPanel(QWidget):
         schema: EditableTrackerSchema,
         request: BulkUpdateRequest,
     ) -> None:
+        if self._refuse_while_bulk_running():
+            return
         tracker = self._host.current_tracker()
         if tracker is None:
             return
@@ -748,15 +761,24 @@ class TrackerSearchPanel(QWidget):
         try:
             worker.start()
         except Exception as exc:
-            progress.reject()
+            progress.finish()
             self._bulk_progress_dialog = None
             self._cleanup_bulk_worker()
             self._host.show_error(exc, prefix="일괄 수정 시작 실패")
 
+    def _refuse_while_bulk_running(self) -> bool:
+        """일괄 수정은 한 번에 하나만 돌린다. 겹치면 같은 아이템을 두 번 고친다."""
+        if self._bulk_worker is None:
+            return False
+        self._host.set_workspace_status(
+            "일괄 수정이 진행 중입니다. 끝난 뒤 다시 실행하세요.", tone="warning"
+        )
+        return True
+
     def _finish_bulk_update(self, result) -> None:
         progress = self._bulk_progress_dialog
         if progress is not None:
-            progress.accept()
+            progress.finish()
         self._bulk_progress_dialog = None
         if self.bulk_run_store is not None:
             self.bulk_run_store.append(result)
@@ -794,26 +816,38 @@ class TrackerSearchPanel(QWidget):
                         "unattempted_count": len(result.unattempted_item_ids),
                         "atomic": result.atomic,
                         "chunk_size": result.chunk_size,
+                        "stopped_by_error": result.error is not None,
                     },
                 )
             )
-        self._host.set_workspace_status(
-            f"일괄 수정 완료: 성공 {success_count:,}건, 재시도 대상 {retry_count:,}건.",
-            tone="warning" if retry_count else "info",
-        )
+        if result.error is not None:
+            # 앞 청크는 반영됐다. 무엇이 남았는지와 함께 알린다.
+            self._host.show_error(
+                result.error,
+                prefix=(
+                    f"일괄 수정 중단(성공 {success_count:,}건, 재시도 대상 {retry_count:,}건)"
+                ),
+            )
+        else:
+            self._host.set_workspace_status(
+                f"일괄 수정 완료: 성공 {success_count:,}건, 재시도 대상 {retry_count:,}건.",
+                tone="warning" if retry_count else "info",
+            )
         self.clear_selection()
 
     def _fail_bulk_update(self, exc: Exception) -> None:
         if self._bulk_progress_dialog is not None:
-            self._bulk_progress_dialog.reject()
+            self._bulk_progress_dialog.finish()
         self._bulk_progress_dialog = None
         self._host.show_error(exc, prefix="일괄 수정 실패")
 
     def _cleanup_bulk_worker(self) -> None:
         worker = self._bulk_worker
+        # 아직 도는 작업은 지우지 않는다. 실행 중인 스레드를 지우면 앱이 강제 종료된다.
+        if worker is None or worker.isRunning():
+            return
         self._bulk_worker = None
-        if worker is not None:
-            worker.deleteLater()
+        worker.deleteLater()
 
     def open_bulk_retry(self, run_id: str) -> None:
         if self.bulk_run_store is None:
@@ -821,6 +855,21 @@ class TrackerSearchPanel(QWidget):
         record = self.bulk_run_store.get(run_id)
         if record is None:
             self._host.set_workspace_status("재시도 실행 기록을 찾지 못했습니다.", tone="warning")
+            return
+        # 아이템 ID는 서버마다 다르다. 다른 연결에서 돌리면 엉뚱한 아이템을 고친다.
+        if not record.server_key:
+            self._host.set_workspace_status(
+                "서버 정보가 없는 이전 실행 기록이라 재시도할 수 없습니다. "
+                "검색에서 대상을 다시 골라 일괄 수정하세요.",
+                tone="warning",
+            )
+            return
+        if record.server_key != bulk_run_server_key(self.settings_provider()):
+            self._host.set_workspace_status(
+                "다른 서버나 계정에서 실행한 기록이라 재시도할 수 없습니다. "
+                "그 연결로 바꾼 뒤 다시 시도하세요.",
+                tone="warning",
+            )
             return
         still_selected = self._host.current_tracker()
         if still_selected is None or still_selected.tracker_id != record.tracker_id:
