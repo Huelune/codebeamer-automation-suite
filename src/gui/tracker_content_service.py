@@ -22,6 +22,8 @@ from .wiki_renderer import sanitize_server_wiki_html
 
 MAX_INLINE_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_ITEM_INLINE_IMAGE_BYTES = 50 * 1024 * 1024
+# 받아 둔 이미지·첨부 바이트의 총량. 넘으면 가장 오래 보지 않은 것부터 버리고 필요할 때 다시 받는다.
+MAX_RESOURCE_CACHE_BYTES = 128 * 1024 * 1024
 _IMAGE_MIME_TYPES = {
     "image/bmp",
     "image/gif",
@@ -47,12 +49,21 @@ def _attachment_payloads(payload: Any) -> list[dict[str, Any]]:
 class TrackerContentService:
     """Wiki 렌더링과 첨부 리소스를 tracker query와 분리해 조회한다."""
 
-    def __init__(self, client_factory=CodebeamerClient, logger=None) -> None:
+    def __init__(
+        self,
+        client_factory=CodebeamerClient,
+        logger=None,
+        *,
+        resource_cache_bytes: int = MAX_RESOURCE_CACHE_BYTES,
+    ) -> None:
         self.client_factory = client_factory
         self.logger = logger
         self._render_cache: ServiceCache[tuple[Any, ...], WikiRenderResult] = ServiceCache()
         self._attachment_cache: ServiceCache[tuple[Any, ...], tuple[AttachmentSummary, ...]] = ServiceCache()
-        self._resource_cache: ServiceCache[tuple[Any, ...], AttachmentResource] = ServiceCache()
+        self._resource_cache: ServiceCache[tuple[Any, ...], AttachmentResource] = ServiceCache(
+            max_total_size=int(resource_cache_bytes),
+            size_of=lambda resource: len(resource.data),
+        )
 
     @staticmethod
     def _settings_key(settings) -> tuple[Any, ...]:
@@ -77,6 +88,10 @@ class TrackerContentService:
         )
         self._attachment_cache.discard_where(lambda key: key == (settings_key, normalized_item_id))
         self._resource_cache.clear()
+
+    def cached_resource_bytes(self) -> int:
+        """메모리에 들고 있는 이미지·첨부 바이트 총량."""
+        return self._resource_cache.total_size()
 
     def _client(self, settings):
         return _build_gui_client(settings, self.client_factory, self.logger)
@@ -233,14 +248,23 @@ class TrackerContentService:
         if cached is not None:
             return cached
         generation = self._resource_cache.generation()
+        result = self._fetch_attachment(settings, attachment, max_bytes=max_bytes)
+        self._resource_cache.put(key, result, generation)
+        return result
+
+    def _fetch_attachment(
+        self,
+        settings,
+        attachment: AttachmentSummary,
+        *,
+        max_bytes: int,
+    ) -> AttachmentResource:
         mime_type, data = self._client(settings).download_attachment_content(
             attachment.attachment_id,
             max_bytes=max_bytes,
         )
         normalized_mime = mime_type.split(";", 1)[0].strip().casefold()
-        result = AttachmentResource(resource_key, normalized_mime, data)
-        self._resource_cache.put(key, result, generation)
-        return result
+        return AttachmentResource(f"attachment-{attachment.attachment_id}", normalized_mime, data)
 
     def save_attachment(
         self,
@@ -253,7 +277,8 @@ class TrackerContentService:
         """첨부를 대상 폴더의 임시 파일에 쓴 뒤 원자적으로 교체한다."""
         target = Path(str(output_path)).expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
-        resource = self.download_attachment(
+        # 저장은 최대 1GB까지 받는다. 받은 내용을 메모리 캐시에 남기지 않는다.
+        resource = self._fetch_attachment(
             settings,
             attachment,
             max_bytes=max_bytes,

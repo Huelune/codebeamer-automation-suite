@@ -34,9 +34,30 @@ class ServiceCacheTest(unittest.TestCase):
         self.assertIsNone(cache.get((1, 2)))
         self.assertEqual(cache.get((2, 1)), "item-2")
 
+    def test_size_budget_evicts_least_recently_used_values(self) -> None:
+        cache: ServiceCache[str, bytes] = ServiceCache(max_total_size=25, size_of=len)
+        for key in ("a", "b"):
+            cache.put(key, b"x" * 10, cache.generation())
+        cache.get("a")  # a 를 최근에 쓴 것으로 만든다.
+
+        cache.put("c", b"x" * 10, cache.generation())
+
+        self.assertIsNone(cache.get("b"))
+        self.assertIsNotNone(cache.get("a"))
+        self.assertIsNotNone(cache.get("c"))
+        self.assertLessEqual(cache.total_size(), 25)
+
+    def test_value_larger_than_the_budget_is_not_kept(self) -> None:
+        cache: ServiceCache[str, bytes] = ServiceCache(max_total_size=5, size_of=len)
+
+        cache.put("big", b"x" * 10, cache.generation())
+
+        self.assertIsNone(cache.get("big"))
+        self.assertEqual(cache.total_size(), 0)
+
     def test_concurrent_reads_writes_and_clears_do_not_raise(self) -> None:
         """작업 스레드가 넣는 동안 다른 스레드가 비우거나 골라 지워도 예외가 나지 않는다."""
-        cache: ServiceCache[tuple[int, int], int] = ServiceCache()
+        cache: ServiceCache[tuple[int, int], int] = ServiceCache(max_total_size=500, size_of=lambda _value: 1)
         errors: list[BaseException] = []
         stop = time.monotonic() + 0.3
 
