@@ -382,6 +382,10 @@ class ValidationPresenter:
                 "그 표 필드의 모든 열을 매핑해 수정 범위에 넣거나, "
                 "표 필드 열을 모두 매핑에서 빼 기존 표를 그대로 두세요.",
             ),
+            "ITEM_NAME_MISSING": (
+                "새로 만드는 행의 요약(Summary)이 비어 있습니다.",
+                "요약 칸을 채우거나, 기존 아이템을 수정할 행이면 id 값을 넣은 뒤 다시 검증하세요.",
+            ),
             "UPSERT_PARENT_ID_REQUIRED": (
                 "계층형 신규 행을 연결할 기존 부모 item id가 없습니다.",
                 "부모 행에 기존 id를 넣거나, 계층을 제거한 뒤 다시 검증하세요.",
@@ -393,6 +397,8 @@ class ValidationPresenter:
         }
         if code in messages:
             message, action = messages[code]
+            if code == "ITEM_NAME_MISSING":
+                column = "요약"
             if code in {
                 "UPDATE_ITEM_ID_COLUMN_MISSING",
                 "UPDATE_ITEM_ID_MISSING",

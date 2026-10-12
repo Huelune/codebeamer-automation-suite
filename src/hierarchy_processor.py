@@ -77,6 +77,29 @@ class HierarchyProcessor:
         text = str(value).strip()
         return text or None
 
+    @staticmethod
+    def _item_id_column(columns: Any) -> str | None:
+        """update/upsert 대상 id 열. 업로드 단계와 같은 규칙으로 찾는다."""
+        case_insensitive_match = None
+        for column in columns:
+            name = str(column or "").strip()
+            if not name or name.startswith("_"):
+                continue
+            if name == "id":
+                return column
+            if name.casefold() == "id" and case_insensitive_match is None:
+                case_insensitive_match = column
+        return case_insensitive_match
+
+    @classmethod
+    def _item_id_text(cls, value: Any) -> str | None:
+        normalized = cls.normalize_scalar(value)
+        if cls.is_blank(normalized):
+            return None
+        if isinstance(normalized, float) and normalized.is_integer():
+            normalized = int(normalized)
+        return str(normalized).strip() or None
+
     def merge_multiline_records(
         self,
         raw_df: pd.DataFrame,
@@ -109,10 +132,20 @@ class HierarchyProcessor:
                 group_ids.append(key_to_group[key])
                 previous_key = key
         else:
+            # 수정용 파일은 id가 레코드 경계다. Summary가 비어도 다른 id가 나오면 새 레코드로 본다.
+            # 첫 Summary 앞의 행도 버리지 않고 레코드로 남겨 검증에서 이름이나 id가 없다고 알린다.
+            id_column = self._item_id_column(work.columns)
             current_group = 0
+            current_item_id: str | None = None
             for _, row in work.iterrows():
-                if not self.is_blank(row[self.summary_col]):
+                item_id = self._item_id_text(row[id_column]) if id_column is not None else None
+                if (
+                    current_group == 0
+                    or not self.is_blank(row[self.summary_col])
+                    or (item_id is not None and item_id != current_item_id)
+                ):
                     current_group += 1
+                    current_item_id = item_id
                 group_ids.append(current_group)
 
         work["_group"] = group_ids

@@ -939,6 +939,16 @@ class WizardItemBuilderService:
 
     def _build_row_payload(self, row: pd.Series, row_id: int, *, operation: str = "create") -> dict[str, Any]:
         """단일 생성 행에서 순수 item payload만 계산한다."""
+        upload_name = row.get("upload_name")
+        if not self._has_configured_value(upload_name):
+            # 이름 없이 만들면 'None' 같은 이름의 아이템이 생긴다.
+            self._raise_payload_error(
+                "ITEM_NAME_MISSING",
+                schema_field="name",
+                df_col="upload_name",
+                row_id=row_id,
+                detail="summary is empty",
+            )
         item = self._build_row_item(
             row,
             row_id,
