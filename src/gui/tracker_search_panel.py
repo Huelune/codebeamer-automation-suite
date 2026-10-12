@@ -630,10 +630,18 @@ class TrackerSearchPanel(QWidget):
             return
         if self.selected_count() <= 0:
             return
+        tracker = self._host.current_tracker()
+        query = self._last_search_query
+        if tracker is None or query is None or query.tracker_id != tracker.tracker_id:
+            # 선택은 지금 트래커의 검색 결과여야 한다. 아니면 새 트래커 schema 로 엉뚱한 아이템을 고친다.
+            self.reset_results("트래커가 바뀌어 검색 결과를 비웠습니다.")
+            self._host.set_workspace_status(
+                "선택한 검색 결과가 다른 트래커의 것이라 일괄 수정하지 않았습니다. "
+                "지금 트래커에서 다시 검색하세요.",
+                tone="warning",
+            )
+            return
         if self._all_search_selected:
-            query = self._last_search_query
-            if query is None:
-                return
             settings = self.settings_provider()
             exclusions = set(self._excluded_search_ids)
 

@@ -950,7 +950,7 @@ class TrackerWorkspacePage(QWidget):
         self._current_tracker = None
         self.hierarchy_panel.clear_baseline_cache()
         self.hierarchy_panel.reset_source()
-        self.search_panel.reset_condition_search("트래커를 불러오는 중입니다.")
+        self.search_panel.reset_results("트래커를 불러오는 중입니다.")
         self._reset_baseline_state("트래커를 불러오는 중입니다.")
         self.detail_panel.reset_detail()
         self._load_trackers(
@@ -1762,7 +1762,7 @@ class TrackerWorkspacePage(QWidget):
         self._current_tracker = tracker
         self._remember_tracker(tracker)
         if previous_tracker_id != tracker.tracker_id:
-            self.search_panel.reset_condition_search(
+            self.search_panel.reset_results(
                 "트래커가 변경되었습니다. 상세 검색 조건을 다시 설정하세요."
             )
             self._reset_baseline_state("Baseline 비교 기준을 다시 불러오세요.")

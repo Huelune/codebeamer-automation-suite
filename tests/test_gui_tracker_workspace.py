@@ -2606,6 +2606,53 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.search_panel.selected_count(), 1)
         self.assertEqual(len(self.page.search_panel._excluded_search_ids), 1)
 
+    def _select_steering_results(self):
+        panel = self.page.search_panel
+        panel.search_text_input.setText("Steering")
+        panel._run_search()
+        panel._select_current_search_page()
+        self.assertEqual(panel.selected_count(), 2)
+        return panel
+
+    def test_direct_open_to_other_tracker_clears_search_results_and_selection(self) -> None:
+        """다른 트래커로 옮기면 이전 트래커의 검색 선택으로 일괄 수정하지 않게 비운다."""
+        self.page.activate()
+        panel = self._select_steering_results()
+        self.page.direct_id_input.setText("9101002")
+
+        self.page._open_direct_item()
+
+        self.assertEqual(self.page.tracker_combo.currentData(), 24680002)
+        self.assertEqual(panel.search_table.rowCount(), 0)
+        self.assertEqual(panel.selected_count(), 0)
+        self.assertFalse(panel.bulk_update_button.isEnabled())
+
+    def test_opening_tracker_by_id_clears_search_results_and_selection(self) -> None:
+        """트래커 ID나 즐겨찾기로 프로젝트를 옮겨 열 때도 검색 결과를 비운다."""
+        self.page.activate()
+        panel = self._select_steering_results()
+
+        self.page._open_tracker_by_id(24680002)
+
+        self.assertEqual(self.page.tracker_combo.currentData(), 24680002)
+        self.assertEqual(panel.search_table.rowCount(), 0)
+        self.assertEqual(panel.selected_count(), 0)
+
+    def test_bulk_update_refuses_selection_from_another_tracker(self) -> None:
+        """검색 결과를 비우지 못한 경로가 생겨도 다른 트래커 아이템을 일괄 수정하지 않는다."""
+        self.page.activate()
+        panel = self._select_steering_results()
+        self.page._current_tracker = next(
+            tracker for tracker in self.page._trackers if tracker.tracker_id == 24680002
+        )
+
+        panel._start_bulk_update()
+
+        self.assertIn("다른 트래커", self.page.workspace_status_label.text())
+        self.assertEqual(self.page.workspace_status_label.property("tone"), "warning")
+        self.assertEqual(panel.selected_count(), 0)
+        self.assertEqual(panel.search_table.rowCount(), 0)
+
     def test_condition_search_mode_loads_schema_and_builds_condition_query(self) -> None:
         self.page.activate()
         self.page.browser_tabs.setCurrentIndex(1)
