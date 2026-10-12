@@ -285,6 +285,11 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             self.upload_page.status_label.setText(message)
             self._show_error_dialog("테스트 모드 업로드 제한", message)
             return
+        if not self.upload_page.dry_run_checkbox.isChecked() and not self._confirm_repeat_upload():
+            self.upload_page.status_label.setText(
+                "다시 실행하지 않았습니다. 실패한 항목만 다시 하려면 결과 화면의 '실패 항목 재시도'를 쓰세요."
+            )
+            return
         output_dir = str(Path(self.session_state.settings.output_dir))
         self.upload_page.reset(0)
         self._activity_dry_run = bool(self.upload_page.dry_run_checkbox.isChecked())
@@ -316,6 +321,34 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             self.upload_worker.start()
         except Exception as exc:
             self._on_upload_failed(str(exc) or "업로드 작업을 시작하지 못했습니다.")
+
+    def _confirm_repeat_upload(self) -> bool:
+        """이미 실제 업로드를 실행한 준비 데이터면 처음부터 다시 실행할지 묻는다.
+
+        다시 실행하면 이미 만든 아이템을 한 번 더 만든다. 검증을 다시 해 준비 데이터가
+        바뀌었으면 사용자가 다시 고른 것으로 보고 묻지 않는다.
+        """
+        if getattr(self, "_real_upload_context", None) is not self.session_state.mapping_context:
+            return True
+        QMessageBox = self.qt["QMessageBox"]
+        answer = QMessageBox.question(
+            self,
+            "업로드 다시 실행",
+            (
+                "이 준비 데이터로 이미 실제 업로드를 실행했습니다.\n"
+                "처음부터 다시 실행하면 이미 만든 아이템이 한 번 더 생성되고, 수정 행은 다시 수정됩니다.\n"
+                "실패한 항목만 다시 하려면 결과 화면의 '실패 항목 재시도'를 쓰세요.\n\n"
+                "그래도 처음부터 다시 실행할까요?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _remember_real_upload(self) -> None:
+        """Dry Run이 아니면 서버에 쓴 것으로 보고, 다음 전체 실행 전에 묻도록 표시한다."""
+        if not bool(getattr(self, "_activity_dry_run", False)):
+            self._real_upload_context = self.session_state.mapping_context
 
     def _pause_upload(self) -> None:
         if self.upload_worker is not None:
@@ -671,6 +704,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
         self._retry_in_progress = False
         self.session_state.upload_result = result
         self.upload_worker = None
+        self._remember_real_upload()
         success_df = result.get("success_df")
         failed_df = result.get("failed_df")
         unresolved_df = result.get("unresolved_df")
@@ -849,6 +883,8 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
     def _on_upload_failed(self, message: str) -> None:
         self._retry_in_progress = False
         self.upload_worker = None
+        # 도중에 실패해도 그 전 항목은 이미 서버에 반영됐을 수 있다.
+        self._remember_real_upload()
         self.upload_page.status_label.setText(message)
         self._update_upload_time_label()
         self.upload_page.eta_label.setText(f"예상 종료: 중단됨 ({self._format_clock()})")
