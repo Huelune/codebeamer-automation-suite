@@ -3080,6 +3080,49 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.assertEqual(summary_row.widget.text(), "Unsaved detached value")
         self.assertEqual(check_item.checkState(), Qt.CheckState.Checked)
 
+    @staticmethod
+    def _other_detail() -> TrackerItemDetail:
+        return TrackerItemDetail.from_raw(
+            {"id": 1009, "name": "Another item", "version": 1, "tracker": {"id": 20, "name": "Requirements"}}
+        )
+
+    def test_late_save_result_does_not_replace_another_open_item(self) -> None:
+        """저장이 끝나기 전에 다른 아이템을 열었으면 그 화면을 저장한 아이템으로 바꾸지 않는다."""
+        from PySide6.QtCore import Qt
+
+        editor = self.page.detail_panel.editor_panel
+        summary_row = editor.rows[3]
+        editor.field_table.item(summary_row.row, 0).setCheckState(Qt.CheckState.Checked)
+        summary_row.widget.setText("Saved late")
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        editor.save_button.click()
+        self.page.detail_panel.render_detail(self._other_detail())
+
+        tasks[0].finish()
+
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Another item")
+        # 저장은 끝났으므로 계층의 그 아이템은 새 이름으로 바뀐다.
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(0), "Saved late")
+        self.assertEqual(self.activities[-1].operation.value, "tracker_update")
+
+    def test_late_delete_result_does_not_clear_another_open_item(self) -> None:
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        self.page.detail_panel.editor_panel.delete_button.click()
+        self.page.detail_panel.render_detail(self._other_detail())
+
+        tasks[0].finish()
+
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Another item")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 0)
+
     def test_single_create_adds_selected_child_and_opens_created_detail(self) -> None:
         def create_request(schema, tracker, selected_detail):
             self.assertEqual(tracker.tracker_id, 20)

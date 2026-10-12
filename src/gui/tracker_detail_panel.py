@@ -1350,6 +1350,14 @@ class TrackerDetailPanel(QFrame):
             failed,
         )
 
+    def _shows_item(self, item_id: int) -> bool:
+        """쓰기 결과를 반영할 아이템이 아직 화면에 열려 있는지 본다.
+
+        끝나기 전에 다른 아이템을 열었으면 그 화면은 그 아이템의 흐름이 맡는다.
+        """
+        current = self._current_detail
+        return current is not None and current.item_id == int(item_id)
+
     def _save_item_changes(
         self,
         changes: tuple[TrackerItemFieldChange, ...],
@@ -1380,7 +1388,8 @@ class TrackerDetailPanel(QFrame):
                 },
             )
             self._host.refresh_visible_item(updated_detail)
-            self.render_detail(updated_detail)
+            if self._shows_item(item_id):
+                self.render_detail(updated_detail)
             self._host.set_workspace_status(
                 f"#{item_id}의 필드 {len(changes)}개를 저장했습니다."
             )
@@ -1396,8 +1405,9 @@ class TrackerDetailPanel(QFrame):
                     "error": str(exc),
                 },
             )
-            self.editor_panel.set_busy(False)
-            self.editor_panel.set_error(str(exc) or "필드 저장에 실패했습니다.")
+            if self._shows_item(item_id):
+                self.editor_panel.set_busy(False)
+                self.editor_panel.set_error(str(exc) or "필드 저장에 실패했습니다.")
             self._host.show_error(exc, prefix="필드 저장 실패")
 
         self._host.submit(
@@ -1455,7 +1465,8 @@ class TrackerDetailPanel(QFrame):
                 },
             )
             self._host.refresh_visible_item(updated_detail)
-            self.render_detail(updated_detail)
+            if self._shows_item(item_id):
+                self.render_detail(updated_detail)
             self._host.set_workspace_status(
                 f"#{item_id} 상태 필드를 '{updated_detail.summary.status or target_name}'(으)로 변경했습니다."
             )
@@ -1472,8 +1483,9 @@ class TrackerDetailPanel(QFrame):
                     "error": str(exc),
                 },
             )
-            self.editor_panel.set_busy(False)
-            self.editor_panel.set_error(str(exc) or "상태 필드 변경에 실패했습니다.")
+            if self._shows_item(item_id):
+                self.editor_panel.set_busy(False)
+                self.editor_panel.set_error(str(exc) or "상태 필드 변경에 실패했습니다.")
             self._host.show_error(exc, prefix="상태 필드 변경 실패")
 
         self._host.submit(
@@ -1522,8 +1534,9 @@ class TrackerDetailPanel(QFrame):
             self._host.remove_visible_item(item_id)
             if tracker_id is not None:
                 self._host.invalidate_tracker_cache(int(tracker_id))
-            self._selected_item_id = None
-            self.reset_detail()
+            if self._shows_item(item_id):
+                self._selected_item_id = None
+                self.reset_detail()
             self._host.set_workspace_status(f"#{item_id}을(를) 삭제했습니다.")
 
         def failed(exc: Exception) -> None:
@@ -1534,8 +1547,9 @@ class TrackerDetailPanel(QFrame):
                 detail=detail,
                 details={"error": str(exc)},
             )
-            self.editor_panel.set_busy(False)
-            self.editor_panel.set_error(str(exc) or "아이템 삭제에 실패했습니다.")
+            if self._shows_item(item_id):
+                self.editor_panel.set_busy(False)
+                self.editor_panel.set_error(str(exc) or "아이템 삭제에 실패했습니다.")
             self._host.show_error(exc, prefix="아이템 삭제 실패")
 
         self._host.submit(
