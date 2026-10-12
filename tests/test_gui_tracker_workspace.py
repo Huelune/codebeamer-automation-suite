@@ -2740,6 +2740,33 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(self.service.child_load_count, loads + 1)
 
+    def test_direct_open_to_other_tracker_refreshes_required_fields(self) -> None:
+        self.page.activate()
+        self.page.required_fields_label.setText("이전 트래커 필드")
+        self.page.direct_id_input.setText("9101002")
+
+        self.page._open_direct_item()
+
+        self.assertEqual(self.page.tracker_combo.currentData(), 24680002)
+        self.assertNotEqual(self.page.required_fields_label.text(), "이전 트래커 필드")
+
+    def test_direct_open_from_baseline_source_shows_current_state(self) -> None:
+        """ID 바로 열기는 현재 상태를 연다. 조회 기준이 Baseline으로 남아 있으면 쓰기가 막힌다."""
+        self.page.activate()
+        panel = self.page.hierarchy_panel
+        panel.hierarchy_source_combo.setCurrentIndex(panel.hierarchy_source_combo.findData(24681001))
+        self._app.processEvents()
+        self.assertEqual(panel.selected_baseline_id(), 24681001)
+        self.page.direct_id_input.setText("9001002")
+
+        self.page._open_direct_item()
+
+        self.assertIsNone(panel.selected_baseline_id())
+        self.assertFalse(self.page._is_historical_read_only())
+        self.assertEqual(panel.reload_roots_button.text(), "현재 계층 다시 불러오기")
+        # Baseline 목록은 남겨 다시 고를 수 있다.
+        self.assertGreater(panel.hierarchy_source_combo.findData(24681001), 0)
+
     def test_condition_search_mode_loads_schema_and_builds_condition_query(self) -> None:
         self.page.activate()
         self.page.browser_tabs.setCurrentIndex(1)

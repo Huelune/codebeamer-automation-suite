@@ -1772,6 +1772,10 @@ class TrackerWorkspacePage(QWidget):
             self._reset_baseline_state("Baseline 비교 기준을 다시 불러오세요.")
             self.hierarchy_panel.clear_baseline_cache()
             self.hierarchy_panel.reset_source()
+            self._show_required_fields(tracker)
+        else:
+            # 현재 상태 아이템을 연다. 조회 기준이 Baseline으로 남으면 계층과 쓰기 잠금이 어긋난다.
+            self.hierarchy_panel.show_current_source()
         self.project_combo.setCurrentIndex(
             -1
             if project is None

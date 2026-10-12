@@ -236,6 +236,13 @@ class TrackerHierarchyPanel(QWidget):
         self.hierarchy_source_combo.blockSignals(False)
         self.reload_roots_button.setText("현재 계층 다시 불러오기")
 
+    def show_current_source(self) -> None:
+        """Baseline 목록은 두고 조회 기준만 현재 상태로 돌린다. 트리는 부른 쪽이 그린다."""
+        self.hierarchy_source_combo.blockSignals(True)
+        self.hierarchy_source_combo.setCurrentIndex(0)
+        self.hierarchy_source_combo.blockSignals(False)
+        self.reload_roots_button.setText("현재 계층 다시 불러오기")
+
     def set_baselines(
         self,
         baselines: tuple[TrackerBaseline, ...],
