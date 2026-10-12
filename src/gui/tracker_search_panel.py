@@ -815,13 +815,23 @@ class TrackerSearchPanel(QWidget):
                         "unattempted_count": len(result.unattempted_item_ids),
                         "atomic": result.atomic,
                         "chunk_size": result.chunk_size,
+                        "stopped_by_error": result.error is not None,
                     },
                 )
             )
-        self._host.set_workspace_status(
-            f"일괄 수정 완료: 성공 {success_count:,}건, 재시도 대상 {retry_count:,}건.",
-            tone="warning" if retry_count else "info",
-        )
+        if result.error is not None:
+            # 앞 청크는 반영됐다. 무엇이 남았는지와 함께 알린다.
+            self._host.show_error(
+                result.error,
+                prefix=(
+                    f"일괄 수정 중단(성공 {success_count:,}건, 재시도 대상 {retry_count:,}건)"
+                ),
+            )
+        else:
+            self._host.set_workspace_status(
+                f"일괄 수정 완료: 성공 {success_count:,}건, 재시도 대상 {retry_count:,}건.",
+                tone="warning" if retry_count else "info",
+            )
         self.clear_selection()
 
     def _fail_bulk_update(self, exc: Exception) -> None:

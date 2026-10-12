@@ -203,6 +203,8 @@ class EditableWorkspaceClient:
     bulk_gate: threading.Event | None = None
     # 일괄 수정 요청이 클라이언트에 도착하면 켜진다.
     bulk_entered = threading.Event()
+    # 이 번호(1부터)의 일괄 수정 요청은 응답 없이 연결 오류로 끝난다.
+    bulk_error_on_call: int | None = None
 
     def __init__(self, *args, **kwargs) -> None:
         del args, kwargs
@@ -226,6 +228,7 @@ class EditableWorkspaceClient:
         cls.created_item = None
         cls.bulk_gate = None
         cls.bulk_entered = threading.Event()
+        cls.bulk_error_on_call = None
 
     def get_projects(self):
         return [{"id": 10, "name": "Vehicle"}]
@@ -327,6 +330,8 @@ class EditableWorkspaceClient:
         self.__class__.bulk_entered.set()
         if self.__class__.bulk_gate is not None:
             self.__class__.bulk_gate.wait(5)
+        if sum(1 for call in calls if call[0] == "bulk") == self.__class__.bulk_error_on_call:
+            raise ConnectionError("connection reset")
         return {"successfulOperationsCount": len(operations)}
 
 
@@ -3137,6 +3142,22 @@ class TrackerWorkspaceBulkUpdateTest(unittest.TestCase):
         self.assertIsNone(self.panel._bulk_worker)
         self.assertFalse(progress.isVisible())
         self.assertEqual(len(self._bulk_calls()), 1)
+
+    def test_bulk_run_stopped_by_error_keeps_record_and_reports(self) -> None:
+        EditableWorkspaceClient.bulk_error_on_call = 2
+
+        self.panel._prepare_bulk_update((1001, 1002, 1003))
+        self._wait_for_bulk_run(self.panel._bulk_worker)
+
+        record = self.run_store.load()[0]
+        self.assertEqual(record.successful_item_ids, (1001,))
+        self.assertEqual(record.retry_item_ids, (1002, 1003))
+        self.assertEqual(self.activities[-1].result.value, "partial")
+        self.assertTrue(self.activities[-1].details["stopped_by_error"])
+        self.assertEqual(len(self.alerts), 1)
+        self.assertIn("중단", self.alerts[0][1])
+        self.assertIn("성공 1건", self.page.workspace_status_label.text())
+        self.assertIsNone(self.panel._bulk_progress_dialog)
 
 
 if __name__ == "__main__":

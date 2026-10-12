@@ -6,6 +6,7 @@ from collections.abc import Callable
 from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -68,6 +69,8 @@ class BulkUpdateRunResult:
     chunk_size: int
     cancelled: bool = False
     unattempted_item_ids: tuple[int, ...] = ()
+    # 청크 요청이 응답 없이 실패해 멈췄을 때의 오류. 그 청크부터 unattempted 로 남긴다.
+    error: TrackerItemWriteError | None = field(default=None, compare=False)
 
     @property
     def successful_item_ids(self) -> tuple[int, ...]:
@@ -312,17 +315,24 @@ class TrackerBulkUpdateService:
         chunks: list[BulkUpdateChunkResult] = []
         completed = 0
         cancelled = False
+        error: TrackerItemWriteError | None = None
         for start in range(0, len(normalized_ids), normalized_chunk_size):
             if cancel_requested is not None and cancel_requested():
                 cancelled = True
                 break
             chunk_ids = normalized_ids[start : start + normalized_chunk_size]
-            result = self._execute_chunk(
-                client,
-                chunk_ids,
-                field_values,
-                atomic=bool(atomic),
-            )
+            try:
+                result = self._execute_chunk(
+                    client,
+                    chunk_ids,
+                    field_values,
+                    atomic=bool(atomic),
+                )
+            except TrackerItemWriteError as exc:
+                # 앞 청크는 이미 반영됐다. 결과를 버리지 않고 멈춘 청크부터 재시도 대상으로 남긴다.
+                # 같은 값을 다시 쓰는 것이라 반영 여부를 모르는 청크를 다시 보내도 된다.
+                error = exc
+                break
             chunks.append(result)
             completed += len(chunk_ids)
             if event_callback is not None:
@@ -350,6 +360,7 @@ class TrackerBulkUpdateService:
             chunk_size=normalized_chunk_size,
             cancelled=cancelled,
             unattempted_item_ids=unattempted,
+            error=error,
         )
 
 

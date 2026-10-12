@@ -12,6 +12,7 @@ from src.gui.tracker_bulk_update import BulkUpdateRunStore
 from src.gui.tracker_bulk_update import TrackerBulkUpdateService
 from src.gui.tracker_bulk_update import build_bulk_field_values
 from src.gui.tracker_bulk_update_dialog import TrackerBulkUpdateDialog
+from src.gui.tracker_item_editor import TrackerItemWriteError
 from src.gui.tracker_item_editor import build_create_tracker_schema
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
@@ -67,6 +68,8 @@ SCHEMA = {
 class BulkClient:
     calls: list[tuple] = []
     failure_ids: set[int] = set()
+    # 이 번호(1부터)의 요청은 응답 없이 연결 오류로 끝난다.
+    error_on_call: int | None = None
 
     def __init__(self, *args, **kwargs) -> None:
         del args, kwargs
@@ -75,10 +78,13 @@ class BulkClient:
     def reset(cls) -> None:
         cls.calls = []
         cls.failure_ids = set()
+        cls.error_on_call = None
 
     def bulk_update_item_fields(self, operations, *, atomic=True):
         copied = deepcopy(operations)
         self.__class__.calls.append((copied, atomic))
+        if len(self.__class__.calls) == self.__class__.error_on_call:
+            raise ConnectionError("connection reset")
         failed = [
             {"id": operation["itemId"], "exceptionMessage": "failed"}
             for operation in copied
@@ -211,6 +217,43 @@ class TrackerBulkUpdateTest(unittest.TestCase):
 
         self.assertTrue(result.cancelled)
         self.assertEqual(result.unattempted_item_ids, (3, 4))
+
+    def test_error_in_later_chunk_keeps_earlier_results_for_retry(self) -> None:
+        """앞 청크가 이미 반영됐으면 뒤 청크가 실패해도 결과를 버리지 않는다."""
+        BulkClient.error_on_call = 2
+
+        result = self.service.execute(
+            self.settings,
+            tracker_id=20,
+            item_ids=(1, 2, 3, 4, 5),
+            schema=self.schema,
+            changes=(BulkFieldChange(self.field(3), "Changed"),),
+            chunk_size=2,
+        )
+
+        self.assertEqual(len(BulkClient.calls), 2)
+        self.assertEqual(result.successful_item_ids, (1, 2))
+        # 실패한 청크는 반영 여부를 알 수 없으므로 남은 청크와 함께 다시 보낸다.
+        self.assertEqual(result.unattempted_item_ids, (3, 4, 5))
+        self.assertEqual(result.retry_item_ids, (3, 4, 5))
+        self.assertIsInstance(result.error, TrackerItemWriteError)
+        self.assertFalse(result.cancelled)
+
+    def test_error_in_first_chunk_still_returns_a_retryable_result(self) -> None:
+        BulkClient.error_on_call = 1
+
+        result = self.service.execute(
+            self.settings,
+            tracker_id=20,
+            item_ids=(1, 2, 3),
+            schema=self.schema,
+            changes=(BulkFieldChange(self.field(3), "Changed"),),
+            chunk_size=2,
+        )
+
+        self.assertEqual(result.successful_item_ids, ())
+        self.assertEqual(result.retry_item_ids, (1, 2, 3))
+        self.assertIsInstance(result.error, TrackerItemWriteError)
 
     def test_persistent_retry_store_excludes_field_values(self) -> None:
         BulkClient.failure_ids = {2}
