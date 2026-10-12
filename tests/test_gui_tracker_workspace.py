@@ -3145,6 +3145,29 @@ class TrackerWorkspaceBulkUpdateTest(unittest.TestCase):
         self.assertFalse(progress.isVisible())
         self.assertEqual(len(self._bulk_calls()), 1)
 
+    def test_editor_and_bulk_schema_loads_do_not_cancel_each_other(self) -> None:
+        """수정 탭과 일괄 수정이 같은 요청 이름을 쓰면 늦게 시작한 쪽이 앞 결과를 버린다."""
+        tree = self.page.hierarchy_panel.item_tree
+        tree.setCurrentItem(tree.topLevelItem(0))
+        self._app.processEvents()
+        detail = self.page.detail_panel.current_detail
+        editor = self.page.detail_panel.editor_panel
+        self.assertNotIn(3, editor.rows)
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+
+        self.page.detail_panel._load_editor_schema(detail)
+        self.panel._prepare_bulk_update((1001,))
+        tasks[0].finish()
+        tasks[1].finish()
+
+        self.assertIn(3, editor.rows)
+        self.assertEqual(len(self.requests), 1)
+        self._wait_for_bulk_run(self.panel._bulk_worker)
+
     def test_bulk_run_stopped_by_error_keeps_record_and_reports(self) -> None:
         EditableWorkspaceClient.bulk_error_on_call = 2
 

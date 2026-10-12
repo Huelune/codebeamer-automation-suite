@@ -99,6 +99,7 @@ REQUEST_BUSY_MESSAGES = {
     "baseline_saved_hierarchy": "저장해 둔 Baseline 계층을 여는 중입니다.",
     "direct": "아이템 ID의 위치와 계층을 확인하는 중입니다.",
     "editor_schema": "수정 가능한 필드를 확인하는 중입니다.",
+    "bulk_schema": "일괄 수정할 수 있는 필드를 확인하는 중입니다.",
     "required_fields": "새 아이템 필수 필드를 확인하는 중입니다.",
     "item_write": "트래커 아이템 변경 사항을 반영하는 중입니다.",
     "tracker_lookup": "트래커 ID의 소속 프로젝트를 확인하는 중입니다.",
