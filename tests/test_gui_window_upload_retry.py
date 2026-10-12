@@ -5,8 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
+from unittest.mock import patch
 
 import pandas as pd
+from PySide6.QtWidgets import QMessageBox
 
 from src.gui.activity_history import ActivityResult
 from src.gui.batch_window import BatchUploadWindow
@@ -140,6 +142,125 @@ class WindowUploadRetryResultTest(unittest.TestCase):
                 window._show_error_dialog.assert_not_called()
             finally:
                 window.close()
+
+
+class _SignalStub:
+    def connect(self, callback) -> None:
+        self.callback = callback
+
+
+class _RecordingWorker:
+    started: list[dict] = []
+
+    def __init__(self, *args, **kwargs) -> None:
+        del args
+        self.kwargs = kwargs
+        self.progress_changed = _SignalStub()
+        self.upload_event = _SignalStub()
+        self.upload_finished = _SignalStub()
+        self.upload_failed = _SignalStub()
+
+    def start(self) -> None:
+        self.__class__.started.append(self.kwargs)
+
+
+class _AnswerBox:
+    """확인 창 대신 미리 정한 답을 돌려준다."""
+
+    answers: list[object] = []
+    asked: list[str] = []
+
+    StandardButton = QMessageBox.StandardButton
+
+    @classmethod
+    def question(cls, parent, title, text, buttons, default):
+        del parent, title, buttons
+        cls.asked.append(text)
+        assert default == cls.StandardButton.No
+        return cls.answers.pop(0)
+
+
+class WindowUploadRepeatGuardTest(unittest.TestCase):
+    """실제 업로드를 마친 같은 데이터로 처음부터 다시 실행하면 먼저 묻는다."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.window = BatchUploadWindow(GuiSettingsStore(root_dir=Path(temp_dir.name)))
+        self.addCleanup(self.window.close)
+        self.window._record_batch_activity = Mock()
+        self.window._show_error_dialog = Mock()
+        self.window.qt = dict(self.window.qt, QMessageBox=_AnswerBox)
+        self.window.session_state.mapping_context = object()
+        self.window.upload_page.dry_run_checkbox.setChecked(False)
+        _RecordingWorker.started = []
+        _AnswerBox.answers = []
+        _AnswerBox.asked = []
+        worker_patch = patch("src.gui.window_upload.UploadWorker", _RecordingWorker)
+        worker_patch.start()
+        self.addCleanup(worker_patch.stop)
+
+    @staticmethod
+    def _finished_result() -> dict:
+        return {
+            "success_df": pd.DataFrame([{"_row_id": 0, "upload_name": "생성됨", "phase": "insert"}]),
+            "failed_df": pd.DataFrame(),
+            "unresolved_df": pd.DataFrame(),
+            "phase_results": {"insert": {"total": 1, "success": 1, "failed": 0, "unresolved": 0}},
+        }
+
+    def test_restarting_after_real_upload_asks_before_running_again(self) -> None:
+        window = self.window
+        window._start_upload()
+        self.assertEqual(len(_RecordingWorker.started), 1)
+        self.assertEqual(_AnswerBox.asked, [])
+        window._on_upload_finished(self._finished_result())
+
+        _AnswerBox.answers = [_AnswerBox.StandardButton.No]
+        window._start_upload()
+
+        self.assertEqual(len(_RecordingWorker.started), 1)
+        self.assertEqual(len(_AnswerBox.asked), 1)
+        self.assertIn("한 번 더", _AnswerBox.asked[0])
+        self.assertIn("실패 항목 재시도", window.upload_page.status_label.text())
+
+        _AnswerBox.answers = [_AnswerBox.StandardButton.Yes]
+        window._start_upload()
+
+        self.assertEqual(len(_RecordingWorker.started), 2)
+
+    def test_restart_after_failed_real_upload_also_asks(self) -> None:
+        window = self.window
+        window._start_upload()
+        window._on_upload_failed("중간에 실패했습니다.")
+
+        _AnswerBox.answers = [_AnswerBox.StandardButton.No]
+        window._start_upload()
+
+        self.assertEqual(len(_RecordingWorker.started), 1)
+        self.assertEqual(len(_AnswerBox.asked), 1)
+
+    def test_dry_run_and_revalidated_data_do_not_ask(self) -> None:
+        window = self.window
+        window.upload_page.dry_run_checkbox.setChecked(True)
+        window._start_upload()
+        window._on_upload_finished(self._finished_result())
+        # Dry Run 은 서버에 아무것도 만들지 않았다.
+        window.upload_page.dry_run_checkbox.setChecked(False)
+        window._start_upload()
+        window._on_upload_finished(self._finished_result())
+        # 검증을 다시 하면 새 준비 데이터다. 사용자가 다시 고른 것으로 본다.
+        window.session_state.mapping_context = object()
+        window._start_upload()
+
+        self.assertEqual(len(_RecordingWorker.started), 3)
+        self.assertEqual(_AnswerBox.asked, [])
 
 
 if __name__ == "__main__":

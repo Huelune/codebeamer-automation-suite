@@ -373,6 +373,10 @@ class ValidationPresenter:
                 "기존 item 정보를 조회하지 못해 업데이트 payload를 만들 수 없습니다.",
                 "id 값과 서버 연결 상태를 확인한 뒤 다시 검증하세요.",
             ),
+            "UPDATE_ITEM_TRACKER_MISMATCH": (
+                "업데이트 대상 item이 선택한 트래커의 아이템이 아닙니다.",
+                "다른 트래커에서 내보낸 파일인지 확인하고, 그 트래커를 선택하거나 id 값을 고친 뒤 다시 실행하세요.",
+            ),
             "UPSERT_PARENT_ID_REQUIRED": (
                 "계층형 신규 행을 연결할 기존 부모 item id가 없습니다.",
                 "부모 행에 기존 id를 넣거나, 계층을 제거한 뒤 다시 검증하세요.",
@@ -390,6 +394,7 @@ class ValidationPresenter:
                 "UPDATE_ITEM_ID_INVALID",
                 "UPDATE_ITEM_ID_DUPLICATE",
                 "UPDATE_ITEM_FETCH_FAILED",
+                "UPDATE_ITEM_TRACKER_MISMATCH",
                 "UPSERT_PARENT_ID_REQUIRED",
                 "UPSERT_UPDATE_WITH_NEW_ANCESTOR",
             }:

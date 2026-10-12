@@ -811,11 +811,14 @@ class RootItemService:
         if payload_df is None or payload_df.empty:
             return []
 
+        # upsert 의 수정 행은 기존 위치에 그대로 둔다. 수정 행만 있는 그룹 폴더는 빈 폴더가 된다.
+        operations = payload_df.get("_operation", pd.Series("", index=payload_df.index))
         ready_top_level_row_ids = {
             int(row_id)
             for row_id in payload_df[
                 payload_df["payload_status"].eq(PayloadStatus.READY.value)
                 & payload_df["parent_row_id"].apply(lambda value: value is None or pd.isna(value))
+                & operations.fillna("").astype(str).str.strip().str.lower().ne("update")
             ]["_row_id"].tolist()
         }
         if not ready_top_level_row_ids:
