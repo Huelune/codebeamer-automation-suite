@@ -25,6 +25,12 @@ _API_REQUEST_CONTEXT: ContextVar[tuple[str, int, int] | None] = ContextVar(
     default=None,
 )
 
+# 서버에 닿지 않으면 빨리 포기하고, 닿은 뒤에는 큰 조회를 처리할 시간을 준다.
+CONNECT_TIMEOUT_SECONDS = 10.0
+READ_TIMEOUT_SECONDS = 120.0
+# 쓰기는 응답을 받지 못하면 반영됐는지 알 수 없다. 서버가 끝낼 시간을 더 준다.
+WRITE_READ_TIMEOUT_SECONDS = 300.0
+
 
 class CodebeamerClient:
     def __init__(
@@ -59,6 +65,11 @@ class CodebeamerClient:
             "Content-Type": "application/json",
         })
         return session
+
+    @staticmethod
+    def _timeout(method: str) -> tuple[float, float]:
+        read_timeout = READ_TIMEOUT_SECONDS if method == "GET" else WRITE_READ_TIMEOUT_SECONDS
+        return (CONNECT_TIMEOUT_SECONDS, read_timeout)
 
     def _get(self, path: str, params: dict | None = None) -> Any:
         """GET 요청을 보내고 JSON 응답을 돌려준다."""
@@ -115,6 +126,7 @@ class CodebeamerClient:
                     headers={"Accept": "*/*"},
                     stream=True,
                     allow_redirects=False,
+                    timeout=self._timeout("GET"),
                 )
                 status_code = self._response_status_code(response)
                 if status_code in {301, 302, 303, 307, 308}:
@@ -135,6 +147,7 @@ class CodebeamerClient:
                         headers={"Accept": "*/*"},
                         stream=True,
                         allow_redirects=False,
+                        timeout=self._timeout("GET"),
                     )
                     status_code = self._response_status_code(response)
                 response.raise_for_status()
@@ -227,7 +240,10 @@ class CodebeamerClient:
             url = f"{self.base_url}{path}"
             with self._session() as session:
                 request_method = getattr(session, normalized_method.lower())
-                request_kwargs: dict[str, Any] = {"params": params}
+                request_kwargs: dict[str, Any] = {
+                    "params": params,
+                    "timeout": self._timeout(normalized_method),
+                }
                 if normalized_method in {"POST", "PUT"}:
                     request_kwargs["json"] = json_body
                 response = request_method(url, **request_kwargs)

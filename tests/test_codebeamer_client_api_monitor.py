@@ -84,6 +84,20 @@ class CodebeamerClientApiMonitorTest(unittest.TestCase):
         self.monitor = ApiMonitorService()
         self.monitor.configure(enabled=True, slow_threshold_ms=1000)
 
+    def test_requests_have_connect_and_read_timeouts(self) -> None:
+        """서버가 응답하지 않아도 무한히 기다리지 않는다."""
+        client = _SessionClient(
+            [_FakeResponse(200, []), _FakeResponse(201, {"id": 1})],
+            api_monitor=self.monitor,
+        )
+
+        client.get_projects()
+        client.create_item(10, {"name": "REQ"})
+
+        timeouts = [kwargs.get("timeout") for _method, _url, kwargs in client.fake_session.calls]
+        # 조회는 응답을 2분, 쓰기는 반영될 시간을 5분까지 기다린다. 연결은 10초.
+        self.assertEqual(timeouts, [(10.0, 120.0), (10.0, 300.0)])
+
     def test_successful_create_records_only_safe_request_metadata(self) -> None:
         secret_payload = {"name": "private summary", "description": "secret body"}
         client = _SessionClient(
