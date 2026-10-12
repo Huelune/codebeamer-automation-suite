@@ -190,6 +190,8 @@ class UpdateModeFakeClient(FakeClient):
             "id": int(item_id),
             "name": f"기존-{item_id}",
             "description": "기존 설명",
+            # 테스트 설정이 고르는 트래커(default_tracker_id) 소속이다.
+            "tracker": {"id": 1000, "type": "TrackerReference"},
             "status": {"id": 201, "name": "Open", "type": "ChoiceOptionReference"},
             "customFields": [
                 {

@@ -61,12 +61,15 @@ class UpsertSchemaClient(StaticSchemaClient):
         super().__init__(schema)
         self.get_item_calls: list[int] = []
         self.update_item_calls: list[tuple[int, dict[str, Any]]] = []
+        # 여기 없는 item 은 테스트가 고르는 트래커(2) 소속이다.
+        self.item_tracker_ids: dict[int, int] = {}
 
     def get_item(self, item_id: int) -> dict[str, Any]:
         self.get_item_calls.append(int(item_id))
         return {
             "id": int(item_id),
             "name": f"기존-{item_id}",
+            "tracker": {"id": self.item_tracker_ids.get(int(item_id), 2), "type": "TrackerReference"},
             "customFields": [],
         }
 
@@ -647,6 +650,33 @@ class PayloadCacheWizardTest(unittest.TestCase):
         self.assertFalse(result["update_payload_prepared"])
         self.assertEqual(client.get_item_calls, [])
         self.assertEqual(client.update_item_calls, [])
+
+    def test_update_skips_item_that_belongs_to_another_tracker(self) -> None:
+        """다른 트래커에서 내보낸 id 열로 그 트래커 아이템을 덮어쓰지 않는다."""
+        client = UpsertSchemaClient(self.schema)
+        client.item_tracker_ids = {101: 99}
+        wizard = CountingWizard(
+            client=client,
+            processor=HierarchyProcessor(summary_col="요약"),
+            mapper=self.mapper,
+        )
+        wizard.select_project(1)
+        wizard.select_tracker(2)
+        wizard.state.upload_mode = "update"
+        raw_df = pd.DataFrame([
+            {"id": 101, "요약": "Other tracker", "_excel_row": 2, "_summary_indent": 0},
+            {"id": 102, "요약": "Same tracker", "_excel_row": 3, "_summary_indent": 0},
+        ], dtype=object)
+        wizard.load_raw_dataframe(raw_df, list_cols=[])
+        wizard.load_schema_and_compare({"요약": "Summary"})
+        wizard.process_option_mapping({"요약": "Summary"})
+
+        result = wizard.update_items(dry_run=False)
+
+        self.assertEqual([call[0] for call in client.update_item_calls], [102])
+        failed = result["failed_df"]
+        self.assertEqual(failed["_row_id"].tolist(), [0])
+        self.assertIn("UPDATE_ITEM_TRACKER_MISMATCH", str(failed.iloc[0]["error"]))
 
     def test_upsert_blocks_update_row_with_new_ancestor(self) -> None:
         client = UpsertSchemaClient(self.schema)

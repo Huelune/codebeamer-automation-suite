@@ -39,6 +39,22 @@ class ValidationPresenterTest(unittest.TestCase):
         self.assertEqual(issue_df.iloc[0]["field"], "id")
         self.assertIn("숫자", issue_df.iloc[0]["message"])
 
+    def test_tracker_mismatch_error_points_to_id_column(self) -> None:
+        row = pd.Series(
+            {
+                "payload_error": (
+                    "[UPDATE_ITEM_TRACKER_MISMATCH] field='id' df_column='id' _row_id=0 "
+                    "item_id=101 tracker_id=99 selected_tracker_id=2"
+                )
+            }
+        )
+
+        column, field, message, action = ValidationPresenter.message_from_payload_error(row)
+
+        self.assertEqual((column, field), ("id", "id"))
+        self.assertIn("선택한 트래커", message)
+        self.assertIn("다른 트래커", action)
+
     def test_build_summary_stats_scopes_same_row_id_by_file(self) -> None:
         row_context_df = pd.DataFrame(
             [
