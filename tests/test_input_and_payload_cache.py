@@ -679,6 +679,119 @@ class PayloadCacheWizardTest(unittest.TestCase):
         self.assertEqual(client.get_item_calls, [])
         self.assertEqual(client.update_item_calls, [])
 
+    TABLE_SCHEMA = [
+        {
+            "id": 1,
+            "name": "Summary",
+            "type": "TextField",
+            "trackerItemField": "name",
+            "valueModel": "TextFieldValue",
+        },
+        {
+            "id": 1000,
+            "name": "Steps",
+            "type": "TableField",
+            "valueModel": "TableFieldValue",
+            "columns": [
+                {"id": 1001, "name": "Action", "type": "WikiTextField", "valueModel": "WikiTextFieldValue"},
+                {"id": 1002, "name": "Expected", "type": "WikiTextField", "valueModel": "WikiTextFieldValue"},
+            ],
+        },
+    ]
+
+    def _table_wizard(
+        self,
+        client,
+        selected_mapping: dict[str, str],
+        *,
+        upload_mode: str = "update",
+        selected_mapping_modes=None,
+    ) -> CodebeamerUploadWizard:
+        wizard = CodebeamerUploadWizard(
+            client=client,
+            processor=HierarchyProcessor(summary_col="요약"),
+            mapper=MappingService(),
+        )
+        wizard.select_project(1)
+        wizard.select_tracker(2)
+        wizard.state.upload_mode = upload_mode
+        wizard.load_raw_dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "id": 101,
+                        "요약": "REQ-101",
+                        "Steps.Action": "a1",
+                        "Steps.Expected": "e1",
+                        "_excel_row": 2,
+                        "_summary_indent": 0,
+                    }
+                ],
+                dtype=object,
+            ),
+            list_cols=[column for column in selected_mapping if column.startswith("Steps.")],
+        )
+        wizard.load_schema_and_compare(selected_mapping)
+        wizard.process_option_mapping(selected_mapping, selected_mapping_modes=selected_mapping_modes)
+        return wizard
+
+    @staticmethod
+    def _sent_table(client) -> list:
+        payload = client.update_item_calls[0][1]
+        return [field for field in payload.get("customFields", []) if field.get("fieldId") == 1000]
+
+    def test_unmapped_table_columns_are_not_sent_on_update(self) -> None:
+        """매핑에서 뺀 표 열을 보내면 기존 표가 잘린다. 매핑하지 않은 표는 그대로 둔다."""
+        client = UpsertSchemaClient(self.TABLE_SCHEMA)
+        wizard = self._table_wizard(client, {"요약": "Summary"})
+
+        wizard.update_items(dry_run=False)
+
+        self.assertEqual(self._sent_table(client), [])
+
+    def test_table_columns_outside_update_scope_are_not_sent(self) -> None:
+        client = UpsertSchemaClient(self.TABLE_SCHEMA)
+        selected_mapping = {"요약": "Summary", "Steps.Action": "Steps", "Steps.Expected": "Steps"}
+        wizard = self._table_wizard(
+            client,
+            selected_mapping,
+            upload_mode="upsert",
+            selected_mapping_modes={
+                "요약": {"create": True, "update": True},
+                "Steps.Action": {"create": True, "update": False},
+                "Steps.Expected": {"create": True, "update": False},
+            },
+        )
+
+        wizard.upsert_items(dry_run=False)
+
+        self.assertEqual(self._sent_table(client), [])
+
+    def test_update_with_only_some_table_columns_is_blocked(self) -> None:
+        """수정은 표 전체를 바꾸므로 일부 열만 보내면 나머지 열이 비워질 수 있다."""
+        client = UpsertSchemaClient(self.TABLE_SCHEMA)
+        wizard = self._table_wizard(client, {"요약": "Summary", "Steps.Action": "Steps"})
+
+        payload_df = wizard.build_payloads(fetch_existing_items=False)
+
+        self.assertEqual(payload_df["payload_status"].tolist(), [PayloadStatus.FAILED.value])
+        self.assertIn("TABLE_FIELD_PARTIAL_UPDATE", str(payload_df.iloc[0]["payload_error"]))
+        self.assertIn("Expected", str(payload_df.iloc[0]["payload_error"]))
+
+    def test_update_with_all_table_columns_replaces_the_table(self) -> None:
+        client = UpsertSchemaClient(self.TABLE_SCHEMA)
+        selected_mapping = {"요약": "Summary", "Steps.Action": "Steps", "Steps.Expected": "Steps"}
+        wizard = self._table_wizard(client, selected_mapping)
+
+        wizard.update_items(dry_run=False)
+
+        table = self._sent_table(client)
+        self.assertEqual(len(table), 1)
+        self.assertEqual(
+            [[cell["value"] for cell in row] for row in table[0]["values"]],
+            [["a1", "e1"]],
+        )
+
     def test_update_skips_item_that_belongs_to_another_tracker(self) -> None:
         """다른 트래커에서 내보낸 id 열로 그 트래커 아이템을 덮어쓰지 않는다."""
         client = UpsertSchemaClient(self.schema)

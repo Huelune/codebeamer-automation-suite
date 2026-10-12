@@ -754,8 +754,18 @@ class WizardItemBuilderService:
             item.set_field_value(tracker_field, field_value, field_info)
             applied_schema_fields.add(schema_field)
 
-    def _build_table_custom_fields(self, row: pd.Series) -> list[TableFieldValue]:
-        """현재 행에서 TableField 값들을 모아 custom field payload로 만든다."""
+    def _build_table_custom_fields(
+        self,
+        row: pd.Series,
+        *,
+        row_id: int,
+        operation: str,
+    ) -> list[TableFieldValue]:
+        """현재 행에서 TableField 값들을 모아 custom field payload로 만든다.
+
+        일반 필드처럼 열마다 생성/수정 사용 범위를 따른다. 수정은 표 전체를 바꾸므로
+        한 표의 일부 열만 보내면 나머지 열이 비워질 수 있어 막는다.
+        """
         custom_fields: list[TableFieldValue] = []
         if not self.state.table_field_mapping or self.state.schema_df is None:
             return custom_fields
@@ -771,12 +781,20 @@ class WizardItemBuilderService:
             }
 
         tables_data: dict[str, dict[str, Any]] = {}
+        df_col_by_table: dict[str, str] = {}
 
         for df_col, tf_info in self.state.table_field_mapping.items():
+            if not scope_applies_to_operation(
+                self.state.selected_mapping_modes.get(df_col),
+                operation,
+                upload_mode=self.state.upload_mode,
+            ):
+                continue
             tf_name = tf_info["table_field_name"]
             col_name = tf_info["column_name"]
             if tf_name not in tables_data:
                 tables_data[tf_name] = {}
+                df_col_by_table[tf_name] = df_col
             tables_data[tf_name][col_name] = row[df_col] if df_col in row.index else None
 
         for tf_name, table_values_by_column in tables_data.items():
@@ -820,6 +838,21 @@ class WizardItemBuilderService:
 
                 if row_fields:
                     values.append(row_fields)
+
+            if values and str(operation or "").strip().lower() == "update":
+                missing_columns = sorted(
+                    str(column_def.get("name"))
+                    for column_def in column_defs
+                    if column_def.get("name") and column_def.get("name") not in table_values_by_column
+                )
+                if missing_columns:
+                    self._raise_payload_error(
+                        "TABLE_FIELD_PARTIAL_UPDATE",
+                        schema_field=tf_name,
+                        df_col=df_col_by_table[tf_name],
+                        row_id=row_id,
+                        detail=f"missing_columns={missing_columns!r}",
+                    )
 
             if values:
                 custom_fields.append(
@@ -897,7 +930,7 @@ class WizardItemBuilderService:
             operation=operation,
             applied_schema_fields=applied_schema_fields,
         )
-        table_custom_fields = self._build_table_custom_fields(row)
+        table_custom_fields = self._build_table_custom_fields(row, row_id=row_id, operation=operation)
         if table_custom_fields:
             for field in table_custom_fields:
                 item.add_field_value(field)

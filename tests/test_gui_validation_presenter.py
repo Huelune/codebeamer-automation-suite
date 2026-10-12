@@ -55,6 +55,22 @@ class ValidationPresenterTest(unittest.TestCase):
         self.assertIn("선택한 트래커", message)
         self.assertIn("다른 트래커", action)
 
+    def test_partial_table_update_error_points_to_table_column(self) -> None:
+        row = pd.Series(
+            {
+                "payload_error": (
+                    "[TABLE_FIELD_PARTIAL_UPDATE] field='Steps' df_column='Steps.Action' _row_id=0 "
+                    "missing_columns=['Expected']"
+                )
+            }
+        )
+
+        column, field, message, action = ValidationPresenter.message_from_payload_error(row)
+
+        self.assertEqual((column, field), ("Steps.Action", "Steps"))
+        self.assertIn("일부 열", message)
+        self.assertIn("모든 열", action)
+
     def test_build_summary_stats_scopes_same_row_id_by_file(self) -> None:
         row_context_df = pd.DataFrame(
             [

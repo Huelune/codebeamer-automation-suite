@@ -253,11 +253,11 @@ def main():
     print(comparison_df[["df_column", "selected_schema_field", "status"]])
 
     if wizard.state.table_field_mapping:
-        print("\n[자동 감지된 TableField 컬럼]")
+        print("\n[매핑된 TableField 컬럼]")
         for df_col, tf_info in wizard.state.table_field_mapping.items():
             print(f"- {df_col} -> {tf_info['table_field_name']}.{tf_info['column_name']}")
     else:
-        print("\n[감지된 TableField 컬럼 없음]")
+        print("\n[매핑된 TableField 컬럼 없음]")
 
     print("\n[옵션/참조형 필드 처리 중]")
     selected_option_mapping = validation_result.selected_option_mapping
