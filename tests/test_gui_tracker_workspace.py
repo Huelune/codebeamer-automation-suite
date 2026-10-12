@@ -2614,6 +2614,13 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(panel.selected_count(), 2)
         return panel
 
+    def _search_row_texts(self) -> list[tuple[str, ...]]:
+        table = self.page.search_panel.search_table
+        return [
+            tuple(table.item(row, column).text() for column in range(1, table.columnCount()))
+            for row in range(table.rowCount())
+        ]
+
     def test_direct_open_to_other_tracker_clears_search_results_and_selection(self) -> None:
         """다른 트래커로 옮기면 이전 트래커의 검색 선택으로 일괄 수정하지 않게 비운다."""
         self.page.activate()
@@ -2652,6 +2659,17 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.workspace_status_label.property("tone"), "warning")
         self.assertEqual(panel.selected_count(), 0)
         self.assertEqual(panel.search_table.rowCount(), 0)
+
+    def test_search_rows_follow_saved_and_deleted_items(self) -> None:
+        self.page.activate()
+        self._select_steering_results()
+        self.assertEqual({row[0] for row in self._search_row_texts()}, {"9001003", "9001004"})
+
+        self.page._refresh_visible_item(_detail(9001003, "Renamed steering"))
+        self.page._remove_visible_item(9001004)
+
+        rows = self._search_row_texts()
+        self.assertEqual([row[:2] for row in rows], [("9001003", "Renamed steering")])
 
     def test_condition_search_mode_loads_schema_and_builds_condition_query(self) -> None:
         self.page.activate()

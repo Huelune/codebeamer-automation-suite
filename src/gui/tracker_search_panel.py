@@ -278,7 +278,7 @@ class TrackerSearchPanel(QWidget):
         """수정 결과를 검색 결과 표에도 반영한다."""
         summary = detail.summary
         for row in range(self.search_table.rowCount()):
-            id_item = self.search_table.item(row, 0)
+            id_item = self.search_table.item(row, 1)
             if id_item is None:
                 continue
             existing = id_item.data(ITEM_SUMMARY_ROLE)
@@ -295,9 +295,9 @@ class TrackerSearchPanel(QWidget):
             id_item.setData(ITEM_SUMMARY_ROLE, updated)
             # 셀이 아직 만들어지지 않았으면 갱신할 대상이 없다.
             for column, text in (
-                (1, updated.name),
-                (2, updated.status or "-"),
-                (3, ", ".join(updated.assignees) or "-"),
+                (2, updated.name),
+                (3, updated.status or "-"),
+                (4, ", ".join(updated.assignees) or "-"),
             ):
                 cell = self.search_table.item(row, column)
                 if cell is not None:
@@ -305,7 +305,7 @@ class TrackerSearchPanel(QWidget):
 
     def remove_item(self, item_id: int) -> None:
         for row in range(self.search_table.rowCount() - 1, -1, -1):
-            id_item = self.search_table.item(row, 0)
+            id_item = self.search_table.item(row, 1)
             summary = id_item.data(ITEM_SUMMARY_ROLE) if id_item is not None else None
             if isinstance(summary, TrackerItemSummary) and summary.item_id == int(item_id):
                 self.search_table.removeRow(row)
