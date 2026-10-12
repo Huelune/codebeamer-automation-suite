@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import os
+import tempfile
+import threading
 import unittest
 from copy import deepcopy
 from dataclasses import replace
@@ -30,6 +32,10 @@ from src.gui.styles import build_gui_stylesheet
 from src.gui.tracker_baseline_compare import BaselineComparisonKind
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
+from src.gui.tracker_bulk_update import BulkFieldChange
+from src.gui.tracker_bulk_update import BulkUpdateRunStore
+from src.gui.tracker_bulk_update import TrackerBulkUpdateService
+from src.gui.tracker_bulk_update_dialog import BulkUpdateRequest
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
 from src.gui.tracker_content_models import AttachmentSummary
@@ -193,6 +199,10 @@ class EditableWorkspaceClient:
     created_item = None
     calls: list[tuple] = []
     deleted = False
+    # 일괄 수정 요청을 이 신호가 올 때까지 붙잡아 둔다. 실행 중인 상태를 만들 때 쓴다.
+    bulk_gate: threading.Event | None = None
+    # 일괄 수정 요청이 클라이언트에 도착하면 켜진다.
+    bulk_entered = threading.Event()
 
     def __init__(self, *args, **kwargs) -> None:
         del args, kwargs
@@ -214,6 +224,8 @@ class EditableWorkspaceClient:
         cls.calls = []
         cls.deleted = False
         cls.created_item = None
+        cls.bulk_gate = None
+        cls.bulk_entered = threading.Event()
 
     def get_projects(self):
         return [{"id": 10, "name": "Vehicle"}]
@@ -308,6 +320,14 @@ class EditableWorkspaceClient:
         self.__class__.calls.append(("delete", item_id))
         self.__class__.deleted = True
         return {}
+
+    def bulk_update_item_fields(self, operations, *, atomic=True):
+        calls = self.__class__.calls
+        calls.append(("bulk", tuple(operation["itemId"] for operation in operations), atomic))
+        self.__class__.bulk_entered.set()
+        if self.__class__.bulk_gate is not None:
+            self.__class__.bulk_gate.wait(5)
+        return {"successfulOperationsCount": len(operations)}
 
 
 class TrackerWorkspacePageTest(unittest.TestCase):
@@ -3012,6 +3032,111 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.assertIn("생성했습니다", self.page.workspace_status_label.text())
         self.assertEqual(self.activities[-1].operation.value, "tracker_create")
         self.assertEqual(self.activities[-1].item_id, 1002)
+
+
+class TrackerWorkspaceBulkUpdateTest(unittest.TestCase):
+    """일괄 수정은 실제 작업 스레드로 돌려 실행 중 상태와 끝난 뒤 정리를 확인한다."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        cls._app = QApplication.instance() or QApplication([])
+
+    def setUp(self) -> None:
+        EditableWorkspaceClient.reset()
+        self.settings = GuiSettings(
+            base_url="https://example.test/cb",
+            username="sample",
+            password="placeholder",
+        )
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.run_store = BulkUpdateRunStore(Path(temp_dir.name) / "bulk_runs.json")
+        query_service = TrackerQueryService(client_factory=EditableWorkspaceClient)
+        self.requests: list[dict] = []
+        self.activities = []
+        self.alerts: list[tuple[str, str]] = []
+
+        def bulk_request(schema, **kwargs):
+            self.requests.append(kwargs)
+            summary = next(field for field in schema.fields if field.field_id == 3)
+            return BulkUpdateRequest(
+                changes=(BulkFieldChange(summary, "Bulk summary"),),
+                atomic=True,
+                chunk_size=1,
+            )
+
+        self.page = TrackerWorkspacePage(
+            settings_provider=lambda: self.settings,
+            service=query_service,
+            editor_service=TrackerItemEditorService(
+                client_factory=EditableWorkspaceClient,
+                query_service=query_service,
+            ),
+            bulk_update_service=TrackerBulkUpdateService(client_factory=EditableWorkspaceClient),
+            bulk_run_store=self.run_store,
+            bulk_request_provider=bulk_request,
+            activity_recorder=self.activities.append,
+            error_notifier=lambda title, message: self.alerts.append((title, message)),
+            synchronous=True,
+        )
+        self.page.show()
+        self.page.activate()
+        self._app.processEvents()
+        # 가짜 클라이언트에는 Baseline 목록이 없어 활성화 때 알림이 하나 나온다.
+        self.alerts.clear()
+        self.panel = self.page.search_panel
+
+    def tearDown(self) -> None:
+        if EditableWorkspaceClient.bulk_gate is not None:
+            EditableWorkspaceClient.bulk_gate.set()
+        worker = self.panel._bulk_worker
+        if worker is not None:
+            worker.wait(5000)
+        self._app.processEvents()
+        self.page.close()
+        self._app.processEvents()
+
+    def _wait_for_bulk_run(self, worker) -> None:
+        self.assertTrue(worker.wait(5000))
+        # 작업 스레드의 완료 신호는 이벤트 루프로 넘어온다.
+        self._app.processEvents()
+        self._app.processEvents()
+
+    def _bulk_calls(self) -> list[tuple]:
+        return [call for call in EditableWorkspaceClient.calls if call[0] == "bulk"]
+
+    def test_running_bulk_update_cannot_be_closed_or_started_twice(self) -> None:
+        gate = threading.Event()
+        EditableWorkspaceClient.bulk_gate = gate
+        self.panel._prepare_bulk_update((1001,))
+        first = self.panel._bulk_worker
+        progress = self.panel._bulk_progress_dialog
+        self.assertIsNotNone(first)
+        self.assertTrue(progress.isVisible())
+        # 첫 청크 요청이 서버에 가 있는 동안 닫으려 한다.
+        self.assertTrue(EditableWorkspaceClient.bulk_entered.wait(5))
+
+        # Esc나 창 닫기로는 진행 창이 닫히지 않는다. 남은 청크 중단 요청으로만 받는다.
+        QTest.keyClick(progress, Qt.Key.Key_Escape)
+        progress.close()
+        self._app.processEvents()
+        self.assertTrue(progress.isVisible())
+        self.assertFalse(progress.cancel_button.isEnabled())
+
+        # 끝나기 전에 다시 실행해도 두 번째 작업을 만들지 않는다.
+        self.panel._prepare_bulk_update((1001,))
+        self.assertIs(self.panel._bulk_worker, first)
+        self.assertIn("진행 중", self.page.workspace_status_label.text())
+        self.assertEqual(len(self.requests), 1)
+
+        gate.set()
+        self._wait_for_bulk_run(first)
+
+        self.assertIsNone(self.panel._bulk_worker)
+        self.assertFalse(progress.isVisible())
+        self.assertEqual(len(self._bulk_calls()), 1)
 
 
 if __name__ == "__main__":

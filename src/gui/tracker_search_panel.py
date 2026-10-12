@@ -669,6 +669,8 @@ class TrackerSearchPanel(QWidget):
         initial_atomic: bool = True,
         initial_chunk_size: int | None = None,
     ) -> None:
+        if self._refuse_while_bulk_running():
+            return
         if self._host.selected_hierarchy_baseline_id() is not None:
             self._host.set_workspace_status(
                 "Baseline 조회 중에는 일괄 수정할 수 없습니다.",
@@ -727,6 +729,8 @@ class TrackerSearchPanel(QWidget):
         schema: EditableTrackerSchema,
         request: BulkUpdateRequest,
     ) -> None:
+        if self._refuse_while_bulk_running():
+            return
         tracker = self._host.current_tracker()
         if tracker is None:
             return
@@ -756,15 +760,24 @@ class TrackerSearchPanel(QWidget):
         try:
             worker.start()
         except Exception as exc:
-            progress.reject()
+            progress.finish()
             self._bulk_progress_dialog = None
             self._cleanup_bulk_worker()
             self._host.show_error(exc, prefix="일괄 수정 시작 실패")
 
+    def _refuse_while_bulk_running(self) -> bool:
+        """일괄 수정은 한 번에 하나만 돌린다. 겹치면 같은 아이템을 두 번 고친다."""
+        if self._bulk_worker is None:
+            return False
+        self._host.set_workspace_status(
+            "일괄 수정이 진행 중입니다. 끝난 뒤 다시 실행하세요.", tone="warning"
+        )
+        return True
+
     def _finish_bulk_update(self, result) -> None:
         progress = self._bulk_progress_dialog
         if progress is not None:
-            progress.accept()
+            progress.finish()
         self._bulk_progress_dialog = None
         if self.bulk_run_store is not None:
             self.bulk_run_store.append(result)
@@ -813,15 +826,17 @@ class TrackerSearchPanel(QWidget):
 
     def _fail_bulk_update(self, exc: Exception) -> None:
         if self._bulk_progress_dialog is not None:
-            self._bulk_progress_dialog.reject()
+            self._bulk_progress_dialog.finish()
         self._bulk_progress_dialog = None
         self._host.show_error(exc, prefix="일괄 수정 실패")
 
     def _cleanup_bulk_worker(self) -> None:
         worker = self._bulk_worker
+        # 아직 도는 작업은 지우지 않는다. 실행 중인 스레드를 지우면 앱이 강제 종료된다.
+        if worker is None or worker.isRunning():
+            return
         self._bulk_worker = None
-        if worker is not None:
-            worker.deleteLater()
+        worker.deleteLater()
 
     def open_bulk_retry(self, run_id: str) -> None:
         if self.bulk_run_store is None:
