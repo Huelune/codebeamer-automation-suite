@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import random
 import threading
 import time
 from contextvars import ContextVar
@@ -31,6 +32,10 @@ CONNECT_TIMEOUT_SECONDS = 10.0
 READ_TIMEOUT_SECONDS = 120.0
 # 쓰기는 응답을 받지 못하면 반영됐는지 알 수 없다. 서버가 끝낼 시간을 더 준다.
 WRITE_READ_TIMEOUT_SECONDS = 300.0
+# 429 응답의 Retry-After 를 따르되 이보다 오래 붙잡혀 있지는 않는다.
+MAX_RETRY_AFTER_SECONDS = 60.0
+# 동시에 막힌 요청이 같은 순간에 다시 몰리지 않도록 재시도 간격에 더하는 최대 비율.
+RETRY_JITTER_RATIO = 0.25
 
 
 class CodebeamerClient:
@@ -44,6 +49,7 @@ class CodebeamerClient:
         rate_limit_retry_delay_seconds: float = 1.0,
         rate_limit_max_retries: int = 5,
         sleep_fn=time.sleep,
+        jitter_fn=random.random,
         api_monitor=API_MONITOR,
     ):
         """Codebeamer 서버에 요청할 때 필요한 접속 정보를 보관한다."""
@@ -54,6 +60,7 @@ class CodebeamerClient:
         self.rate_limit_retry_delay_seconds = rate_limit_retry_delay_seconds
         self.rate_limit_max_retries = rate_limit_max_retries
         self._sleep_fn = sleep_fn
+        self._jitter_fn = jitter_fn
         self.api_monitor = api_monitor
         # requests.Session 은 스레드끼리 나눠 쓰면 안전하지 않다. 스레드마다 하나씩 두고 다시 쓴다.
         self._sessions = threading.local()
@@ -939,6 +946,17 @@ class CodebeamerClient:
             lambda: self._delete(f"/v3/items/{int(item_id)}"),
         )
 
+    @staticmethod
+    def _retry_after_seconds(exc: Exception) -> float | None:
+        """429 응답이 알려 준 대기 시간(초). 없거나 날짜 형식이면 None."""
+        headers: Any = getattr(getattr(exc, "response", None), "headers", None)
+        raw_value = headers.get("Retry-After") if hasattr(headers, "get") else None
+        try:
+            seconds = float(str(raw_value).strip())
+        except (TypeError, ValueError):
+            return None
+        return seconds if seconds >= 0 else None
+
     def _run_rate_limited_request(self, request_name: str, request_func) -> Any:
         """rate limit 재시도를 포함해 요청을 실행한다."""
         attempts = self.rate_limit_max_retries + 1
@@ -954,6 +972,10 @@ class CodebeamerClient:
                     raise
 
                 delay_seconds = self.rate_limit_retry_delay_seconds * attempt
+                retry_after = self._retry_after_seconds(exc)
+                if retry_after is not None:
+                    delay_seconds = max(delay_seconds, min(retry_after, MAX_RETRY_AFTER_SECONDS))
+                delay_seconds += delay_seconds * RETRY_JITTER_RATIO * float(self._jitter_fn())
                 if self.logger is not None:
                     self.logger.warning(
                         "%s rate limited; retrying in %.2fs (attempt %s/%s)",
