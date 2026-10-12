@@ -2698,6 +2698,34 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         rows = self._search_row_texts()
         self.assertEqual([row[:2] for row in rows], [("9001003", "Renamed steering")])
 
+    def test_late_baseline_tab_children_after_tree_reload_are_ignored(self) -> None:
+        """하위 조회가 끝나기 전에 Baseline 탭 트리를 다시 그려도 지워진 항목을 건드리지 않는다."""
+        self.page.activate()
+        self.page.workspace_mode_tabs.setCurrentIndex(self.page.baseline_mode_index)
+        self._app.processEvents()
+        workspace = self.page.baseline_workspace
+        roots = self.page.hierarchy_panel.root_cache()[24680001]
+        alerts: list[str] = []
+        self.page.error_notifier = lambda _title, message: alerts.append(message)
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+
+        workspace.baseline_item_tree.topLevelItem(0).setExpanded(True)
+        workspace.render_roots(())
+        tasks[0].finish()
+
+        self.page.hierarchy_panel.child_cache().clear()
+        workspace.render_roots(roots)
+        workspace.baseline_item_tree.topLevelItem(0).setExpanded(True)
+        workspace.render_roots(())
+        tasks[1].emit_failure(RuntimeError("late failure"))
+
+        self.assertEqual(len(tasks), 2)
+        self.assertEqual(alerts, [])
+
     def test_condition_search_mode_loads_schema_and_builds_condition_query(self) -> None:
         self.page.activate()
         self.page.browser_tabs.setCurrentIndex(1)
