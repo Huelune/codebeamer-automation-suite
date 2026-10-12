@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 from collections.abc import Callable
@@ -57,6 +58,13 @@ class BulkUpdateChunkResult:
         return tuple(failure.item_id for failure in self.failures)
 
 
+def bulk_run_server_key(settings: Any) -> str:
+    """실행 기록을 만든 서버·사용자를 가리키는 값. 주소와 계정 원문은 남기지 않는다."""
+    base_url = str(getattr(settings, "base_url", "") or "").strip().rstrip("/")
+    username = str(getattr(settings, "username", "") or "").strip()
+    return hashlib.sha256(f"{base_url}|{username}".encode()).hexdigest()
+
+
 @dataclass(frozen=True)
 class BulkUpdateRunResult:
     run_id: str
@@ -69,6 +77,7 @@ class BulkUpdateRunResult:
     chunk_size: int
     cancelled: bool = False
     unattempted_item_ids: tuple[int, ...] = ()
+    server_key: str = ""
     # 청크 요청이 응답 없이 실패해 멈췄을 때의 오류. 그 청크부터 unattempted 로 남긴다.
     error: TrackerItemWriteError | None = field(default=None, compare=False)
 
@@ -360,6 +369,7 @@ class TrackerBulkUpdateService:
             chunk_size=normalized_chunk_size,
             cancelled=cancelled,
             unattempted_item_ids=unattempted,
+            server_key=bulk_run_server_key(settings),
             error=error,
         )
 
@@ -379,6 +389,8 @@ class BulkUpdateRunRecord:
     atomic: bool
     chunk_size: int
     cancelled: bool
+    # 이 필드가 생기기 전 기록은 빈 값이다. 어느 서버 기록인지 몰라 재시도하지 않는다.
+    server_key: str = ""
 
     @classmethod
     def from_result(cls, result: BulkUpdateRunResult) -> BulkUpdateRunRecord:
@@ -396,6 +408,7 @@ class BulkUpdateRunRecord:
             atomic=result.atomic,
             chunk_size=result.chunk_size,
             cancelled=result.cancelled,
+            server_key=result.server_key,
         )
 
     @property
@@ -425,6 +438,7 @@ class BulkUpdateRunRecord:
             "atomic": self.atomic,
             "chunkSize": self.chunk_size,
             "cancelled": self.cancelled,
+            "serverKey": self.server_key,
         }
 
     @classmethod
@@ -449,6 +463,7 @@ class BulkUpdateRunRecord:
             atomic=bool(payload.get("atomic", True)),
             chunk_size=max(int(payload.get("chunkSize") or 1), 1),
             cancelled=bool(payload.get("cancelled", False)),
+            server_key=str(payload.get("serverKey") or ""),
         )
 
 
@@ -531,5 +546,6 @@ __all__ = [
     "BulkUpdateRunStore",
     "TrackerBulkUpdateService",
     "build_bulk_field_values",
+    "bulk_run_server_key",
     "default_bulk_update_runs_path",
 ]

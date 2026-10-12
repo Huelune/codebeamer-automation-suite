@@ -33,8 +33,10 @@ from src.gui.tracker_baseline_compare import BaselineComparisonKind
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
 from src.gui.tracker_bulk_update import BulkFieldChange
+from src.gui.tracker_bulk_update import BulkUpdateRunResult
 from src.gui.tracker_bulk_update import BulkUpdateRunStore
 from src.gui.tracker_bulk_update import TrackerBulkUpdateService
+from src.gui.tracker_bulk_update import bulk_run_server_key
 from src.gui.tracker_bulk_update_dialog import BulkUpdateRequest
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
@@ -3158,6 +3160,37 @@ class TrackerWorkspaceBulkUpdateTest(unittest.TestCase):
         self.assertIn("중단", self.alerts[0][1])
         self.assertIn("성공 1건", self.page.workspace_status_label.text())
         self.assertIsNone(self.panel._bulk_progress_dialog)
+
+    def test_retry_from_another_server_or_older_record_is_refused(self) -> None:
+        def stored(run_id: str, server_key: str) -> None:
+            self.run_store.append(
+                BulkUpdateRunResult(
+                    run_id=run_id,
+                    tracker_id=20,
+                    target_item_ids=(1001,),
+                    field_ids=(3,),
+                    clear_field_ids=(),
+                    chunks=(),
+                    atomic=True,
+                    chunk_size=1,
+                    unattempted_item_ids=(1001,),
+                    server_key=server_key,
+                )
+            )
+
+        stored("other-account", bulk_run_server_key(replace(self.settings, username="other")))
+        stored("older-record", "")
+        stored("same-server", bulk_run_server_key(self.settings))
+
+        for run_id in ("other-account", "older-record"):
+            with self.subTest(run_id=run_id):
+                self.page.open_bulk_retry(run_id)
+                self.assertEqual(self.requests, [])
+                self.assertIn("재시도할 수 없습니다", self.page.workspace_status_label.text())
+
+        EditableWorkspaceClient.bulk_gate = threading.Event()
+        self.page.open_bulk_retry("same-server")
+        self.assertEqual(len(self.requests), 1)
 
 
 if __name__ == "__main__":

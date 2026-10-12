@@ -40,6 +40,7 @@ from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
 from .settings_store import GuiSettings
+from .tracker_bulk_update import bulk_run_server_key
 from .tracker_bulk_update_dialog import BulkUpdateProgressDialog
 from .tracker_bulk_update_dialog import BulkUpdateRequest
 from .tracker_bulk_update_dialog import TrackerBulkUpdateDialog
@@ -854,6 +855,21 @@ class TrackerSearchPanel(QWidget):
         record = self.bulk_run_store.get(run_id)
         if record is None:
             self._host.set_workspace_status("재시도 실행 기록을 찾지 못했습니다.", tone="warning")
+            return
+        # 아이템 ID는 서버마다 다르다. 다른 연결에서 돌리면 엉뚱한 아이템을 고친다.
+        if not record.server_key:
+            self._host.set_workspace_status(
+                "서버 정보가 없는 이전 실행 기록이라 재시도할 수 없습니다. "
+                "검색에서 대상을 다시 골라 일괄 수정하세요.",
+                tone="warning",
+            )
+            return
+        if record.server_key != bulk_run_server_key(self.settings_provider()):
+            self._host.set_workspace_status(
+                "다른 서버나 계정에서 실행한 기록이라 재시도할 수 없습니다. "
+                "그 연결로 바꾼 뒤 다시 시도하세요.",
+                tone="warning",
+            )
             return
         still_selected = self._host.current_tracker()
         if still_selected is None or still_selected.tracker_id != record.tracker_id:

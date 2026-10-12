@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 from src.gui.settings_store import GuiSettings
@@ -11,6 +12,7 @@ from src.gui.tracker_bulk_update import BulkFieldChange
 from src.gui.tracker_bulk_update import BulkUpdateRunStore
 from src.gui.tracker_bulk_update import TrackerBulkUpdateService
 from src.gui.tracker_bulk_update import build_bulk_field_values
+from src.gui.tracker_bulk_update import bulk_run_server_key
 from src.gui.tracker_bulk_update_dialog import TrackerBulkUpdateDialog
 from src.gui.tracker_item_editor import TrackerItemWriteError
 from src.gui.tracker_item_editor import build_create_tracker_schema
@@ -254,6 +256,36 @@ class TrackerBulkUpdateTest(unittest.TestCase):
         self.assertEqual(result.successful_item_ids, ())
         self.assertEqual(result.retry_item_ids, (1, 2, 3))
         self.assertIsInstance(result.error, TrackerItemWriteError)
+
+    def test_run_record_keeps_server_identity_without_address(self) -> None:
+        """재시도할 때 같은 서버·사용자인지 확인할 수 있어야 한다. 주소 원문은 남기지 않는다."""
+        BulkClient.failure_ids = {2}
+        result = self.service.execute(
+            self.settings,
+            tracker_id=20,
+            item_ids=(1, 2),
+            schema=self.schema,
+            changes=(BulkFieldChange(self.field(3), "Changed"),),
+            atomic=False,
+        )
+        other = GuiSettings(base_url="https://example.test/cb", username="other", password="placeholder")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "bulk.json"
+            store = BulkUpdateRunStore(path)
+            store.append(result)
+            restored = store.get(result.run_id)
+            raw = path.read_text(encoding="utf-8")
+
+        self.assertEqual(restored.server_key, bulk_run_server_key(self.settings))
+        self.assertNotEqual(restored.server_key, bulk_run_server_key(other))
+        # 끝의 / 와 공백은 같은 서버로 본다.
+        self.assertEqual(
+            bulk_run_server_key(replace(self.settings, base_url=" https://example.test/cb/ ")),
+            restored.server_key,
+        )
+        self.assertNotIn("example.test", raw)
+        self.assertNotIn("sample", raw)
 
     def test_persistent_retry_store_excludes_field_values(self) -> None:
         BulkClient.failure_ids = {2}
