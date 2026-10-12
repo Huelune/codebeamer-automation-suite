@@ -2726,6 +2726,20 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(len(tasks), 2)
         self.assertEqual(alerts, [])
 
+    def test_refresh_reloads_hierarchy_instead_of_cached_children(self) -> None:
+        """새로고침은 서버에서 다시 받는다. 펼쳐 둔 하위 목록 캐시를 그대로 쓰지 않는다."""
+        self.page.activate()
+        self.page.hierarchy_panel.item_tree.topLevelItem(0).setExpanded(True)
+        self._app.processEvents()
+        loads = self.service.child_load_count
+
+        self.page.refresh_context_button.click()
+        self._app.processEvents()
+        self.page.hierarchy_panel.item_tree.topLevelItem(0).setExpanded(True)
+        self._app.processEvents()
+
+        self.assertEqual(self.service.child_load_count, loads + 1)
+
     def test_condition_search_mode_loads_schema_and_builds_condition_query(self) -> None:
         self.page.activate()
         self.page.browser_tabs.setCurrentIndex(1)

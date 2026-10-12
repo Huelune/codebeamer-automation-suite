@@ -570,6 +570,9 @@ class TrackerWorkspacePage(QWidget):
             self.content_service.clear_cache()
             self.context_service.clear_cache()
             self.comment_service.clear_cache()
+            # 새로고침은 서버에서 다시 받는다. 펼쳐 둔 계층을 캐시에서 다시 그리지 않는다.
+            self.hierarchy_panel.root_cache().clear()
+            self.hierarchy_panel.child_cache().clear()
         if settings_changed:
             self._settings_fingerprint = fingerprint
             self._clear_context_state()
