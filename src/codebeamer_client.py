@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import threading
 import time
 from contextvars import ContextVar
 from typing import Any
@@ -54,9 +55,14 @@ class CodebeamerClient:
         self.rate_limit_max_retries = rate_limit_max_retries
         self._sleep_fn = sleep_fn
         self.api_monitor = api_monitor
+        # requests.Session 은 스레드끼리 나눠 쓰면 안전하지 않다. 스레드마다 하나씩 두고 다시 쓴다.
+        self._sessions = threading.local()
 
     def _session(self) -> requests.Session:
-        """인증 헤더가 포함된 새 HTTP 세션을 만든다."""
+        """인증 헤더가 포함된 이 스레드의 HTTP 세션. 연결을 다음 요청에 다시 쓴다."""
+        session = getattr(self._sessions, "session", None)
+        if session is not None:
+            return session
         session = requests.Session()
         token = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
         session.headers.update({
@@ -64,6 +70,7 @@ class CodebeamerClient:
             "Accept": "application/json",
             "Content-Type": "application/json",
         })
+        self._sessions.session = session
         return session
 
     @staticmethod
@@ -120,50 +127,50 @@ class CodebeamerClient:
         outcome = API_OUTCOME_SUCCESS
         error_kind = None
         try:
-            with self._session() as session:
+            session = self._session()
+            response = session.get(
+                absolute,
+                headers={"Accept": "*/*"},
+                stream=True,
+                allow_redirects=False,
+                timeout=self._timeout("GET"),
+            )
+            status_code = self._response_status_code(response)
+            if status_code in {301, 302, 303, 307, 308}:
+                location = response.headers.get("Location", "")
+                redirected = urljoin(absolute, location)
+                redirected_url = urlparse(redirected)
+                if (redirected_url.scheme.casefold(), redirected_url.netloc.casefold()) != (
+                    base.scheme.casefold(),
+                    base.netloc.casefold(),
+                ):
+                    raise ValueError("첨부 다운로드가 다른 서버로 이동하려고 합니다.")
+                redirected_target = f"{redirected_url.path}?{redirected_url.query}".casefold()
+                if "attachment" not in redirected_target and "displaydocument" not in redirected_target:
+                    raise ValueError("첨부 다운로드가 확인되지 않은 경로로 이동하려고 합니다.")
+                response.close()
                 response = session.get(
-                    absolute,
+                    redirected,
                     headers={"Accept": "*/*"},
                     stream=True,
                     allow_redirects=False,
                     timeout=self._timeout("GET"),
                 )
                 status_code = self._response_status_code(response)
-                if status_code in {301, 302, 303, 307, 308}:
-                    location = response.headers.get("Location", "")
-                    redirected = urljoin(absolute, location)
-                    redirected_url = urlparse(redirected)
-                    if (redirected_url.scheme.casefold(), redirected_url.netloc.casefold()) != (
-                        base.scheme.casefold(),
-                        base.netloc.casefold(),
-                    ):
-                        raise ValueError("첨부 다운로드가 다른 서버로 이동하려고 합니다.")
-                    redirected_target = f"{redirected_url.path}?{redirected_url.query}".casefold()
-                    if "attachment" not in redirected_target and "displaydocument" not in redirected_target:
-                        raise ValueError("첨부 다운로드가 확인되지 않은 경로로 이동하려고 합니다.")
-                    response.close()
-                    response = session.get(
-                        redirected,
-                        headers={"Accept": "*/*"},
-                        stream=True,
-                        allow_redirects=False,
-                        timeout=self._timeout("GET"),
-                    )
-                    status_code = self._response_status_code(response)
-                response.raise_for_status()
-                content_length = response.headers.get("Content-Length")
-                if content_length is not None and content_length != "" and int(content_length) > normalized_limit:
+            response.raise_for_status()
+            content_length = response.headers.get("Content-Length")
+            if content_length is not None and content_length != "" and int(content_length) > normalized_limit:
+                raise ValueError("첨부 리소스가 허용 크기를 초과합니다.")
+            chunks: list[bytes] = []
+            received = 0
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                if not chunk:
+                    continue
+                received += len(chunk)
+                if received > normalized_limit:
                     raise ValueError("첨부 리소스가 허용 크기를 초과합니다.")
-                chunks: list[bytes] = []
-                received = 0
-                for chunk in response.iter_content(chunk_size=64 * 1024):
-                    if not chunk:
-                        continue
-                    received += len(chunk)
-                    if received > normalized_limit:
-                        raise ValueError("첨부 리소스가 허용 크기를 초과합니다.")
-                    chunks.append(chunk)
-                return str(response.headers.get("Content-Type") or ""), b"".join(chunks)
+                chunks.append(chunk)
+            return str(response.headers.get("Content-Type") or ""), b"".join(chunks)
         except Exception as exc:
             status_code = self._response_status_code(response, exc)
             is_retry = self._is_rate_limited(exc) and attempt < max_attempts
@@ -238,25 +245,24 @@ class CodebeamerClient:
         error_kind = None
         try:
             url = f"{self.base_url}{path}"
-            with self._session() as session:
-                request_method = getattr(session, normalized_method.lower())
-                request_kwargs: dict[str, Any] = {
-                    "params": params,
-                    "timeout": self._timeout(normalized_method),
-                }
-                if normalized_method in {"POST", "PUT"}:
-                    request_kwargs["json"] = json_body
-                response = request_method(url, **request_kwargs)
-                status_code = self._response_status_code(response)
-                response.raise_for_status()
-                if empty_ok and not response.content:
+            request_method = getattr(self._session(), normalized_method.lower())
+            request_kwargs: dict[str, Any] = {
+                "params": params,
+                "timeout": self._timeout(normalized_method),
+            }
+            if normalized_method in {"POST", "PUT"}:
+                request_kwargs["json"] = json_body
+            response = request_method(url, **request_kwargs)
+            status_code = self._response_status_code(response)
+            response.raise_for_status()
+            if empty_ok and not response.content:
+                return {}
+            try:
+                return response.json()
+            except ValueError:
+                if empty_ok:
                     return {}
-                try:
-                    return response.json()
-                except ValueError:
-                    if empty_ok:
-                        return {}
-                    raise
+                raise
         except Exception as exc:
             status_code = self._response_status_code(response, exc)
             is_retry = self._is_rate_limited(exc) and attempt < max_attempts

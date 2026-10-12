@@ -38,12 +38,17 @@ class _FakeSession:
     def __init__(self, responses: list[object]) -> None:
         self.responses = list(responses)
         self.calls: list[tuple[str, str, dict]] = []
+        self.closed = 0
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc, traceback) -> None:
         del exc_type, exc, traceback
+        self.close()
+
+    def close(self) -> None:
+        self.closed += 1
 
     def _request(self, method: str, url: str, **kwargs):
         self.calls.append((method, url, kwargs))
@@ -97,6 +102,18 @@ class CodebeamerClientApiMonitorTest(unittest.TestCase):
         timeouts = [kwargs.get("timeout") for _method, _url, kwargs in client.fake_session.calls]
         # 조회는 응답을 2분, 쓰기는 반영될 시간을 5분까지 기다린다. 연결은 10초.
         self.assertEqual(timeouts, [(10.0, 120.0), (10.0, 300.0)])
+
+    def test_session_stays_open_for_the_next_request(self) -> None:
+        """요청마다 연결을 닫지 않고 다음 요청에 다시 쓴다."""
+        client = _SessionClient(
+            [_FakeResponse(200, []), _FakeResponse(200, [])],
+            api_monitor=self.monitor,
+        )
+
+        client.get_projects()
+        client.get_projects()
+
+        self.assertEqual(client.fake_session.closed, 0)
 
     def test_successful_create_records_only_safe_request_metadata(self) -> None:
         secret_payload = {"name": "private summary", "description": "secret body"}

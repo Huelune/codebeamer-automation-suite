@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import unittest
 
 from src.codebeamer_client import CodebeamerClient
@@ -140,6 +141,20 @@ class CodebeamerClientRetryTest(unittest.TestCase):
         self.assertEqual(result, {})
         self.assertEqual(client.calls, 2)
         self.assertEqual(slept, [0.75])
+
+
+class CodebeamerClientSessionTest(unittest.TestCase):
+    def test_session_is_reused_per_thread_with_auth_headers(self) -> None:
+        client = CodebeamerClient("https://example.com/cb", "user", "pass")
+        first = client._session()
+        other_thread: list[object] = []
+        worker = threading.Thread(target=lambda: other_thread.append(client._session()))
+        worker.start()
+        worker.join()
+
+        self.assertIs(client._session(), first)
+        self.assertIsNot(other_thread[0], first)
+        self.assertTrue(first.headers["Authorization"].startswith("Basic "))
 
 
 if __name__ == "__main__":
