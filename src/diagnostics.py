@@ -72,6 +72,9 @@ _SENSITIVE_HEADER_RE = re.compile(
 _AUTH_VALUE_RE = re.compile(r"(?i)\b(?:basic|bearer)\s+[A-Za-z0-9._~+/=-]+")
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w.-])")
 _URL_RE = re.compile(r"(?i)\bhttps?://[^\s<>'\"]+")
+# requests·urllib3 연결 오류는 URL 없이 host='…'와 이름 해석 대상으로 서버 이름을 담는다.
+_HOST_ASSIGNMENT_RE = re.compile(r"(?i)\bhost=(?P<quote>['\"])[^'\"]+(?P=quote)")
+_RESOLVE_TARGET_RE = re.compile(r"(?i)\b(?P<verb>resolve|connect to)\s+(?P<quote>['\"])[^'\"]+(?P=quote)")
 _QUOTED_ABSOLUTE_PATH_RE = re.compile(
     r"(?i)(?P<quote>['\"])(?:[A-Z]:[\\/]|\\\\[^\\/\r\n]+[\\/]|/)"
     r"[^'\"\r\n]+(?P=quote)"
@@ -250,6 +253,8 @@ def sanitize_diagnostic_text(value: Any, *, limit: int = 1_000) -> str:
     )
     text = _EMAIL_RE.sub("<EMAIL>", text)
     text = _URL_RE.sub("<URL>", text)
+    text = _HOST_ASSIGNMENT_RE.sub("host=<HOST>", text)
+    text = _RESOLVE_TARGET_RE.sub(lambda match: f"{match.group('verb')} <HOST>", text)
     text = _QUOTED_ABSOLUTE_PATH_RE.sub(
         lambda match: f"{match.group('quote')}<PATH>{match.group('quote')}",
         text,
