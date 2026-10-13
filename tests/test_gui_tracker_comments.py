@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import unittest
 from dataclasses import dataclass
 
@@ -85,6 +86,30 @@ class TrackerCommentServiceTest(unittest.TestCase):
         self.service.clear_item_cache(self.settings, 1205)
         self.service.load_comments(self.settings, 1205, 3)
         self.assertEqual(Client.calls, 3)
+
+    def test_cleared_cache_is_not_refilled_by_a_late_result(self) -> None:
+        """상세 새로고침으로 비운 뒤 늦게 끝난 조회가 옛 댓글을 다시 넣지 않는다."""
+        entered = threading.Event()
+        release = threading.Event()
+
+        class SlowClient(Client):
+            def get_item_comments(self, item_id: int):
+                entered.set()
+                release.wait(5)
+                return super().get_item_comments(item_id)
+
+        SlowClient.calls = 0
+        service = TrackerCommentService(client_factory=SlowClient)
+        worker = threading.Thread(target=lambda: service.load_comments(Settings(), 1001, 3))
+        worker.start()
+        self.assertTrue(entered.wait(5))
+        service.clear_item_cache(Settings(), 1001)
+        release.set()
+        worker.join(5)
+
+        service.load_comments(Settings(), 1001, 3)
+
+        self.assertEqual(SlowClient.calls, 2)
 
     def test_baseline_is_rejected_before_client_call(self) -> None:
         with self.assertRaisesRegex(ValueError, "Baseline"):

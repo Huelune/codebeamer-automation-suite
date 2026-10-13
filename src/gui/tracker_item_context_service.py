@@ -4,6 +4,7 @@ from typing import Any
 
 from src.codebeamer_client import CodebeamerClient
 
+from .service_cache import ServiceCache
 from .service_core import _build_gui_client
 from .tracker_item_context_models import ItemHistorySnapshot
 from .tracker_item_context_models import ItemRelationsSnapshot
@@ -18,8 +19,8 @@ class TrackerItemContextService:
     def __init__(self, client_factory=CodebeamerClient, logger=None) -> None:
         self.client_factory = client_factory
         self.logger = logger
-        self._relations_cache: dict[tuple[Any, ...], ItemRelationsSnapshot] = {}
-        self._history_cache: dict[tuple[Any, ...], ItemHistorySnapshot] = {}
+        self._relations_cache: ServiceCache[tuple[Any, ...], ItemRelationsSnapshot] = ServiceCache()
+        self._history_cache: ServiceCache[tuple[Any, ...], ItemHistorySnapshot] = ServiceCache()
 
     @staticmethod
     def _settings_key(settings) -> tuple[Any, ...]:
@@ -42,8 +43,8 @@ class TrackerItemContextService:
 
     def clear_item_cache(self, settings, item_id: int) -> None:
         prefix = self._settings_key(settings), int(item_id)
-        self._relations_cache = {key: value for key, value in self._relations_cache.items() if key[:2] != prefix}
-        self._history_cache = {key: value for key, value in self._history_cache.items() if key[:2] != prefix}
+        self._relations_cache.discard_where(lambda key: key[:2] == prefix)
+        self._history_cache.discard_where(lambda key: key[:2] == prefix)
 
     @staticmethod
     def _error(operation: str, exc: Exception) -> TrackerQueryServiceError:
@@ -67,8 +68,10 @@ class TrackerItemContextService:
         if baseline_id is not None:
             raise ValueError("Baseline 시점의 관계 조회는 지원하지 않습니다.")
         key = self._key(settings, item_id, item_version)
-        if not force and key in self._relations_cache:
-            return self._relations_cache[key]
+        cached_relations = None if force else self._relations_cache.get(key)
+        if cached_relations is not None:
+            return cached_relations
+        generation = self._relations_cache.generation()
         try:
             raw = self._client(settings).get_item_relations(int(item_id))
         except Exception as exc:
@@ -80,7 +83,7 @@ class TrackerItemContextService:
                 operation="load_item_relations",
             )
         result = ItemRelationsSnapshot.from_raw(raw)
-        self._relations_cache[key] = result
+        self._relations_cache.put(key, result, generation)
         return result
 
     def load_history(
@@ -88,8 +91,10 @@ class TrackerItemContextService:
     ) -> ItemHistorySnapshot:
         """아이템의 전체 버전 이력. 시점과 관계없는 응답이라 Baseline 화면도 같은 결과를 쓴다."""
         key = self._key(settings, item_id, item_version)
-        if not force and key in self._history_cache:
-            return self._history_cache[key]
+        cached_history = None if force else self._history_cache.get(key)
+        if cached_history is not None:
+            return cached_history
+        generation = self._history_cache.generation()
         try:
             raw = self._client(settings).get_item_history(int(item_id))
         except Exception as exc:
@@ -101,7 +106,7 @@ class TrackerItemContextService:
                 operation="load_item_history",
             )
         result = ItemHistorySnapshot.from_raw(raw, current_version=item_version)
-        self._history_cache[key] = result
+        self._history_cache.put(key, result, generation)
         return result
 
 
