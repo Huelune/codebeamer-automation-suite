@@ -5,11 +5,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
 
+from src.diagnostics import sanitize_diagnostic_text
 from src.upload_policy import upload_mode_action_label as gui_upload_mode_action_label
 
 from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
+from .error_reporting import safe_exception_message
 from .upload_workbook_tools import UploadWorkbookService
 from .window_support import UploadProgressState
 from .window_support import _format_clock_text
@@ -681,7 +683,9 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
                 message = "업로드 실패"
             response_json = event.get("response_json")
             if response_json not in (None, ""):
-                self.upload_page.response_view.setPlainText(str(response_json))
+                self.upload_page.response_view.setPlainText(
+                    sanitize_diagnostic_text(response_json, limit=20_000)
+                )
                 if hasattr(self.upload_page, "detail_tabs") and hasattr(self.upload_page, "response_tab"):
                     self.upload_page.detail_tabs.setCurrentWidget(self.upload_page.response_tab)
         phase_name = self._phase_display_name(event.get("phase"))
@@ -810,7 +814,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             and "error_response_json" in activity_failed_df.columns
         ):
             self.upload_page.response_view.setPlainText(
-                str(activity_failed_df.iloc[0].get("error_response_json") or "")
+                sanitize_diagnostic_text(activity_failed_df.iloc[0].get("error_response_json"), limit=20_000)
             )
             if hasattr(self.upload_page, "detail_tabs") and hasattr(self.upload_page, "response_tab"):
                 self.upload_page.detail_tabs.setCurrentWidget(self.upload_page.response_tab)
@@ -895,6 +899,8 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             )
 
     def _on_upload_failed(self, message: str) -> None:
+        # 작업 실패 문구는 예외 원문이다. 서버 주소·경로를 가린 뒤 상태·로그·대화상자에 쓴다.
+        message = safe_exception_message(message)
         self._retry_in_progress = False
         self._finishing_upload_worker = self.upload_worker
         self.upload_worker = None

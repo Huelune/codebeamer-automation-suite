@@ -9,6 +9,8 @@ from datetime import datetime
 from functools import partial
 from typing import Any
 
+import requests
+
 from src.codebeamer_client import CodebeamerClient
 
 from .baseline_cache import BaselineCacheKey
@@ -53,6 +55,14 @@ _ERROR_MESSAGES = {
 }
 
 
+TRANSPORT_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.RetryError,
+)
+
+
 def classify_tracker_query_error(exc: Exception) -> tuple[TrackerQueryErrorKind, int | None]:
     explicit_kind = getattr(exc, "query_error_kind", None)
     if explicit_kind is not None:
@@ -76,6 +86,12 @@ def classify_tracker_query_error(exc: Exception) -> tuple[TrackerQueryErrorKind,
     if isinstance(status_code, int) and status_code >= 500:
         return TrackerQueryErrorKind.SERVER, status_code
 
+    # 200 응답이 JSON이 아니면(게이트웨이 오류 페이지 등) 검색 조건이 아니라 서버 쪽 문제다.
+    if isinstance(exc, requests.exceptions.JSONDecodeError):
+        return TrackerQueryErrorKind.SERVER, status_code
+    # SSL·프록시·전송 끊김은 클래스 이름에 connection 이 없어도 연결 문제다.
+    if isinstance(exc, TRANSPORT_ERRORS):
+        return TrackerQueryErrorKind.NETWORK, None
     if isinstance(exc, ValueError):
         return TrackerQueryErrorKind.INVALID_QUERY, None
     if isinstance(exc, KeyError):

@@ -16,6 +16,12 @@ from src.models import UploadStatus
 from src.wizard import CodebeamerUploadWizard
 
 
+# 연결 오류 문구에는 서버 이름과 경로가 들어 있다. 화면·기록에 남지 않아야 한다.
+SECRET_CONNECTION_ERROR = (
+    "HTTPSConnectionPool(host='secret-host.example.invalid', port=443): Max retries exceeded "
+    "with url: /cb/api/v3/trackers/2/items (Caused by NewConnectionError('refused'))"
+)
+
 class StaticSchemaClient:
     def __init__(self, schema: list[dict[str, Any]]) -> None:
         self.schema = schema
@@ -87,6 +93,19 @@ class FailingCreateUpsertClient(UpsertSchemaClient):
     ):
         del tracker_id, payload, parent_item_id
         raise RuntimeError("create failed")
+
+
+class UnreachableCreateClient(UpsertSchemaClient):
+    """생성 요청이 서버에 닿지 않는다. 예외 문구에 서버 이름과 경로가 들어 있다."""
+
+    def create_item(
+        self,
+        tracker_id: int,
+        payload: dict[str, Any],
+        parent_item_id: int | None = None,
+    ):
+        del tracker_id, payload, parent_item_id
+        raise ConnectionError(SECRET_CONNECTION_ERROR)
 
 
 class CancelAfterCreateUpsertClient(UpsertSchemaClient):
@@ -559,6 +578,29 @@ class PayloadCacheWizardTest(unittest.TestCase):
             [None, 1001],
         )
         self.assertEqual(len(upload_result["success_df"]), 2)
+
+    def test_failure_reason_hides_server_address(self) -> None:
+        """결과 표·로그·실패 보고서에 남는 실패 사유에 서버 주소가 들어가지 않는다."""
+        wizard = CountingWizard(
+            client=UnreachableCreateClient(self.schema),
+            processor=HierarchyProcessor(summary_col="요약"),
+            mapper=self.mapper,
+        )
+        wizard.select_project(1)
+        wizard.select_tracker(2)
+        wizard.load_raw_dataframe(
+            pd.DataFrame([{"요약": "REQ-1", "_excel_row": 2, "_summary_indent": 0}]),
+            list_cols=[],
+        )
+        wizard.load_schema_and_compare({"요약": "Summary"})
+        wizard.process_option_mapping({"요약": "Summary"})
+
+        result = wizard.upload(dry_run=False)
+
+        error = str(result["failed_df"].iloc[0]["error"])
+        self.assertNotIn("secret-host", error)
+        self.assertNotIn("/cb/api", error)
+        self.assertIn("Max retries exceeded", error)
 
     def test_create_stop_on_error_counts_failed_row_only_as_failed(self) -> None:
         """오류 시 중단하면 실패 행은 실패로만, 실행하지 않은 행은 미해결로 남긴다."""

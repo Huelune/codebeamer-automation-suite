@@ -6,10 +6,13 @@ from dataclasses import dataclass
 
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_comment_service import TrackerCommentService
+from src.gui.tracker_query_models import TrackerQueryServiceError
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
 @dataclass
+
+
 class Settings:
     offline_mode: bool = False
     base_url: str = "https://example.test/cb"
@@ -52,6 +55,14 @@ class Client:
                 "comment": "|| Key || Value ||",
             },
         ]
+
+
+class _ServerError(Exception):
+    """서버 500. 예외 문구에 서버 주소가 들어 있다."""
+
+    def __init__(self) -> None:
+        self.response = type("Response", (), {"status_code": 500})()
+        super().__init__("500 Server Error: Internal for url: https://secret-host.example.invalid/cb/api/v3/items/1")
 
 
 class TrackerCommentModelsTest(unittest.TestCase):
@@ -115,6 +126,21 @@ class TrackerCommentServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Baseline"):
             self.service.load_comments(self.settings, 1205, 3, baseline_id=7)
         self.assertEqual(Client.calls, 0)
+
+    def test_server_error_message_shows_status_without_address(self) -> None:
+        class FailingClient(Client):
+            def get_item_comments(self, item_id: int):
+                raise _ServerError()
+
+        service = TrackerCommentService(client_factory=FailingClient)
+
+        with self.assertRaises(TrackerQueryServiceError) as caught:
+            service.load_comments(Settings(), 1001, 3)
+
+        message = str(caught.exception)
+        self.assertNotIn("secret-host", message)
+        self.assertNotIn("/cb/api", message)
+        self.assertIn("500", message)
 
 
 if __name__ == "__main__":

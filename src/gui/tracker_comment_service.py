@@ -55,10 +55,13 @@ class TrackerCommentService:
                 TrackerQueryErrorKind.FORBIDDEN: "댓글을 볼 권한이 없습니다.",
                 TrackerQueryErrorKind.NOT_FOUND: "댓글을 찾을 수 없습니다.",
                 TrackerQueryErrorKind.RATE_LIMITED: "요청이 많아 댓글 조회가 제한되었습니다.",
+                TrackerQueryErrorKind.NETWORK: "Codebeamer 서버에 연결하지 못해 댓글을 조회할 수 없습니다.",
             }
+            # 예외 원문에는 서버 주소가 들어 있다. 종류와 HTTP 상태만 알린다.
+            status_text = f" (HTTP {status_code})" if status_code else ""
             raise TrackerQueryServiceError(
                 kind,
-                messages.get(kind, f"댓글 조회에 실패했습니다: {exc}"),
+                messages.get(kind, f"댓글 조회에 실패했습니다{status_text}."),
                 status_code=status_code,
                 operation="load_item_comments",
             ) from exc

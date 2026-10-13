@@ -743,6 +743,30 @@ class TrackerQueryServiceTest(unittest.TestCase):
                 self.assertEqual(kind, expected_kind)
                 self.assertEqual(actual_status, status_code)
 
+    def test_transport_and_response_format_errors_get_actionable_kinds(self) -> None:
+        """클래스 이름에 timeout·connection이 없는 연결 오류와, JSON이 아닌 200 응답을 바르게 분류한다."""
+        import requests
+
+        expected = {
+            "SSLError": (requests.exceptions.SSLError("certificate verify failed"), TrackerQueryErrorKind.NETWORK),
+            "ProxyError": (requests.exceptions.ProxyError("proxy refused"), TrackerQueryErrorKind.NETWORK),
+            "ChunkedEncodingError": (
+                requests.exceptions.ChunkedEncodingError("connection broken"),
+                TrackerQueryErrorKind.NETWORK,
+            ),
+            "RetryError": (requests.exceptions.RetryError("too many retries"), TrackerQueryErrorKind.NETWORK),
+            # 게이트웨이가 HTML 오류 페이지를 200으로 돌려준 경우다. 검색 조건 문제가 아니다.
+            "JSONDecodeError": (
+                requests.exceptions.JSONDecodeError("Expecting value", "<html>", 0),
+                TrackerQueryErrorKind.SERVER,
+            ),
+        }
+
+        for name, (error, expected_kind) in expected.items():
+            with self.subTest(error=name):
+                kind, _status = classify_tracker_query_error(error)
+                self.assertEqual(kind, expected_kind)
+
     def test_search_rejects_server_results_outside_selected_tracker(self) -> None:
         service = TrackerQueryService(client_factory=LeakingSearchFakeClient)
 
