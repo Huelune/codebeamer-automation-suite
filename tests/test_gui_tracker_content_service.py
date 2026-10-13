@@ -158,6 +158,27 @@ class TrackerContentServiceTest(unittest.TestCase):
         self.assertEqual([url for url, _limit in downloads], [f"/cb/attachment/{key}" for key in "abca"])
         self.assertLessEqual(service.cached_resource_bytes(), 25)
 
+    def test_failed_server_render_is_not_cached(self) -> None:
+        """서버 렌더링이 한 번 실패해도 다음에 다시 서버로 그린다. 대체 결과를 계속 쓰지 않는다."""
+        attempts: list[int] = []
+
+        class FlakyClient(FakeContentClient):
+            def render_wiki_to_html(self, project_id: int, **kwargs) -> str:
+                attempts.append(project_id)
+                if len(attempts) == 1:
+                    raise ConnectionError("temporary")
+                return super().render_wiki_to_html(project_id, **kwargs)
+
+        service = TrackerContentService(client_factory=FlakyClient)
+
+        first = service.render_wiki(settings(), self.context, "text")
+        second = service.render_wiki(settings(), self.context, "text")
+
+        self.assertTrue(first.used_fallback)
+        self.assertFalse(second.used_fallback)
+        self.assertIn("서버 표", second.html)
+        self.assertEqual(len(attempts), 2)
+
     def test_cleared_render_cache_is_not_refilled_by_a_late_result(self) -> None:
         """상세 새로고침으로 비운 뒤 늦게 끝난 렌더링이 옛 결과를 다시 넣지 않는다."""
         entered = threading.Event()

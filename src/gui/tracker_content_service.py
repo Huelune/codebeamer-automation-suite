@@ -148,7 +148,8 @@ class TrackerContentService:
                 warning=warning,
             )
         except Exception:
-            result = WikiRenderResult(
+            # 일시 실패일 수 있다. 대체 결과는 캐시하지 않고 다음에 다시 서버로 그린다.
+            return WikiRenderResult(
                 html=codebeamer_wiki_to_html(source),
                 used_fallback=True,
                 warning="서버 Wiki 렌더링에 실패해 제한된 로컬 렌더링을 사용합니다.",
