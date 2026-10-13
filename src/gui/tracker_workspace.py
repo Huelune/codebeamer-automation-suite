@@ -99,6 +99,7 @@ REQUEST_BUSY_MESSAGES = {
     "baseline_saved_hierarchy": "저장해 둔 Baseline 계층을 여는 중입니다.",
     "direct": "아이템 ID의 위치와 계층을 확인하는 중입니다.",
     "editor_schema": "수정 가능한 필드를 확인하는 중입니다.",
+    "bulk_schema": "일괄 수정할 수 있는 필드를 확인하는 중입니다.",
     "required_fields": "새 아이템 필수 필드를 확인하는 중입니다.",
     "item_write": "트래커 아이템 변경 사항을 반영하는 중입니다.",
     "tracker_lookup": "트래커 ID의 소속 프로젝트를 확인하는 중입니다.",
@@ -569,6 +570,9 @@ class TrackerWorkspacePage(QWidget):
             self.content_service.clear_cache()
             self.context_service.clear_cache()
             self.comment_service.clear_cache()
+            # 새로고침은 서버에서 다시 받는다. 펼쳐 둔 계층을 캐시에서 다시 그리지 않는다.
+            self.hierarchy_panel.root_cache().clear()
+            self.hierarchy_panel.child_cache().clear()
         if settings_changed:
             self._settings_fingerprint = fingerprint
             self._clear_context_state()
@@ -1768,6 +1772,10 @@ class TrackerWorkspacePage(QWidget):
             self._reset_baseline_state("Baseline 비교 기준을 다시 불러오세요.")
             self.hierarchy_panel.clear_baseline_cache()
             self.hierarchy_panel.reset_source()
+            self._show_required_fields(tracker)
+        else:
+            # 현재 상태 아이템을 연다. 조회 기준이 Baseline으로 남으면 계층과 쓰기 잠금이 어긋난다.
+            self.hierarchy_panel.show_current_source()
         self.project_combo.setCurrentIndex(
             -1
             if project is None

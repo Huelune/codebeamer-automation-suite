@@ -717,8 +717,9 @@ class TrackerSearchPanel(QWidget):
                 self.bulk_chunk_size_saver(request.chunk_size)
             self._execute_bulk_update(item_ids, schema, request)
 
+        # 수정 탭의 schema 조회와 이름이 같으면 늦게 시작한 쪽이 앞 결과를 버린다.
         self._host.submit(
-            "editor_schema",
+            "bulk_schema",
             lambda: self.editor_service.load_create_schema(settings, tracker_id),
             loaded,
             lambda exc: self._host.show_error(exc, prefix="일괄 수정 schema 조회 실패"),

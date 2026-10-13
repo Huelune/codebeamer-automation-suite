@@ -2701,6 +2701,75 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         rows = self._search_row_texts()
         self.assertEqual([row[:2] for row in rows], [("9001003", "Renamed steering")])
 
+    def test_late_baseline_tab_children_after_tree_reload_are_ignored(self) -> None:
+        """하위 조회가 끝나기 전에 Baseline 탭 트리를 다시 그려도 지워진 항목을 건드리지 않는다."""
+        self.page.activate()
+        self.page.workspace_mode_tabs.setCurrentIndex(self.page.baseline_mode_index)
+        self._app.processEvents()
+        workspace = self.page.baseline_workspace
+        roots = self.page.hierarchy_panel.root_cache()[24680001]
+        alerts: list[str] = []
+        self.page.error_notifier = lambda _title, message: alerts.append(message)
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+
+        workspace.baseline_item_tree.topLevelItem(0).setExpanded(True)
+        workspace.render_roots(())
+        tasks[0].finish()
+
+        self.page.hierarchy_panel.child_cache().clear()
+        workspace.render_roots(roots)
+        workspace.baseline_item_tree.topLevelItem(0).setExpanded(True)
+        workspace.render_roots(())
+        tasks[1].emit_failure(RuntimeError("late failure"))
+
+        self.assertEqual(len(tasks), 2)
+        self.assertEqual(alerts, [])
+
+    def test_refresh_reloads_hierarchy_instead_of_cached_children(self) -> None:
+        """새로고침은 서버에서 다시 받는다. 펼쳐 둔 하위 목록 캐시를 그대로 쓰지 않는다."""
+        self.page.activate()
+        self.page.hierarchy_panel.item_tree.topLevelItem(0).setExpanded(True)
+        self._app.processEvents()
+        loads = self.service.child_load_count
+
+        self.page.refresh_context_button.click()
+        self._app.processEvents()
+        self.page.hierarchy_panel.item_tree.topLevelItem(0).setExpanded(True)
+        self._app.processEvents()
+
+        self.assertEqual(self.service.child_load_count, loads + 1)
+
+    def test_direct_open_to_other_tracker_refreshes_required_fields(self) -> None:
+        self.page.activate()
+        self.page.required_fields_label.setText("이전 트래커 필드")
+        self.page.direct_id_input.setText("9101002")
+
+        self.page._open_direct_item()
+
+        self.assertEqual(self.page.tracker_combo.currentData(), 24680002)
+        self.assertNotEqual(self.page.required_fields_label.text(), "이전 트래커 필드")
+
+    def test_direct_open_from_baseline_source_shows_current_state(self) -> None:
+        """ID 바로 열기는 현재 상태를 연다. 조회 기준이 Baseline으로 남아 있으면 쓰기가 막힌다."""
+        self.page.activate()
+        panel = self.page.hierarchy_panel
+        panel.hierarchy_source_combo.setCurrentIndex(panel.hierarchy_source_combo.findData(24681001))
+        self._app.processEvents()
+        self.assertEqual(panel.selected_baseline_id(), 24681001)
+        self.page.direct_id_input.setText("9001002")
+
+        self.page._open_direct_item()
+
+        self.assertIsNone(panel.selected_baseline_id())
+        self.assertFalse(self.page._is_historical_read_only())
+        self.assertEqual(panel.reload_roots_button.text(), "현재 계층 다시 불러오기")
+        # Baseline 목록은 남겨 다시 고를 수 있다.
+        self.assertGreater(panel.hierarchy_source_combo.findData(24681001), 0)
+
     def test_condition_search_mode_loads_schema_and_builds_condition_query(self) -> None:
         self.page.activate()
         self.page.browser_tabs.setCurrentIndex(1)
@@ -3014,6 +3083,49 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.assertEqual(summary_row.widget.text(), "Unsaved detached value")
         self.assertEqual(check_item.checkState(), Qt.CheckState.Checked)
 
+    @staticmethod
+    def _other_detail() -> TrackerItemDetail:
+        return TrackerItemDetail.from_raw(
+            {"id": 1009, "name": "Another item", "version": 1, "tracker": {"id": 20, "name": "Requirements"}}
+        )
+
+    def test_late_save_result_does_not_replace_another_open_item(self) -> None:
+        """저장이 끝나기 전에 다른 아이템을 열었으면 그 화면을 저장한 아이템으로 바꾸지 않는다."""
+        from PySide6.QtCore import Qt
+
+        editor = self.page.detail_panel.editor_panel
+        summary_row = editor.rows[3]
+        editor.field_table.item(summary_row.row, 0).setCheckState(Qt.CheckState.Checked)
+        summary_row.widget.setText("Saved late")
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        editor.save_button.click()
+        self.page.detail_panel.render_detail(self._other_detail())
+
+        tasks[0].finish()
+
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Another item")
+        # 저장은 끝났으므로 계층의 그 아이템은 새 이름으로 바뀐다.
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItem(0).text(0), "Saved late")
+        self.assertEqual(self.activities[-1].operation.value, "tracker_update")
+
+    def test_late_delete_result_does_not_clear_another_open_item(self) -> None:
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        self.page.detail_panel.editor_panel.delete_button.click()
+        self.page.detail_panel.render_detail(self._other_detail())
+
+        tasks[0].finish()
+
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Another item")
+        self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 0)
+
     def test_delete_uses_the_real_dialog_that_needs_the_item_id(self) -> None:
         """삭제 확인 창을 실제 생성자로 띄운다. ID를 입력해야 삭제 버튼이 켜진다."""
         enabled_before_typing = []
@@ -3181,6 +3293,29 @@ class TrackerWorkspaceBulkUpdateTest(unittest.TestCase):
         self.assertIsNone(self.panel._bulk_worker)
         self.assertFalse(progress.isVisible())
         self.assertEqual(len(self._bulk_calls()), 1)
+
+    def test_editor_and_bulk_schema_loads_do_not_cancel_each_other(self) -> None:
+        """수정 탭과 일괄 수정이 같은 요청 이름을 쓰면 늦게 시작한 쪽이 앞 결과를 버린다."""
+        tree = self.page.hierarchy_panel.item_tree
+        tree.setCurrentItem(tree.topLevelItem(0))
+        self._app.processEvents()
+        detail = self.page.detail_panel.current_detail
+        editor = self.page.detail_panel.editor_panel
+        self.assertNotIn(3, editor.rows)
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+
+        self.page.detail_panel._load_editor_schema(detail)
+        self.panel._prepare_bulk_update((1001,))
+        tasks[0].finish()
+        tasks[1].finish()
+
+        self.assertIn(3, editor.rows)
+        self.assertEqual(len(self.requests), 1)
+        self._wait_for_bulk_run(self.panel._bulk_worker)
 
     def test_bulk_update_uses_the_real_field_dialog(self) -> None:
         from PySide6.QtWidgets import QPushButton

@@ -34,6 +34,7 @@ try:
     from PySide6.QtWidgets import QTreeWidgetItem
     from PySide6.QtWidgets import QVBoxLayout
     from PySide6.QtWidgets import QWidget
+    from shiboken6 import isValid
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
@@ -307,9 +308,14 @@ class BaselineWorkspacePanel(QWidget):
             if still_selected is None or still_selected.tracker_id != tracker_id:
                 return
             self._host.child_cache()[summary.item_id] = children
+            # 트리를 다시 그려 항목이 지워졌어도 캐시는 남겨 다음 펼침에 쓴다.
+            if not isValid(item):
+                return
             self._host.replace_tree_children(item, children)
 
         def failed(exc: Exception) -> None:
+            if not isValid(item):
+                return
             item.takeChildren()
             item.addChild(self._host.placeholder_item("하위 조회 실패 · 다시 펼쳐 재시도"))
             item.setData(0, CHILDREN_LOADED_ROLE, False)
