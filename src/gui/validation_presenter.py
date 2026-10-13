@@ -271,13 +271,20 @@ class ValidationPresenter:
                 f"{field_name} 필드의 값을 확인할 준비가 아직 되어 있지 않습니다.",
                 "이 컬럼 매핑을 해제하거나 지원되는 다른 필드로 다시 매핑하세요.",
             )
-        if status.endswith(("USER_LOOKUP_FAILED", "USER_LOOKUP_AMBIGUOUS", "USER_NOT_FOUND")):
+        # 서버 조회 자체가 실패했다. 입력값 문제로 안내하면 맞는 값을 계속 고치게 된다.
+        if status.endswith(("USER_LOOKUP_FAILED", "MEMBER_LOOKUP_FAILED")):
+            return (
+                "오류",
+                f"{df_column} 값을 서버에서 조회하지 못했습니다.",
+                "요청 제한이나 연결 문제일 수 있습니다. 잠시 후 다시 검증하고, 계속되면 연결 설정과 권한을 확인하세요.",
+            )
+        if status.endswith(("USER_LOOKUP_AMBIGUOUS", "USER_NOT_FOUND")):
             return (
                 "오류",
                 f"{df_column} 값으로 사용자를 찾지 못했습니다.",
                 "사용자 이름, 이메일, 아이디를 확인하고 프로젝트 멤버인지 점검하세요.",
             )
-        if status.endswith(("MEMBER_LOOKUP_FAILED", "MEMBER_LOOKUP_AMBIGUOUS", "MEMBER_NOT_FOUND")):
+        if status.endswith(("MEMBER_LOOKUP_AMBIGUOUS", "MEMBER_NOT_FOUND")):
             return (
                 "오류",
                 f"{df_column} 값으로 담당자, 역할, 그룹을 찾지 못했습니다.",
