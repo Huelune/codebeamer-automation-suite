@@ -2535,6 +2535,137 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(len(tasks), 5)
         self.assertEqual(len(self.page.detail_panel._inline_resource_reservations), 5)
 
+    def _image_test_detail(self, item_id: int) -> TrackerItemDetail:
+        self.settings.offline_mode = False
+        self.settings.base_url = "https://example.test/cb"
+        self.settings.username = "sample"
+        self.settings.password = "placeholder"
+        detail = TrackerItemDetail.from_raw(
+            {
+                "id": item_id,
+                "name": "Image detail",
+                "version": 1,
+                "tracker": {
+                    "id": 24680001,
+                    "name": "Offline Requirements",
+                    "project": {"id": 246800, "name": "Offline Project"},
+                },
+            }
+        )
+        self.page.detail_panel.render_detail(detail)
+        return detail
+
+    def _deferred_tasks(self) -> list[_DeferredTask]:
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        return tasks
+
+    @staticmethod
+    def _finish_all(tasks: list[_DeferredTask]) -> None:
+        index = 0
+        while index < len(tasks):
+            tasks[index].finish()
+            index += 1
+
+    def _record_image_downloads(self) -> list[str]:
+        requested: list[str] = []
+        content = self.page.content_service
+
+        def download_resource(*_args, **kwargs):
+            requested.append(kwargs["resource_key"])
+            return AttachmentResource(kwargs["resource_key"], "image/png", _png_bytes(2, 2))
+
+        def download_attachment(_settings, attachment, *, max_bytes):
+            del max_bytes
+            key = f"attachment-{attachment.attachment_id}"
+            requested.append(key)
+            return AttachmentResource(key, "image/png", _png_bytes(2, 2))
+
+        content.download_resource = download_resource
+        content.download_attachment = download_attachment
+        return requested
+
+    @staticmethod
+    def _image_attachments(count: int) -> tuple[AttachmentSummary, ...]:
+        return tuple(
+            AttachmentSummary(500 + index, f"preview-{index}.png", mime_type="image/png", size=100)
+            for index in range(count)
+        )
+
+    @staticmethod
+    def _server_images(count: int) -> WikiRenderResult:
+        return WikiRenderResult(
+            html="<p>images</p>",
+            resources=tuple(
+                WikiResourceReference(f"image-{index}", f"https://example.test/cb/attachment/{index}")
+                for index in range(count)
+            ),
+        )
+
+    def test_inline_images_beyond_five_load_as_earlier_ones_finish(self) -> None:
+        """동시에는 5개만 받고, 끝나는 대로 나머지를 받는다. 6번째부터 빈 칸으로 남지 않는다."""
+        detail = self._image_test_detail(1301)
+        panel = self.page.detail_panel
+        requested = self._record_image_downloads()
+        tasks = self._deferred_tasks()
+
+        panel._load_inline_resources(self._server_images(8), panel.detail_description, detail, None)
+        self.assertEqual(len(tasks), 5)
+        self._finish_all(tasks)
+
+        self.assertEqual(sorted(requested), sorted(f"image-{index}" for index in range(8)))
+
+    def test_attachment_previews_beyond_five_are_all_loaded(self) -> None:
+        detail = self._image_test_detail(1302)
+        panel = self.page.detail_panel
+        requested = self._record_image_downloads()
+        tasks = self._deferred_tasks()
+
+        panel._load_attachment_previews(self._image_attachments(7), detail)
+        self._finish_all(tasks)
+
+        self.assertEqual(len(requested), 7)
+        self.assertEqual(len(panel._attachment_preview_resources), 7)
+
+    def test_description_images_load_even_when_attachment_previews_came_first(self) -> None:
+        """먼저 온 첨부 미리보기가 자리를 다 써도 설명 이미지를 끝내 받는다."""
+        detail = self._image_test_detail(1303)
+        panel = self.page.detail_panel
+        requested = self._record_image_downloads()
+        tasks = self._deferred_tasks()
+
+        panel._load_attachment_previews(self._image_attachments(6), detail)
+        panel._load_inline_resources(self._server_images(3), panel.detail_description, detail, None)
+        self._finish_all(tasks)
+
+        self.assertTrue({"image-0", "image-1", "image-2"} <= set(requested))
+        self.assertEqual(len(panel._attachment_preview_resources), 6)
+
+    def test_reopening_wiki_field_dialog_does_not_use_up_the_image_budget(self) -> None:
+        """닫은 Wiki 필드 창의 이미지 바이트를 돌려받는다. 다시 열 때마다 쌓여 결국 아무 그림도 못 받던 문제."""
+        self._image_test_detail(1304)
+        panel = self.page.detail_panel
+        self._record_image_downloads()
+        panel.content_service.render_wiki = lambda *_args: WikiRenderResult(
+            html='<img src="cb-attachment://image-0">',
+            resources=(WikiResourceReference("image-0", "https://example.test/cb/attachment/0"),),
+        )
+
+        class _NonModalWikiDialog(WikiContentDialog):
+            def exec(self) -> int:
+                return 0
+
+        field = TrackerFieldValue(field_id=78, name="Notes", type_name="WikiTextFieldValue", display_value="x")
+        with patch("src.gui.tracker_detail_panel.WikiContentDialog", _NonModalWikiDialog):
+            for _ in range(3):
+                panel._open_wiki_field(field)
+                self._app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+        self.assertEqual(panel._inline_image_bytes, 0)
+
     def test_scheduled_inline_downloads_keep_their_own_resource(self) -> None:
         """예약된 다운로드가 각자의 참조를 들고 있는지 확인한다.
 
