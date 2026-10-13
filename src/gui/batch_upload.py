@@ -20,6 +20,7 @@ from src.upload_policy import upload_mode_action_label as gui_upload_mode_action
 from src.upload_policy import upload_mode_allows_root_items as gui_upload_mode_allows_root_items
 from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
 from src.wizard import CodebeamerUploadWizard
+from src.wizard_user_lookup import reusable_lookup_entries
 
 from .batch_validation import BatchValidationService
 from .root_item_service import RootItemService
@@ -494,8 +495,8 @@ class BatchUploadService:
             force=True,
             fetch_existing_items=not gui_upload_mode_supports_update(mapping_context.upload_mode),
         )
-        mapping_context.user_lookup_cache = dict(wizard.state.user_lookup_cache)
-        mapping_context.member_lookup_cache = dict(wizard.state.member_lookup_cache)
+        mapping_context.user_lookup_cache = reusable_lookup_entries(wizard.state.user_lookup_cache)
+        mapping_context.member_lookup_cache = reusable_lookup_entries(wizard.state.member_lookup_cache)
         mapping_context.group_lookup_cache = dict(wizard.state.group_lookup_cache)
         mapping_context.tracker_role_cache = dict(wizard.state.tracker_role_cache)
         return wizard

@@ -18,6 +18,7 @@ from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 from src.upload_policy import scope_applies_to_upload_mode
 from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
 from src.wizard import CodebeamerUploadWizard
+from src.wizard_user_lookup import reusable_lookup_entries
 
 from .service_core import PreviewData
 from .service_core import gui_display_text
@@ -710,8 +711,8 @@ class BatchValidationService:
                 )
             )
 
-        mapping_context.user_lookup_cache = dict(wizard.state.user_lookup_cache)
-        mapping_context.member_lookup_cache = dict(wizard.state.member_lookup_cache)
+        mapping_context.user_lookup_cache = reusable_lookup_entries(wizard.state.user_lookup_cache)
+        mapping_context.member_lookup_cache = reusable_lookup_entries(wizard.state.member_lookup_cache)
         mapping_context.group_lookup_cache = dict(wizard.state.group_lookup_cache)
         mapping_context.tracker_role_cache = dict(wizard.state.tracker_role_cache)
         mapping_context.tracker_item_lookup_cache = dict(wizard.state.tracker_item_lookup_cache)
