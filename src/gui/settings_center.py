@@ -28,6 +28,7 @@ from PySide6.QtWidgets import QWidget
 from src.api_monitor import API_MONITOR_DEFAULT_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MAX_SLOW_THRESHOLD_MS
 from src.api_monitor import API_MONITOR_MIN_SLOW_THRESHOLD_MS
+from src.diagnostics import sanitize_diagnostic_text
 
 from .baseline_cache import BaselineItemCache
 from .settings_store import CREDENTIAL_STORAGE_LOCAL
@@ -1324,7 +1325,8 @@ class SettingsCenterPage(QWidget):
         ]
         for secret in secrets:
             message = message.replace(secret, "***")
-        return message
+        # 연결 오류 원문에는 서버 주소와 호스트 이름이 들어 있다.
+        return sanitize_diagnostic_text(message)
 
 
 __all__ = [

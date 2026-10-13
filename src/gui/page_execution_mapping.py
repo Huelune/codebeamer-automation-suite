@@ -14,6 +14,7 @@ from src.upload_policy import normalize_all_or_none_operation_scope
 from src.upload_policy import normalize_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 
+from .error_reporting import safe_exception_message
 from .page_common import PRIMARY_TABLE_MIN_HEIGHT
 from .page_common import SECONDARY_TABLE_MIN_HEIGHT
 from .page_common import WIDE_FORM_PANEL_MAX_WIDTH
@@ -575,7 +576,7 @@ def _initialize_mapping_page(page, on_validate_requested, on_error=None):
                 get_selected_tracker_item_settings(),
             )
         except Exception as exc:
-            message = f"검증 실패: {exc}"
+            message = f"검증 실패: {safe_exception_message(exc)}"
             status_label.setText(message)
             if callable(on_error):
                 on_error("검증 실패", message)

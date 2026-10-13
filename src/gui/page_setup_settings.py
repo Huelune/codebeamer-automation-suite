@@ -5,6 +5,7 @@ from pathlib import Path
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
 from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
 
+from .error_reporting import safe_exception_message
 from .page_common import WIDE_FORM_PANEL_MAX_WIDTH
 from .page_common import _configure_card_layout
 from .page_common import _configure_constrained_panel
@@ -539,7 +540,7 @@ def create_project_selection_page(
         try:
             projects = on_connection_test(settings)
         except Exception as exc:
-            message = f"프로젝트 조회 실패: {exc}"
+            message = f"프로젝트 조회 실패: {safe_exception_message(exc)}"
             status_label.setText(message)
             if callable(on_error):
                 on_error("프로젝트 조회 실패", message)
@@ -583,7 +584,7 @@ def create_project_selection_page(
         try:
             trackers = on_project_selected(settings, int(project_id))
         except Exception as exc:
-            message = f"트래커 조회 실패: {exc}"
+            message = f"트래커 조회 실패: {safe_exception_message(exc)}"
             status_label.setText(message)
             if callable(on_error):
                 on_error("트래커 조회 실패", message)

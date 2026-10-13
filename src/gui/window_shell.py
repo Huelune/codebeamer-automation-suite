@@ -6,6 +6,7 @@ from typing import Any
 
 from src.upload_policy import OperationScope
 
+from .error_reporting import safe_exception_message
 from .loading_overlay import LoadingOverlay
 from .page_batch_settings import create_batch_settings_page
 from .page_execution_mapping import create_mapping_page
@@ -638,16 +639,18 @@ class WindowShellMixin(_WindowShellMixinComposition):
                 if next_page is not None:
                     self._show_page(next_page)
             except Exception as exc:
-                self.statusBar().showMessage(str(exc))
-                self._show_error_dialog("작업 실패", str(exc))
+                message = safe_exception_message(exc)
+                self.statusBar().showMessage(message)
+                self._show_error_dialog("작업 실패", message)
 
         def _restart():
             try:
                 if restart_handler is not None:
                     restart_handler()
             except Exception as exc:
-                self.statusBar().showMessage(str(exc))
-                self._show_error_dialog("작업 실패", str(exc))
+                message = safe_exception_message(exc)
+                self.statusBar().showMessage(message)
+                self._show_error_dialog("작업 실패", message)
 
         page.request_previous = _go_previous
         page.request_next = _go_next
@@ -762,7 +765,8 @@ class WindowShellMixin(_WindowShellMixinComposition):
         dialog.exec()
 
     def _show_error_dialog(self, title: str, message: str) -> None:
-        self._show_message_dialog(title, message, tone="error")
+        # 오류 문구에는 예외 원문이 섞인다. 서버 주소·경로·인증값을 가린 뒤 보여 준다.
+        self._show_message_dialog(title, safe_exception_message(message), tone="error")
 
     def _show_info_dialog(self, title: str, message: str) -> None:
         self._show_message_dialog(title, message, tone="info")
