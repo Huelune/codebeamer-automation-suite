@@ -2666,6 +2666,104 @@ class TrackerWorkspacePageTest(unittest.TestCase):
 
         self.assertEqual(panel._inline_image_bytes, 0)
 
+    def _wiki_image_detail(self, item_id: int) -> TrackerItemDetail:
+        """서버 Wiki 렌더링을 쓰는 상세. 패널에는 첨부를 아직 받지 않은 상태로 둔다."""
+        self._image_test_detail(item_id)
+        self.settings.server_wiki_html_enabled = True
+        detail = TrackerItemDetail.from_raw(
+            {
+                "id": item_id,
+                "name": "Dialog image detail",
+                "version": 1,
+                "description": "!image!",
+                "descriptionFormat": "Wiki",
+                "tracker": {
+                    "id": 24680001,
+                    "name": "Offline Requirements",
+                    "project": {"id": 246800, "name": "Offline Project"},
+                },
+            }
+        )
+        self.page.detail_panel.render_detail(detail)
+        return detail
+
+    def test_detail_dialog_shows_server_rendered_description_images(self) -> None:
+        """서버가 렌더링한 설명의 그림을 상세 창에도 받아 넣는다."""
+        self._wiki_image_detail(1311)
+        self._record_image_downloads()
+        self.page.content_service.render_wiki = lambda *_args: WikiRenderResult(
+            html='<img src="cb-attachment://image-0"><img src="cb-attachment://image-1">',
+            resources=tuple(
+                WikiResourceReference(f"image-{index}", f"https://example.test/cb/attachment/{index}")
+                for index in range(2)
+            ),
+        )
+        self.page.content_service.load_attachments = lambda *_args, **_kwargs: ()
+
+        dialog = self._open_real_detail_dialog()
+
+        self.assertEqual(
+            {key for key in dialog.description_view._images if "image-" in key},
+            {"cb-attachment://image-0", "cb-attachment://image-1"},
+        )
+
+    def test_detail_dialog_loads_attachments_the_panel_has_not_received_yet(self) -> None:
+        """창을 연 뒤에 끝나는 첨부도 창에 들어온다. 열 때 패널 상태만 복사하면 비어 있다."""
+        self._wiki_image_detail(1312)
+        self._record_image_downloads()
+        attachments = self._image_attachments(3)
+        self.page.content_service.load_attachments = lambda *_args, **_kwargs: attachments
+        self.assertEqual(self.page.detail_panel.attachments, ())
+
+        dialog = self._open_real_detail_dialog()
+
+        self.assertEqual(dialog.image_combo.count(), 3)
+
+    def test_detail_dialog_keeps_other_images_when_one_fails_and_shows_more_than_five(self) -> None:
+        self._wiki_image_detail(1313)
+        requested = self._record_image_downloads()
+        attachments = self._image_attachments(7)
+        self.page.content_service.load_attachments = lambda *_args, **_kwargs: attachments
+        succeed = self.page.content_service.download_attachment
+
+        def flaky_download(settings, attachment, *, max_bytes):
+            if attachment.attachment_id == 502:
+                raise ConnectionError("temporary")
+            return succeed(settings, attachment, max_bytes=max_bytes)
+
+        self.page.content_service.download_attachment = flaky_download
+
+        dialog = self._open_real_detail_dialog()
+
+        self.assertEqual(dialog.image_combo.count(), 6)
+        self.assertEqual(len(requested), 6)
+
+    def test_detail_dialog_comment_images_beyond_five_are_all_loaded(self) -> None:
+        self._wiki_image_detail(1314)
+        requested = self._record_image_downloads()
+        self.page.content_service.load_attachments = lambda *_args, **_kwargs: ()
+        self.page.comment_service.load_comments = lambda *_args, **_kwargs: ItemCommentsSnapshot.from_raw(
+            [
+                {
+                    "id": 1,
+                    "comment": "images",
+                    "attachments": [
+                        {"id": 600 + index, "name": f"comment-{index}.png", "mimeType": "image/png", "size": 100}
+                        for index in range(7)
+                    ],
+                }
+            ]
+        )
+        dialog = self._open_real_detail_dialog()
+        tasks = self._deferred_tasks()
+
+        dialog.tabs.setCurrentWidget(dialog.comments_tab)
+        self._app.processEvents()
+        self._finish_all(tasks)
+
+        self.assertEqual(len([key for key in requested if key.startswith("attachment-6")]), 7)
+        self.assertEqual(len(dialog.comment_views["1"]._images), 7)
+
     def test_scheduled_inline_downloads_keep_their_own_resource(self) -> None:
         """예약된 다운로드가 각자의 참조를 들고 있는지 확인한다.
 
