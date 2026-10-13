@@ -593,15 +593,24 @@ class CodebeamerClient:
 
     def get_project_members(self, project_id: int) -> Any:
         """프로젝트 멤버 목록을 가져온다."""
-        return self._get(f"/v3/projects/{project_id}/members")
+        return self._run_rate_limited_request(
+            "get_project_members",
+            lambda: self._get(f"/v3/projects/{project_id}/members"),
+        )
 
     def get_user_groups(self) -> Any:
         """전체 사용자 그룹 목록을 가져온다."""
-        return self._get("/v3/users/groups")
+        return self._run_rate_limited_request(
+            "get_user_groups",
+            lambda: self._get("/v3/users/groups"),
+        )
 
     def get_tracker_field_permissions(self, tracker_id: int, field_id: int) -> Any:
         """특정 field의 permission matrix를 가져온다."""
-        return self._get(f"/v3/trackers/{tracker_id}/fields/{field_id}/permissions")
+        return self._run_rate_limited_request(
+            "get_tracker_field_permissions",
+            lambda: self._get(f"/v3/trackers/{tracker_id}/fields/{field_id}/permissions"),
+        )
 
     def get_tracker_baselines(self, tracker_id: int) -> list[dict]:
         """트래커에 정의된 baseline을 서버 페이지 끝까지 수집한다."""
@@ -804,15 +813,27 @@ class CodebeamerClient:
 
     def get_user(self, user_id: int) -> UserInfo:
         """사용자 ID로 사용자 상세 정보를 가져온다."""
-        return UserInfo.from_raw(self._get(f"/v3/users/{user_id}"))
+        return UserInfo.from_raw(
+            self._run_rate_limited_request("get_user", lambda: self._get(f"/v3/users/{user_id}"))
+        )
 
     def get_user_by_name(self, name: str) -> UserInfo:
         """이름으로 사용자를 바로 한 건 조회한다."""
-        return UserInfo.from_raw(self._get("/v3/users/findByName", params={"name": name}))
+        return UserInfo.from_raw(
+            self._run_rate_limited_request(
+                "get_user_by_name",
+                lambda: self._get("/v3/users/findByName", params={"name": name}),
+            )
+        )
 
     def get_user_by_email(self, email: str) -> UserInfo:
         """이메일 주소로 사용자를 바로 한 건 조회한다."""
-        return UserInfo.from_raw(self._get("/v3/users/findByEmail", params={"email": email}))
+        return UserInfo.from_raw(
+            self._run_rate_limited_request(
+                "get_user_by_email",
+                lambda: self._get("/v3/users/findByEmail", params={"email": email}),
+            )
+        )
 
     def search_users(
         self,
@@ -840,7 +861,11 @@ class CodebeamerClient:
             "projectId": project_id,
         }
         body = {key: value for key, value in body.items() if value not in (None, "")}
-        return self._post("/v3/users/search", json_body=body, params=params)
+        # 조회용 POST라 다시 보내도 서버 상태가 바뀌지 않는다.
+        return self._run_rate_limited_request(
+            "search_users",
+            lambda: self._post("/v3/users/search", json_body=body, params=params),
+        )
 
     def search_user_infos(
         self,
