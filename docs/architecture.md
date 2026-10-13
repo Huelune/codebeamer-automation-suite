@@ -396,12 +396,13 @@ flowchart TD
 
 처리 흐름:
 1. schema flattening 단계에서 `TableField` 정의와 하위 컬럼 목록 식별
-2. wizard가 `TableFieldName.ColumnName` 패턴으로 일치하는 Excel 컬럼 탐지
+2. wizard가 `TableFieldName.ColumnName` 패턴으로 일치하는 Excel 컬럼 중 매핑에서 그 표 필드에 연결한 열만 사용하고, 열마다 생성/수정 사용 범위를 적용
 3. `Upload Record Key`가 있으면 같은 키의 연속 원본 행을 한 업로드 레코드로 병합하고 table 열의 빈 셀과 순서를 보존
 4. 각 원본 행의 하위 셀 값을 하나의 table row로 묶어 nested `TableFieldValue` 구조 생성
 5. 업로드 전에 `{"fieldId", "name", "type", "values":[...]}` 형태의 plain dict로 직렬화
+6. 수정은 표 전체를 바꾸므로, 수정 행에서 한 표의 일부 열만 보내면 `TABLE_FIELD_PARTIAL_UPDATE`로 막음. 표 열을 모두 매핑에서 빼면 기존 표를 그대로 둠
 
-`Upload Record Key`는 선택 사항입니다. 열이 없으면 기존 Summary 기반 멀티라인 병합을 유지합니다. 열이 있으면 모든 행의 키를 요구하고, 동일 키가 떨어져 다시 나타나는 입력과 그룹 안의 일반 필드 충돌을 payload 생성 전에 거부합니다.
+`Upload Record Key`는 선택 사항입니다. 열이 없으면 기존 Summary 기반 멀티라인 병합을 유지합니다. 이때 `id` 열이 있으면 Summary가 비어 있어도 다른 id가 나오는 행부터 새 레코드로 나눕니다. 열이 있으면 모든 행의 키를 요구하고, 동일 키가 떨어져 다시 나타나는 입력과 그룹 안의 일반 필드 충돌을 payload 생성 전에 거부합니다.
 
 ## Option 및 Reference 처리 방식
 
