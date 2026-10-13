@@ -72,6 +72,9 @@ PTC 문서의 목록 응답은 `page`, `pageSize`, `total`을 포함하지만, �
 `total`에 도달할 때까지 중복 ID를 제외하며 모든 서버 페이지를 합칩니다. 화면에는 페이지 구분 없이 하나의
 스크롤 트리로 전달합니다. 검색의 `PageResult`는 서버 응답값과 `requested_page`, `requested_page_size`를
 함께 저장하고 `server_honored_pagination`을 별도로 제공합니다.
+검색 응답에 `total`이 없으면 `total_known`이 `False`이고 `total`은 그 페이지까지 받은 개수(하한)입니다.
+이때는 꽉 찬 페이지 뒤에 다음 페이지가 있다고 보고, 전체 수집은 빈 페이지나 덜 찬 페이지에서 멈춥니다.
+검색 화면은 다음 페이지가 남은 동안 개수를 `N개 이상`으로 표시합니다.
 
 `GET /v3/trackers/{trackerId}/schema`는 Codebeamer 버전에 따라 필드 정의 배열 또는 필드 컨테이너 객체를
 반환할 수 있습니다. 조회 서비스는 배열을 `{"id": trackerId, "fields": [...]}`로 정규화해 생성·수정

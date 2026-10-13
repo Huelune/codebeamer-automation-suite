@@ -2636,6 +2636,24 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.assertEqual(self.page.search_panel.selected_count(), 1)
         self.assertEqual(len(self.page.search_panel._excluded_search_ids), 1)
 
+    def test_search_without_server_total_shows_count_as_lower_bound_and_allows_next_page(self) -> None:
+        """total이 없는 응답에서 받은 개수를 전체처럼 보이면 다음 페이지로 갈 수 없다."""
+        from src.gui.tracker_query_models import PageResult
+
+        panel = self.page.search_panel
+        self.page.activate()
+        summaries = [
+            TrackerItemSummary.from_raw({"id": 9001003 + index, "name": f"Item {index}"}, tracker_id=24680001)
+            for index in range(2)
+        ]
+
+        panel._render_search_results(
+            PageResult.create(summaries, raw_page={"page": 1, "pageSize": 2}, requested_page=1, requested_page_size=2)
+        )
+
+        self.assertIn("2개 이상", panel.search_scope_label.text())
+        self.assertTrue(panel.search_next_button.isEnabled())
+
     def _select_steering_results(self):
         panel = self.page.search_panel
         panel.search_text_input.setText("Steering")
