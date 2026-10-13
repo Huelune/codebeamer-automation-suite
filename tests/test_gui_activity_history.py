@@ -7,6 +7,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -20,6 +21,7 @@ from src.gui.activity_history import ActivityRecord
 from src.gui.activity_history import ActivityResult
 from src.gui.activity_history import sanitize_activity_details
 from src.gui.activity_history_page import ActivityHistoryPage
+from src.gui.activity_history_page import ConfirmActivityHistoryClearDialog
 from src.gui.batch_window import BatchUploadWindow
 from src.gui.settings_store import GuiSettings
 from src.gui.settings_store import GuiSettingsStore
@@ -173,6 +175,28 @@ class ActivityHistoryPageTest(unittest.TestCase):
         self.assertEqual(self.store.load(), ())
         self.assertEqual(self.page.table.rowCount(), 0)
         self.assertFalse(self.page.clear_button.isEnabled())
+
+    def test_clear_uses_the_real_confirmation_dialog(self) -> None:
+        """테스트가 확인 함수를 넘기면 실제 대화상자 생성자가 불리지 않는다. 실제 창으로 한 번 확인한다."""
+        from PySide6.QtWidgets import QPushButton
+
+        answers = []
+
+        class _AnsweringDialog(ConfirmActivityHistoryClearDialog):
+            def exec(self) -> int:
+                buttons = {button.text(): button for button in self.findChildren(QPushButton)}
+                buttons["기록 비우기" if answers.pop(0) else "취소"].click()
+                return self.result()
+
+        self.page.clear_confirmer = None
+        with patch("src.gui.activity_history_page.ConfirmActivityHistoryClearDialog", _AnsweringDialog):
+            answers.append(False)
+            self.page.clear_button.click()
+            self.assertEqual(len(self.store.load()), 2)
+            answers.append(True)
+            self.page.clear_button.click()
+
+        self.assertEqual(self.store.load(), ())
 
     def test_bulk_failure_record_enables_retry_without_storing_field_values(self) -> None:
         requested = []
