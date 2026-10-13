@@ -1929,6 +1929,16 @@ class TrackerWorkspacePage(QWidget):
         remove_from(None)
         self.search_panel.remove_item(item_id)
 
+    def is_bulk_update_running(self) -> bool:
+        return self.search_panel.is_bulk_update_running()
+
+    def request_bulk_update_stop(self) -> None:
+        self.search_panel.request_bulk_update_stop()
+
+    def has_pending_requests(self) -> bool:
+        """끝나지 않은 조회·저장 작업 스레드가 있는지. 다 끝나야 앱을 안전하게 닫을 수 있다."""
+        return bool(self._tasks)
+
     def shutdown(self) -> None:
         """창 종료 뒤 완료되는 요청이 화면 상태를 갱신하지 않도록 무효화한다."""
         self.detail_panel.shutdown()

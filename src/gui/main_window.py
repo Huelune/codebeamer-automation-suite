@@ -107,6 +107,11 @@ class MainWindow(QMainWindow):
         self.developer_tools_window: DeveloperToolsWindow | None = None
         self.api_monitor_window: DeveloperToolsWindow | None = None
         self._busy_tokens: set[int] = set()
+        # 작업 중에 닫기를 고르면 작업이 끝날 때까지 기다렸다가 닫는다.
+        self._close_after_work = False
+        self._close_wait_timer = QTimer(self)
+        self._close_wait_timer.setInterval(200)
+        self._close_wait_timer.timeout.connect(self._close_when_idle)
 
         self._build_application_shell(initial_settings)
         self.setWindowTitle(APPLICATION_TITLE)
@@ -637,8 +642,61 @@ class MainWindow(QMainWindow):
         if hasattr(self, "loading_overlay"):
             self.loading_overlay.sync_geometry()
 
+    def _running_writes(self) -> list[str]:
+        """닫기 전에 사용자에게 물어야 하는, 서버에 쓰는 중인 작업."""
+        running = []
+        if self.batch_window.has_running_upload():
+            running.append("배치 업로드")
+        if self.tracker_workspace_page.is_bulk_update_running():
+            running.append("일괄 수정")
+        return running
+
+    def _has_running_work(self) -> bool:
+        return (
+            bool(self._running_writes())
+            # 파일 읽기처럼 화면을 막고 도는 배치 작업. 한 번도 돌지 않았으면 속성이 없다.
+            or getattr(self.batch_window, "busy_task", None) is not None
+            or self.tracker_workspace_page.has_pending_requests()
+        )
+
+    def _confirm_close_while_running(self, running: list[str]) -> bool:
+        QMessageBox = self.qt["QMessageBox"]
+        answer = QMessageBox.question(
+            self,
+            "작업 중 닫기",
+            (
+                f"{'·'.join(running)} 작업이 진행 중입니다.\n"
+                "남은 항목을 중단하고, 지금 처리 중인 항목이 끝나면 닫을까요?\n"
+                "그때까지 서버에 반영된 결과는 실행 기록에 남깁니다."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _close_when_idle(self) -> None:
+        """닫기를 미뤄 둔 작업이 모두 끝나면 창을 닫는다."""
+        if self._has_running_work():
+            return
+        self._close_wait_timer.stop()
+        self.close()
+
     def closeEvent(self, event) -> None:
         if self.settings_center_page.has_unsaved_changes() and not self.settings_center_page.request_leave():
+            event.ignore()
+            return
+        # 도는 작업 스레드를 남긴 채 끝나면 실행 중인 스레드가 지워져 앱이 강제 종료된다.
+        if self._has_running_work():
+            if not self._close_after_work:
+                running = self._running_writes()
+                if running and not self._confirm_close_while_running(running):
+                    event.ignore()
+                    return
+                self._close_after_work = True
+                self.batch_window.request_upload_stop()
+                self.tracker_workspace_page.request_bulk_update_stop()
+                self.loading_overlay.start("진행 중인 작업을 마무리한 뒤 닫습니다.")
+                self._close_wait_timer.start()
             event.ignore()
             return
         current_settings = replace(self.batch_window.session_state.settings)
