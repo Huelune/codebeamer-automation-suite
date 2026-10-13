@@ -121,6 +121,8 @@ class AttachmentDownloadTest(unittest.TestCase):
         self.assertEqual(mime_type, "application/pdf")
         self.assertEqual(content, b"pdf")
         self.assertEqual(session.calls[0][0], "https://example.test/cb/v3/attachments/4392/content")
+        # 첨부를 받다가 서버가 멈춰도 무한히 기다리지 않는다.
+        self.assertEqual(session.calls[0][1]["timeout"], (10.0, 120.0))
 
 
 if __name__ == "__main__":
