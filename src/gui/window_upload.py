@@ -369,6 +369,19 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
             self.upload_worker.request_cancel()
             self.upload_page.status_label.setText("중단 요청됨")
 
+    def has_running_upload(self) -> bool:
+        """업로드 작업 스레드가 아직 도는지.
+
+        완료 신호를 받아 참조를 끊은 뒤에도 스레드는 잠깐 더 돈다. 그 사이에 앱이 끝나면
+        실행 중인 스레드가 지워져 강제 종료되므로 끝날 때까지 돈다고 본다.
+        """
+        worker = self.upload_worker or getattr(self, "_finishing_upload_worker", None)
+        return worker is not None and bool(worker.isRunning())
+
+    def request_upload_stop(self) -> None:
+        """앱을 닫기 전에 남은 항목을 중단한다. 진행 중인 항목은 끝까지 기다린다."""
+        self._cancel_upload()
+
     @staticmethod
     def _format_clock(timestamp: float | None = None) -> str:
         return _format_clock_text(timestamp)
@@ -703,6 +716,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
         was_cancelled = bool(result.get("cancelled"))
         self._retry_in_progress = False
         self.session_state.upload_result = result
+        self._finishing_upload_worker = self.upload_worker
         self.upload_worker = None
         self._remember_real_upload()
         success_df = result.get("success_df")
@@ -882,6 +896,7 @@ class WindowUploadMixin(_WindowUploadMixinComposition):
 
     def _on_upload_failed(self, message: str) -> None:
         self._retry_in_progress = False
+        self._finishing_upload_worker = self.upload_worker
         self.upload_worker = None
         # 도중에 실패해도 그 전 항목은 이미 서버에 반영됐을 수 있다.
         self._remember_real_upload()
