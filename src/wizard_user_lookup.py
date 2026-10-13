@@ -23,6 +23,26 @@ if TYPE_CHECKING:
     from .codebeamer_client import CodebeamerClient
     from .models import WizardState
 
+# 서버 조회 자체가 실패한 결과. 요청 제한·시간 초과처럼 다시 물으면 될 수 있다.
+_FAILED_LOOKUP_STATUSES = frozenset({
+    UserLookupStatus.USER_LOOKUP_FAILED.value,
+    UserLookupStatus.MEMBER_LOOKUP_FAILED.value,
+})
+
+
+def reusable_lookup_entries(cache: dict[Any, Any]) -> dict[Any, Any]:
+    """다음 검증·업로드에 넘길 사용자·멤버 조회 결과.
+
+    한 번의 실행 안에서는 같은 값을 다시 묻지 않도록 실패도 기억한다. 하지만 다음 실행까지
+    넘기면 한 번의 일시 실패가 같은 입력을 계속 막으므로 실패한 항목은 빼고 넘긴다.
+    """
+    return {
+        key: entry
+        for key, entry in cache.items()
+        if not (isinstance(entry, tuple) and len(entry) > 2 and entry[2] in _FAILED_LOOKUP_STATUSES)
+    }
+
+
 class WizardUserLookupMixin:
     # 조립된 뒤 사용할 속성의 타입 선언이다. 실제 값은
     # `CodebeamerUploadWizard.__init__` 이 채우므로 여기서는 선언만 둔다.
