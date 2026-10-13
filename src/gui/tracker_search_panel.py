@@ -767,6 +767,17 @@ class TrackerSearchPanel(QWidget):
             self._cleanup_bulk_worker()
             self._host.show_error(exc, prefix="일괄 수정 시작 실패")
 
+    def is_bulk_update_running(self) -> bool:
+        return self._bulk_worker is not None
+
+    def request_bulk_update_stop(self) -> None:
+        """앱을 닫기 전에 남은 청크를 중단한다. 진행 중인 청크는 끝까지 기다린다."""
+        if self._bulk_worker is None:
+            return
+        self._bulk_worker.request_cancel()
+        if self._bulk_progress_dialog is not None:
+            self._bulk_progress_dialog.cancel_button.setEnabled(False)
+
     def _refuse_while_bulk_running(self) -> bool:
         """일괄 수정은 한 번에 하나만 돌린다. 겹치면 같은 아이템을 두 번 고친다."""
         if self._bulk_worker is None:

@@ -92,6 +92,21 @@ class ValidationPresenterTest(unittest.TestCase):
 
         self.assertEqual(finalized.iloc[0]["severity"], "오류")
 
+    def test_server_lookup_failure_is_not_reported_as_unknown_user(self) -> None:
+        """요청 제한·연결 문제로 조회하지 못한 값을 입력값 문제처럼 안내하지 않는다."""
+        for status in ("USER_LOOKUP_FAILED", "MEMBER_LOOKUP_FAILED"):
+            with self.subTest(status=status):
+                row = pd.Series({"status": status, "df_column": "담당자", "field_name": "담당자"})
+
+                severity, message, action = ValidationPresenter.message_from_option_status(row)
+
+                self.assertEqual(severity, "오류")
+                self.assertIn("조회하지 못했습니다", message)
+                self.assertIn("다시 검증", action)
+
+        not_found = pd.Series({"status": "USER_NOT_FOUND", "df_column": "담당자", "field_name": "담당자"})
+        self.assertIn("찾지 못했습니다", ValidationPresenter.message_from_option_status(not_found)[1])
+
 
 if __name__ == "__main__":
     unittest.main()

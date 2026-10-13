@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -127,6 +128,60 @@ class TrackerContentServiceTest(unittest.TestCase):
                 FakeContentClient.instances[0].download_calls,
                 [("/v3/attachments/28/content", 1024 * 1024 * 1024)],
             )
+
+
+    def test_saved_attachment_is_not_kept_in_memory(self) -> None:
+        """저장은 최대 1GB까지 받는다. 받은 내용을 캐시에 남기지 않고, 다시 저장하면 다시 받는다."""
+        attachment = AttachmentSummary(28, "sample.png")
+        with TemporaryDirectory() as directory:
+            target = Path(directory) / "sample.png"
+            self.service.save_attachment(settings(), attachment, str(target))
+            self.service.save_attachment(settings(), attachment, str(target))
+
+        downloads = [call for client in FakeContentClient.instances for call in client.download_calls]
+        self.assertEqual(len(downloads), 2)
+        self.assertEqual(self.service.cached_resource_bytes(), 0)
+
+    def test_image_cache_keeps_recent_images_within_byte_budget(self) -> None:
+        service = TrackerContentService(client_factory=FakeContentClient, resource_cache_bytes=25)
+
+        def download(key: str) -> None:
+            service.download_resource(settings(), resource_key=key, source_url=f"/cb/attachment/{key}")
+
+        for key in ("a", "b", "c"):  # 10바이트씩, 예산 25바이트
+            download(key)
+        download("c")
+        download("a")
+
+        downloads = [call for client in FakeContentClient.instances for call in client.download_calls]
+        # c 는 남아 있어 다시 받지 않고, 가장 오래된 a 는 밀려나 다시 받는다.
+        self.assertEqual([url for url, _limit in downloads], [f"/cb/attachment/{key}" for key in "abca"])
+        self.assertLessEqual(service.cached_resource_bytes(), 25)
+
+    def test_cleared_render_cache_is_not_refilled_by_a_late_result(self) -> None:
+        """상세 새로고침으로 비운 뒤 늦게 끝난 렌더링이 옛 결과를 다시 넣지 않는다."""
+        entered = threading.Event()
+        release = threading.Event()
+
+        class SlowClient(FakeContentClient):
+            def render_wiki_to_html(self, project_id: int, **kwargs) -> str:
+                entered.set()
+                release.wait(5)
+                return super().render_wiki_to_html(project_id, **kwargs)
+
+        service = TrackerContentService(client_factory=SlowClient)
+        worker = threading.Thread(target=lambda: service.render_wiki(settings(), self.context, "text"))
+        worker.start()
+        self.assertTrue(entered.wait(5))
+        service.clear_item_cache(settings(), 1001)
+        release.set()
+        worker.join(5)
+        renders_before = sum(len(client.render_calls) for client in SlowClient.instances)
+
+        service.render_wiki(settings(), self.context, "text")
+
+        renders_after = sum(len(client.render_calls) for client in SlowClient.instances)
+        self.assertEqual(renders_after, renders_before + 1)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,8 @@ jobs:
   lint:
     name: Lint and type check
     runs-on: ubuntu-24.04
+    # 의존성 설치나 검사가 멈춰도 러너를 오래 붙잡지 않는다.
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -36,10 +38,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: |
+            requirements-dev.txt
+            requirements-release.txt
 
+      # 런타임 의존성이 없으면 mypy 가 PySide6·pandas 타입을 모두 Any 로 보고 넘어간다.
+      # 로컬 개발 환경과 같은 고정 버전을 설치해 같은 기준으로 검사한다.
       - name: Install lint dependencies
-        run: python -m pip install --requirement requirements-dev.txt
+        run: python -m pip install --requirement requirements-release.txt --requirement requirements-dev.txt
 
       - name: Run ruff
         run: python -m ruff check --output-format github .
@@ -50,6 +56,7 @@ jobs:
   test:
     name: Regression tests
     runs-on: windows-2022
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -78,6 +85,7 @@ jobs:
     if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/v')
     needs: lint
     runs-on: windows-2022
+    timeout-minutes: 45
     outputs:
       artifact_version: ${{ steps.metadata.outputs.artifact_version }}
       prerelease: ${{ steps.metadata.outputs.prerelease }}
@@ -191,6 +199,7 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [build, test]
     runs-on: windows-2022
+    timeout-minutes: 20
     permissions:
       artifact-metadata: write
       contents: write

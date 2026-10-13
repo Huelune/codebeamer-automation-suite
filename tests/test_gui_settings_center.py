@@ -86,6 +86,20 @@ class GuiSettingsCenterTest(unittest.TestCase):
             self.assertGreaterEqual(os_index, 0)
             self.assertFalse(page.credential_storage_combo.model().item(os_index).isEnabled())
 
+    def test_connection_error_message_hides_server_address_and_password(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            page = SettingsCenterPage(self._store(Path(tmp_dir)))
+            self._configure_online_profile(page)
+
+            message = page._safe_message(
+                "HTTPSConnectionPool(host='secret-host.example.invalid', port=443): Max retries exceeded "
+                "with url: /cb/api/v3/projects (auth session-secret)"
+            )
+
+            for secret in ("secret-host", "/cb/api", "session-secret"):
+                self.assertNotIn(secret, message)
+            self.assertIn("Max retries exceeded", message)
+
     def test_data_page_shows_baseline_cache_usage_and_clears_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             cache = BaselineItemCache(Path(tmp_dir) / "baseline_cache")

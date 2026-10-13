@@ -4,6 +4,7 @@ from typing import Any
 
 from src.codebeamer_client import CodebeamerClient
 
+from .service_cache import ServiceCache
 from .service_core import _build_gui_client
 from .tracker_comment_models import ItemCommentsSnapshot
 from .tracker_query_models import TrackerQueryErrorKind
@@ -17,7 +18,7 @@ class TrackerCommentService:
     def __init__(self, client_factory=CodebeamerClient, logger=None) -> None:
         self.client_factory = client_factory
         self.logger = logger
-        self._cache: dict[tuple[Any, ...], ItemCommentsSnapshot] = {}
+        self._cache: ServiceCache[tuple[Any, ...], ItemCommentsSnapshot] = ServiceCache()
 
     @staticmethod
     def _settings_key(settings) -> tuple[Any, ...]:
@@ -33,7 +34,7 @@ class TrackerCommentService:
 
     def clear_item_cache(self, settings, item_id: int) -> None:
         prefix = self._settings_key(settings), int(item_id)
-        self._cache = {key: value for key, value in self._cache.items() if key[:2] != prefix}
+        self._cache.discard_where(lambda key: key[:2] == prefix)
 
     def load_comments(
         self, settings, item_id: int, item_version: int | None, *, baseline_id: int | None = None, force: bool = False
@@ -41,8 +42,10 @@ class TrackerCommentService:
         if baseline_id is not None:
             raise ValueError("Baseline 시점의 댓글 조회는 지원하지 않습니다.")
         key = self._settings_key(settings), int(item_id), item_version
-        if not force and key in self._cache:
-            return self._cache[key]
+        cached = None if force else self._cache.get(key)
+        if cached is not None:
+            return cached
+        generation = self._cache.generation()
         try:
             raw = _build_gui_client(settings, self.client_factory, self.logger).get_item_comments(int(item_id))
         except Exception as exc:
@@ -52,10 +55,13 @@ class TrackerCommentService:
                 TrackerQueryErrorKind.FORBIDDEN: "댓글을 볼 권한이 없습니다.",
                 TrackerQueryErrorKind.NOT_FOUND: "댓글을 찾을 수 없습니다.",
                 TrackerQueryErrorKind.RATE_LIMITED: "요청이 많아 댓글 조회가 제한되었습니다.",
+                TrackerQueryErrorKind.NETWORK: "Codebeamer 서버에 연결하지 못해 댓글을 조회할 수 없습니다.",
             }
+            # 예외 원문에는 서버 주소가 들어 있다. 종류와 HTTP 상태만 알린다.
+            status_text = f" (HTTP {status_code})" if status_code else ""
             raise TrackerQueryServiceError(
                 kind,
-                messages.get(kind, f"댓글 조회에 실패했습니다: {exc}"),
+                messages.get(kind, f"댓글 조회에 실패했습니다{status_text}."),
                 status_code=status_code,
                 operation="load_item_comments",
             ) from exc
@@ -64,7 +70,7 @@ class TrackerCommentService:
                 TrackerQueryErrorKind.SERVER, "댓글 응답 형식을 해석할 수 없습니다.", operation="load_item_comments"
             )
         result = ItemCommentsSnapshot.from_raw(raw)
-        self._cache[key] = result
+        self._cache.put(key, result, generation)
         return result
 
 

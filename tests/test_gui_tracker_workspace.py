@@ -38,6 +38,7 @@ from src.gui.tracker_bulk_update import BulkUpdateRunStore
 from src.gui.tracker_bulk_update import TrackerBulkUpdateService
 from src.gui.tracker_bulk_update import bulk_run_server_key
 from src.gui.tracker_bulk_update_dialog import BulkUpdateRequest
+from src.gui.tracker_bulk_update_dialog import TrackerBulkUpdateDialog
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentResource
 from src.gui.tracker_content_models import AttachmentSummary
@@ -46,11 +47,13 @@ from src.gui.tracker_content_models import WikiResourceReference
 from src.gui.tracker_detail_panel import ATTACHMENT_VISIBLE_ROWS
 from src.gui.tracker_favorites_panel import UNAVAILABLE_TEXT
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
+from src.gui.tracker_item_create_dialog import TrackerItemCreateDialog
 from src.gui.tracker_item_create_dialog import TrackerItemCreateRequest
 from src.gui.tracker_item_detail_dialog import TrackerItemDetailDialog
 from src.gui.tracker_item_detail_session import TrackerItemDetailSession
 from src.gui.tracker_item_editor import TrackerItemEditorService
 from src.gui.tracker_item_editor import TrackerItemFieldChange
+from src.gui.tracker_item_editor_panel import ConfirmItemDeleteDialog
 from src.gui.tracker_query_models import TrackerFieldValue
 from src.gui.tracker_query_models import TrackerItemDetail
 from src.gui.tracker_query_models import TrackerItemSummary
@@ -3123,6 +3126,40 @@ class TrackerWorkspaceWriteIntegrationTest(unittest.TestCase):
         self.assertEqual(self.page.detail_panel.detail_title.text(), "Another item")
         self.assertEqual(self.page.hierarchy_panel.item_tree.topLevelItemCount(), 0)
 
+    def test_delete_uses_the_real_dialog_that_needs_the_item_id(self) -> None:
+        """삭제 확인 창을 실제 생성자로 띄운다. ID를 입력해야 삭제 버튼이 켜진다."""
+        enabled_before_typing = []
+
+        class _TypingDialog(ConfirmItemDeleteDialog):
+            def exec(self) -> int:
+                enabled_before_typing.append(self.delete_button.isEnabled())
+                self.confirm_input.setText(str(self.detail.item_id))
+                self.delete_button.click()
+                return self.result()
+
+        self.page.detail_panel.delete_confirmer = None
+        with patch("src.gui.tracker_detail_panel.ConfirmItemDeleteDialog", _TypingDialog):
+            self.page.detail_panel.editor_panel.delete_button.click()
+
+        self.assertEqual(enabled_before_typing, [False])
+        self.assertIn(("delete", 1001), EditableWorkspaceClient.calls)
+
+    def test_create_uses_the_real_dialog(self) -> None:
+        class _FillingDialog(TrackerItemCreateDialog):
+            def exec(self) -> int:
+                self.rows[3].widget.setText("Created in dialog")
+                self.create_button.click()
+                return self.result()
+
+        self.page.create_request_provider = None
+        with patch("src.gui.tracker_workspace.TrackerItemCreateDialog", _FillingDialog):
+            self.page.create_item_button.click()
+            self._app.processEvents()
+
+        create_call = next(call for call in EditableWorkspaceClient.calls if call[0] == "create")
+        self.assertEqual(create_call[2], {"name": "Created in dialog"})
+        self.assertEqual(self.page.detail_panel.detail_title.text(), "Created in dialog")
+
     def test_single_create_adds_selected_child_and_opens_created_detail(self) -> None:
         def create_request(schema, tracker, selected_detail):
             self.assertEqual(tracker.tracker_id, 20)
@@ -3279,6 +3316,28 @@ class TrackerWorkspaceBulkUpdateTest(unittest.TestCase):
         self.assertIn(3, editor.rows)
         self.assertEqual(len(self.requests), 1)
         self._wait_for_bulk_run(self.panel._bulk_worker)
+
+    def test_bulk_update_uses_the_real_field_dialog(self) -> None:
+        from PySide6.QtWidgets import QPushButton
+
+        class _FillingDialog(TrackerBulkUpdateDialog):
+            def exec(self) -> int:
+                row = self.rows[3]
+                row.include_item.setCheckState(Qt.CheckState.Checked)
+                row.input_widget.setText("Bulk from dialog")
+                buttons = {button.text(): button for button in self.findChildren(QPushButton)}
+                buttons["일괄 수정 실행"].click()
+                return self.result()
+
+        self.panel.bulk_request_provider = None
+        with patch("src.gui.tracker_search_panel.TrackerBulkUpdateDialog", _FillingDialog):
+            self.panel._prepare_bulk_update((1001,))
+        self._wait_for_bulk_run(self.panel._bulk_worker)
+
+        bulk_calls = self._bulk_calls()
+        self.assertEqual(len(bulk_calls), 1)
+        self.assertEqual(bulk_calls[0][1], (1001,))
+        self.assertIn("성공 1건", self.page.workspace_status_label.text())
 
     def test_bulk_run_stopped_by_error_keeps_record_and_reports(self) -> None:
         EditableWorkspaceClient.bulk_error_on_call = 2

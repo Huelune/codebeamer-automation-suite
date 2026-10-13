@@ -19,6 +19,12 @@ from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+# 연결 오류 문구에는 서버 이름과 경로가 들어 있다. 화면·기록에 남지 않아야 한다.
+SECRET_CONNECTION_ERROR = (
+    "HTTPSConnectionPool(host='secret-host.example.invalid', port=443): Max retries exceeded "
+    "with url: /cb/api/v3/trackers/2/items (Caused by NewConnectionError('refused'))"
+)
+
 class WindowUploadRetryResultTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -245,6 +251,34 @@ class WindowUploadRepeatGuardTest(unittest.TestCase):
 
         self.assertEqual(len(_RecordingWorker.started), 1)
         self.assertEqual(len(_AnswerBox.asked), 1)
+
+    def test_upload_failure_message_hides_server_address(self) -> None:
+        shown: list[str] = []
+        window = self.window
+        window._show_error_dialog = lambda _title, message: shown.append(message)
+        window._start_upload()
+
+        window._on_upload_failed(SECRET_CONNECTION_ERROR)
+
+        texts = [window.upload_page.status_label.text(), window.upload_page.log_view.toPlainText(), *shown]
+        for text in texts:
+            self.assertNotIn("secret-host", text)
+            self.assertNotIn("/cb/api", text)
+        self.assertIn("Max retries exceeded", window.upload_page.status_label.text())
+
+    def test_batch_error_dialog_hides_server_address(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            window = BatchUploadWindow(GuiSettingsStore(root_dir=Path(temp_dir)))
+            shown: list[str] = []
+            window._show_message_dialog = lambda _title, message, *, tone: shown.append(message)
+            try:
+                window._show_error_dialog("작업 실패", SECRET_CONNECTION_ERROR)
+            finally:
+                window.close()
+
+        self.assertEqual(len(shown), 1)
+        self.assertNotIn("secret-host", shown[0])
+        self.assertIn("Max retries exceeded", shown[0])
 
     def test_dry_run_and_revalidated_data_do_not_ask(self) -> None:
         window = self.window
