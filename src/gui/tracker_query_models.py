@@ -632,6 +632,8 @@ class PageResult[ItemT]:
     requested_page: int
     requested_page_size: int
     server_metadata: dict[str, Any] = field(default_factory=dict, compare=False)
+    # 서버가 total을 주지 않으면 False다. 이때 total은 이 페이지까지 받은 개수(하한)다.
+    total_known: bool = True
 
     @property
     def has_previous(self) -> bool:
@@ -639,7 +641,10 @@ class PageResult[ItemT]:
 
     @property
     def has_next(self) -> bool:
-        return self.page * self.page_size < self.total
+        if self.total_known:
+            return self.page * self.page_size < self.total
+        # 전체 개수를 모르면 꽉 찬 페이지 뒤에 더 있을 수 있다.
+        return bool(self.items) and len(self.items) >= self.page_size
 
     @property
     def server_honored_pagination(self) -> bool:
@@ -668,8 +673,9 @@ class PageResult[ItemT]:
         if page_size <= 0:
             page_size = int(requested_page_size)
         total = optional_int(payload.get("total"))
+        total_known = total is not None
         if total is None:
-            total = len(normalized_items)
+            total = (page - 1) * page_size + len(normalized_items)
         metadata = {
             key: mask_sensitive_payload(value)
             for key, value in payload.items()
@@ -683,6 +689,7 @@ class PageResult[ItemT]:
             requested_page=int(requested_page),
             requested_page_size=int(requested_page_size),
             server_metadata=metadata,
+            total_known=total_known,
         )
 
 

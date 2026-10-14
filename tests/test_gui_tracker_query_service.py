@@ -180,6 +180,31 @@ class PaginatedSearchClient(QueryFakeClient):
         }
 
 
+class TotallessSearchClient(QueryFakeClient):
+    """검색 응답에 total을 싣지 않는 서버. 아이템 수는 클래스마다 정한다."""
+
+    item_count = 1201
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.requested_pages: list[int] = []
+
+    def search_items(self, *, query_string, baseline_id=None, page, page_size):
+        del baseline_id
+        self.requested_pages.append(page)
+        tracker_id = int(re.search(r"tracker\.id = (\d+)", query_string).group(1))
+        start = (page - 1) * page_size
+        ids = list(range(1, self.item_count + 1))[start : start + page_size]
+        return {
+            "page": page,
+            "pageSize": page_size,
+            "items": [
+                {"id": item_id, "name": f"Item {item_id}", "tracker": {"id": tracker_id}}
+                for item_id in ids
+            ],
+        }
+
+
 class BaselineDetailFakeClient(QueryFakeClient):
     """Baseline 목록과 단건 상세가 같은 아이템 모델로 오는 서버."""
 
@@ -975,6 +1000,34 @@ class OfflineTrackerQueryServiceIntegrationTest(unittest.TestCase):
         self.assertEqual(len(items), 1201)
         self.assertEqual(items[0].item_id, 1)
         self.assertEqual(items[-1].item_id, 1201)
+
+    def test_load_all_search_items_without_total_reads_until_a_short_page(self) -> None:
+        """total이 없다고 첫 페이지에서 멈추면 Baseline 저장본·비교·내보내기가 500개로 잘린다."""
+        clients: list[TotallessSearchClient] = []
+
+        def make_client(*args, **kwargs):
+            clients.append(TotallessSearchClient(*args, **kwargs))
+            return clients[-1]
+
+        service = TrackerQueryService(client_factory=make_client)
+        settings = GuiSettings(base_url="https://example.test/cb", username="sample", password="placeholder")
+
+        items = service.load_all_search_items(settings, TrackerQuery(tracker_id=20, text="Item"))
+
+        self.assertEqual(len(items), 1201)
+        self.assertEqual(items[-1].item_id, 1201)
+        self.assertEqual([page for client in clients for page in client.requested_pages], [1, 2, 3])
+
+    def test_load_all_search_items_without_total_stops_on_an_empty_page(self) -> None:
+        class ExactPagesClient(TotallessSearchClient):
+            item_count = 1000
+
+        service = TrackerQueryService(client_factory=ExactPagesClient)
+        settings = GuiSettings(base_url="https://example.test/cb", username="sample", password="placeholder")
+
+        items = service.load_all_search_items(settings, TrackerQuery(tracker_id=20, text="Item"))
+
+        self.assertEqual(len(items), 1000)
 
     def test_full_comparison_rejects_reference_only_query_response(self) -> None:
         class ReferenceOnlyClient(QueryFakeClient):

@@ -414,7 +414,7 @@ class TrackerSearchPanel(QWidget):
             self.baseline_compare_button.setEnabled(True)
             self._render_search_results(result)
             self._host.set_workspace_status(
-                f"현재 트래커에서 검색 결과 {result.total}개를 찾았습니다."
+                f"현재 트래커에서 검색 결과를 {self._total_text(result)} 찾았습니다."
             )
 
         def failed(exc: Exception) -> None:
@@ -424,6 +424,13 @@ class TrackerSearchPanel(QWidget):
             self._host.show_error(exc, prefix="트래커 검색 실패")
 
         self._host.submit("search", lambda: self.service.search(settings, query), loaded, failed)
+
+    @staticmethod
+    def _total_text(result: PageResult[TrackerItemSummary]) -> str:
+        # 서버가 전체 개수를 주지 않으면 다음 페이지가 남은 동안은 받은 개수만 안다.
+        if result.total_known or not result.has_next:
+            return f"{result.total}개"
+        return f"{result.total}개 이상"
 
     def _render_search_results(self, result: PageResult[TrackerItemSummary]) -> None:
         self.search_table.blockSignals(True)
@@ -465,7 +472,7 @@ class TrackerSearchPanel(QWidget):
             else f"{scope_tracker.name} ({scope_tracker.tracker_id})"
         )
         self.search_scope_label.setText(
-            f"검색 범위: {tracker_text} · {result.total}개 중 {visible_start}–{visible_end}개"
+            f"검색 범위: {tracker_text} · {self._total_text(result)} 중 {visible_start}–{visible_end}개"
         )
         self.search_page_label.setText(f"{result.page} 페이지")
         pagination_available = result.server_honored_pagination

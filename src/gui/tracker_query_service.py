@@ -828,7 +828,11 @@ class TrackerQueryService:
                 seen_ids.add(summary.item_id)
                 collected.append(summary)
                 added += 1
-            if len(collected) >= result.total:
+            if result.total_known:
+                if len(collected) >= result.total:
+                    break
+            elif not result.items or len(result.items) < result.page_size:
+                # total이 없으면 빈 페이지나 덜 찬 페이지가 마지막이다.
                 break
             if not result.items or added == 0:
                 raise TrackerQueryServiceError(

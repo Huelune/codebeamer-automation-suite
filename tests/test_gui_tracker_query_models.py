@@ -189,6 +189,27 @@ class TrackerQueryModelTest(unittest.TestCase):
         self.assertEqual(masked["nested"][0]["name"], "safe")
         self.assertEqual(source["nested"][0]["token"], "value")
 
+    def test_page_result_without_total_keeps_next_page_open_while_pages_are_full(self) -> None:
+        """total이 없으면 받은 개수를 전체로 보지 않는다. 꽉 찬 페이지 뒤에는 다음 페이지가 있을 수 있다."""
+        full = PageResult.create(
+            ["a", "b"],
+            raw_page={"page": 1, "pageSize": 2},
+            requested_page=1,
+            requested_page_size=2,
+        )
+        short = PageResult.create(
+            ["c"],
+            raw_page={"page": 2, "pageSize": 2},
+            requested_page=2,
+            requested_page_size=2,
+        )
+
+        self.assertFalse(full.total_known)
+        self.assertTrue(full.has_next)
+        self.assertEqual(full.total, 2)
+        self.assertFalse(short.has_next)
+        self.assertEqual(short.total, 3)
+
 
 if __name__ == "__main__":
     unittest.main()
