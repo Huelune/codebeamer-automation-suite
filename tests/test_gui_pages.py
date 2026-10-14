@@ -419,6 +419,28 @@ class GuiPagesUploadPageTest(unittest.TestCase):
         self.assertTrue(result_page.retry_failed_button.isEnabled())
         self.assertIn("생성, 수정, 혼합 처리", result_page.status_label.text())
 
+    def test_result_table_shows_blank_for_missing_values_and_keeps_excel_rows(self) -> None:
+        """파일 준비 실패 행처럼 일부 열이 없는 결과가 합쳐지면 빈 칸이 `nan`으로 보였다."""
+        result_page = create_result_page()
+        failed_df = pd.concat(
+            [
+                pd.DataFrame([{"source_file": "a.xlsx", "excel_row": "Excel 4행", "upload_name": "REQ-002",
+                               "phase": "insert"}]),
+                pd.DataFrame([{"source_file": "b.xlsx", "upload_name": "b", "error": "준비 실패"}]),
+            ],
+            ignore_index=True,
+        )
+
+        result_page.set_results({"success_df": pd.DataFrame(), "failed_df": failed_df, "unresolved_df": pd.DataFrame()})
+
+        table = result_page.tables["failed_df"]
+        headers = [table.horizontalHeaderItem(column).text() for column in range(table.columnCount())]
+        cells = [[table.item(row, column).text() for column in range(table.columnCount())] for row in range(2)]
+        self.assertEqual(cells[0][headers.index("excel_row")], "Excel 4행")
+        self.assertEqual(cells[1][headers.index("excel_row")], "")
+        self.assertEqual(cells[1][headers.index("phase")], "")
+        self.assertNotIn("nan", [cell for row in cells for cell in row])
+
     def test_constrained_panel_remains_horizontally_responsive(self) -> None:
         from PySide6.QtWidgets import QWidget
 

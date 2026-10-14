@@ -353,6 +353,37 @@ class UploadWorkbookServiceTest(unittest.TestCase):
         self.assertIn("<EMAIL>", error_text)
         self.assertIn("<PATH>", error_text)
 
+    def test_failed_upload_report_shows_excel_rows_and_translated_status(self) -> None:
+        """0부터 세는 병합 레코드 번호 대신 Excel 행을 보여 주고 업로드 실패 상태를 번역한다."""
+        failed_df = pd.DataFrame(
+            [
+                {
+                    "source_file": "sample.xlsx",
+                    "excel_row": "Excel 4-6행",
+                    "_row_id": 1,
+                    "upload_name": "REQ-002",
+                    "phase": "insert",
+                    "status": "UPLOAD_FAILED",
+                    "error": "rejected",
+                }
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "failed.xlsx"
+            self.service.export_failed_upload_report(failed_df, pd.DataFrame(), output)
+            workbook = load_workbook(output, data_only=False)
+            try:
+                sheet = workbook["실패"]
+                headers = [cell.value for cell in sheet[1]]
+                values = dict(zip(headers, [cell.value for cell in sheet[2]], strict=False))
+            finally:
+                workbook.close()
+
+        self.assertNotIn("행 식별자", headers)
+        self.assertEqual(values["Excel 행"], "Excel 4-6행")
+        self.assertEqual(values["상태"], "실패")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -115,17 +115,23 @@ class HierarchyProcessor:
             key_to_group: dict[str, int] = {}
             closed_keys: set[str] = set()
             previous_key: str | None = None
+            # 빈 행은 읽을 때 빠지므로 순번으로는 Excel 행을 알 수 없다. 읽을 때 남긴 실제 행을 쓴다.
+            excel_rows = (
+                work["_excel_row"].tolist()
+                if "_excel_row" in work.columns
+                else [index + self.header_row + 1 for index in range(len(work.index))]
+            )
             for index, raw_key in enumerate(work[UPLOAD_RECORD_KEY_COLUMN].tolist()):
                 key = str(self.normalize_scalar(raw_key) or "").strip()
                 if not key:
                     raise ValueError(
-                        f"{UPLOAD_RECORD_KEY_COLUMN} 값이 비어 있습니다. Excel 행={index + self.header_row + 1}"
+                        f"{UPLOAD_RECORD_KEY_COLUMN} 값이 비어 있습니다. Excel {excel_rows[index]}행"
                     )
                 if previous_key is not None and key != previous_key:
                     closed_keys.add(previous_key)
                 if key in closed_keys:
                     raise ValueError(
-                        f"{UPLOAD_RECORD_KEY_COLUMN} '{key}' 행은 연속해서 배치해야 합니다."
+                        f"{UPLOAD_RECORD_KEY_COLUMN} '{key}' 행은 연속해서 배치해야 합니다. Excel {excel_rows[index]}행"
                     )
                 if key not in key_to_group:
                     key_to_group[key] = len(key_to_group) + 1
@@ -171,8 +177,11 @@ class HierarchyProcessor:
                         for value in group_df[column].tolist()
                     ]
                     if any(value != normalized_values[0] for value in normalized_values[1:]):
+                        group_rows = group_df["_excel_row"].tolist() if "_excel_row" in group_df.columns else []
+                        location = f" Excel {group_rows[0]}-{group_rows[-1]}행" if group_rows else ""
                         raise ValueError(
                             f"{UPLOAD_RECORD_KEY_COLUMN} '{record_key}'의 일반 필드 '{column}' 값이 행마다 다릅니다."
+                            f"{location}"
                         )
             row_out = {
                 self.summary_col: (

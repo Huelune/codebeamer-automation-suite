@@ -611,9 +611,12 @@ class ValidationPresenter:
         issue_df["_config_sort"] = (
             issue_df["row_id"].fillna("").astype(str).str.strip().ne("").astype(int)
         )
-        issue_df["_row_order"] = pd.to_numeric(
-            issue_df["row_id"], errors="coerce"
-        ).fillna(10**9)
+        # 여러 파일이면 row_id가 `경로::번호`다. 파일별로 묶고 번호 순서로 놓는다.
+        row_numbers = issue_df["row_id"].fillna("").astype(str).str.rsplit("::", n=1).str[-1]
+        issue_df["_row_order"] = pd.to_numeric(row_numbers, errors="coerce").fillna(10**9)
+        issue_df["_file_order"] = (
+            issue_df["source_file"].fillna("").astype(str) if "source_file" in issue_df.columns else ""
+        )
         return issue_df.sort_values(
-            by=["_sort", "_config_sort", "_row_order", "category", "column", "field"]
-        ).drop(columns=["_sort", "_config_sort", "_row_order"])
+            by=["_sort", "_config_sort", "_file_order", "_row_order", "category", "column", "field"]
+        ).drop(columns=["_sort", "_config_sort", "_file_order", "_row_order"])

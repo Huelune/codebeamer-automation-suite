@@ -510,7 +510,8 @@ def create_result_page():
             table.setRowCount(len(df))
             for row_index, (_, row) in enumerate(df.iterrows()):
                 for col_index, column_name in enumerate(visible_columns):
-                    table.setItem(row_index, col_index, QTableWidgetItem(str(row.get(column_name) or "")))
+                    # 일부 열이 없는 결과가 합쳐지면 빈 칸이 NaN이다. `nan`으로 찍지 않는다.
+                    table.setItem(row_index, col_index, QTableWidgetItem(gui_display_text(row.get(column_name))))
             _configure_table_columns(table, [140] * max(len(visible_columns), 1))
 
         failed_df = upload_result.get("failed_df")
