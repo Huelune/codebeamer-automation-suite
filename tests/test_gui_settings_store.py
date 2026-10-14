@@ -26,15 +26,7 @@ from src.upload_policy import UPLOAD_MODE_UPSERT as GUI_UPLOAD_MODE_UPSERT
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
-try:
-    import cryptography  # noqa: F401
-except ImportError:  # pragma: no cover
-    CRYPTOGRAPHY_AVAILABLE = False
-else:
-    CRYPTOGRAPHY_AVAILABLE = True
-
-
-@unittest.skipUnless(CRYPTOGRAPHY_AVAILABLE, "cryptography 패키지가 설치된 환경에서만 실행")
+# cryptography는 필수 의존성이다. 빠지면 건너뛰지 않고 실패해야 자격증명 저장 회귀가 드러난다.
 class GuiSettingsStoreTest(unittest.TestCase):
     def test_save_without_password_does_not_store_encrypted_value(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
