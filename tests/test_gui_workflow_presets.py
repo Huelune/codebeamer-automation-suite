@@ -214,7 +214,6 @@ class GuiWorkflowPresetCollectionTest(unittest.TestCase):
                         save_password=True,
                         output_dir="/private/sensitive/output",
                         offline_schema_path="/private/sensitive/schema.json",
-                        offline_tracker_configuration_path="/private/sensitive/config.json",
                         offline_query_data_path="/private/sensitive/query.json",
                         last_file_path="/private/sensitive/input.xlsx",
                         upload_mode=GUI_UPLOAD_MODE_UPDATE,

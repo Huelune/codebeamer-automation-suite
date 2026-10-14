@@ -618,23 +618,6 @@ class CodebeamerClient:
             max_bytes=max_bytes,
         )
 
-    def get_tracker_configuration(self, tracker_id: int) -> Any:
-        """트래커 configuration 메타데이터를 가져온다."""
-        candidate_paths = (
-            f"/v3/tracker/{tracker_id}/configuration",
-            f"/v3/trackers/{tracker_id}/configuration",
-            f"/tracker/{tracker_id}/configuration",
-        )
-        last_exc: Exception | None = None
-        for path in candidate_paths:
-            try:
-                return self._get(path)
-            except Exception as exc:
-                last_exc = exc
-        if last_exc is not None:
-            raise last_exc
-        raise RuntimeError("tracker configuration endpoint lookup failed unexpectedly")
-
     def get_project_members(self, project_id: int) -> Any:
         """프로젝트 멤버 목록을 가져온다."""
         return self._run_rate_limited_request(

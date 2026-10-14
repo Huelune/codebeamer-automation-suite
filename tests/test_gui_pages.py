@@ -62,7 +62,6 @@ class GuiPagesProjectSelectionTest(unittest.TestCase):
         base_settings = {
             "offline_mode": True,
             "offline_schema_path": "/tmp/schema.json",
-            "offline_tracker_configuration_path": "/tmp/config.json",
             "base_url": "https://example.test",
             "username": "tester",
         }

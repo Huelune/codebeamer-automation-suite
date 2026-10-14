@@ -70,7 +70,7 @@
 - `referenceType`, `options`, `multipleValues`, `valueModel` 로 보조 판정
 - `UserChoiceField`, `UserReference` 는 사용자 이름 우선 lookup 대상으로 분류
 - `MemberField` 는 `USER/ROLE/GROUP` mixed member lookup 대상으로 분류
-- `TrackerItemChoiceField` 는 configuration 정보와 무관하게 regex ID 추출 경로로 분류
+- `TrackerItemChoiceField` 는 regex ID 추출 경로로 분류(tracker configuration은 조회하지 않음)
 - `Status` 는 transition 기반 후처리가 필요하므로 TODO 로 분리
 - 정적 option이 없는 일반 reference field는 `LOOKUP_REQUIRED` 또는 `FIELD_UNSUPPORTED` 로 조기 노출
 
@@ -246,7 +246,7 @@ payload cache, 업로드 실행 서비스를 조합하고 기존 payload 메서�
 - 진단 로그와 API 모니터를 묶는 확장형 개발자 창: `src/gui/developer_tools_window.py`
 - 테스트 모드 CbQL subset 평가: `src/gui/offline_query.py`
 - 업로드 context 모델: `src/gui/upload_context.py`
-- TRACKER configuration 해석: `src/gui/tracker_config.py`
+- `TrackerItemChoiceField` 정규식 설정 정규화: `src/gui/tracker_config.py`
 - 다중 파일 cache·validation 집계: `src/gui/batch_validation.py`
 - 파일별 wizard 준비·batch 실행·결과 집계: `src/gui/batch_upload.py`
 - 검증 이슈와 사용자 메시지 변환: `src/gui/validation_presenter.py`
@@ -422,9 +422,8 @@ flowchart TD
 - 하나의 이름이 여러 후보와 겹치면 `MEMBER_LOOKUP_AMBIGUOUS` 로 실패
 
 tracker item 선택 필드 처리:
-- `TrackerItemChoiceField` 는 tracker configuration 의 `fields` 목록에서 `referenceId == schema.field_id` 를 우선 매칭합니다.
 - 이름·summary query lookup은 대량 검증의 API 호출을 줄이기 위해 비활성화되어 있습니다.
-- configuration의 source tracker 정보와 무관하게 regex ID 추출 경로를 사용합니다.
+- tracker configuration은 조회하지 않고 regex ID 추출 경로만 사용합니다.
 - builtin `subjects` 는 현재 direct parse만 사용합니다.
 - 단일 값 또는 list 모두 허용
 - 각 값에서 `[:id]` 패턴을 먼저, 없으면 `[]` 안 첫 번째 integer를 추출

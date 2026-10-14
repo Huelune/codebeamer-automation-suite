@@ -52,7 +52,6 @@ py -3 cli_main.py
 GUI의 최상위 `설정 > 테스트 모드`에서 사용할 수 있는 샘플 세트는 `data/gui-offline-sample/` 에 있습니다.
 
 - `offline_schema.json`
-- `offline_tracker_configuration.json`
 - `offline_tracker_items.json`
 - `files/SAMPLE_MODULE_A_TC_001.xlsx`
 - `files/SAMPLE_MODULE_B_TC_002.xlsx`
@@ -143,7 +142,7 @@ lint 규칙과 type check 범위는 `pyproject.toml`에 있고, CI의 `Lint and 
 6. 정적 option 필드는 reference payload로 변환합니다.
 7. 사용자 선택 필드는 사용자 이름을 우선 조회하고, 숫자 입력일 때만 사용자 ID fallback 을 사용합니다.
 8. `MemberField` 는 `USER/ROLE/GROUP` 후보를 이름으로 찾아 mixed reference 로 변환합니다.
-9. `TrackerItemChoiceField` 는 configuration 정보와 관계없이 입력값에서 정규식으로 ID를 추출합니다. 이름·summary 조회는 비활성화되어 있습니다.
+9. `TrackerItemChoiceField` 는 입력값에서 정규식으로 ID를 추출합니다. tracker configuration은 조회하지 않습니다. 이름·summary 조회는 비활성화되어 있습니다.
 10. GUI 상단 데이터 설정이 켜져 있으면 파일별 루트 parent item payload 를 먼저 준비합니다.
 11. row별 payload를 먼저 cache하고 preview와 upload가 같은 payload를 재사용합니다.
 12. 업로드 시점에는 파일별 루트 parent item을 먼저 만들고, 이후 child row 의 `parentItemId` 를 `created_map[parent_row_id]` 또는 루트 item 기준으로 결정합니다.
@@ -184,7 +183,6 @@ powershell -ExecutionPolicy Bypass -File scripts/render_uml.ps1
 - 정적 option이 없는 일반 reference 필드는 아직 자동 lookup을 모두 지원하지 않습니다.
 - 사용자 관련 필드는 이름을 우선 사용하고, 숫자 입력일 때만 사용자 ID fallback 을 사용합니다.
 - `MemberField` 의 `ROLE` 은 field permission matrix, `GROUP` 은 `/v3/users/groups` 전체 목록에서 이름으로 찾습니다.
-- `TrackerItemChoiceField` 는 tracker configuration 의 `fields` 목록에서 `referenceId == schema.field_id` 로 매칭 정보를 확인할 수 있지만, 업로드·검증에서는 항상 입력값의 ID 추출만 사용합니다.
 - 테스트 모드에서는 실제 업로드를 막고 Dry Run만 허용합니다.
 - `Status` 는 workflow transition 제약을 반영해야 하므로 현재 TODO 입니다.
 - `save_state()`는 `payload_df.csv`, `payload_preview.jsonl`을 포함해 payload cache 상태도 함께 저장합니다.

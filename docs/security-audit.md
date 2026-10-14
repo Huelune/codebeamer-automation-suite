@@ -14,7 +14,7 @@
 
 - 실제 `.env`, private key, certificate 파일은 추적되지 않습니다.
 - `.env.example`의 URL, username, password는 모두 명시적인 교체용 placeholder입니다.
-- offline schema/configuration의 ID, 사용자, 그룹, tracker item 값은 sample 전용 값입니다.
+- offline schema와 조회 snapshot의 ID, 사용자, 그룹, tracker item 값은 sample 전용 값입니다.
 - XLSX에는 `sample_user`, `sample_group_a`, `SAMPLE-*` 형식의 익명 값만 사용됩니다.
 - 자격증명 관련 단어가 있는 소스는 환경 변수 로딩, 입력 UI, test fixture 또는 문서이며
   실제 자격증명 값은 확인되지 않았습니다.

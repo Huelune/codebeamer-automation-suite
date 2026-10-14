@@ -33,23 +33,6 @@ class GuiOfflineSampleDataTest(unittest.TestCase):
                 int(item["trackerId"]),
             )
 
-    def test_sample_snapshot_includes_tracker_item_query_source(self) -> None:
-        schema = json.loads((SAMPLE_DIR / "offline_schema.json").read_text(encoding="utf-8"))
-        config = json.loads((SAMPLE_DIR / "offline_tracker_configuration.json").read_text(encoding="utf-8"))
-
-        schema_field_names = [field.get("name") for field in schema.get("fields", [])]
-        self.assertIn("Related Requirement", schema_field_names)
-
-        related_requirement_config = next(
-            field
-            for field in config.get("fields", [])
-            if int(field.get("referenceId") or 0) == 7
-        )
-        filters = related_requirement_config["choiceOptionSetting"]["referenceFilters"]
-
-        self.assertEqual(filters[0]["domainType"], "TRACKER")
-        self.assertEqual(int(filters[0]["domainId"]), 24680001)
-
     def test_query_snapshot_status_and_custom_fields_exist_in_editor_schema(self) -> None:
         schema = json.loads((SAMPLE_DIR / "offline_schema.json").read_text(encoding="utf-8"))
         query_data = json.loads(

@@ -397,7 +397,6 @@ lookup 결과 부가 컬럼:
 
 규칙:
 
-- `TrackerItemChoiceField` 는 tracker configuration 의 `fields` 목록에서 `referenceId == schema.field_id` 를 우선 매칭한다.
 - 이름·summary query lookup은 대량 검증의 API 호출을 줄이기 위해 비활성화되어 있다.
 - 입력값에서 item ID를 직접 추출한다.
 - builtin `subjects` 는 현재 direct parse만 사용한다.

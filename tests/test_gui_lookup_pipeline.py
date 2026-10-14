@@ -13,7 +13,6 @@ from src.models import PayloadStatus
 from tests.gui_service_fixtures import FakeExcelReader
 from tests.gui_service_fixtures import MemberReferenceDefaultFakeClient
 from tests.gui_service_fixtures import TrackerItemDefaultValueFakeClient
-from tests.gui_service_fixtures import TrackerItemNonTrackerConfigFakeClient
 from tests.gui_service_fixtures import TrackerItemQueryFakeClient
 from tests.gui_service_fixtures import TrackerItemReferenceIdConfigFakeClient
 from tests.gui_service_fixtures import UserReferenceDefaultFakeClient
@@ -64,7 +63,15 @@ class GuiLookupPipelineServiceTest(unittest.TestCase):
                 "regex",
             )
 
-    def test_prepare_mapping_context_uses_tracker_configuration_reference_id_when_name_differs(self) -> None:
+    def test_prepare_mapping_context_does_not_request_tracker_configuration(self) -> None:
+        """configuration은 꺼 둔 query 조회에만 쓰였다. 데이터를 불러올 때마다 서버에 묻지 않는다."""
+        configuration_requests: list[int] = []
+
+        class CountingClient(TrackerItemReferenceIdConfigFakeClient):
+            def get_tracker_configuration(self, tracker_id: int):
+                configuration_requests.append(tracker_id)
+                return {}
+
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "sample.xlsx"
             workbook = Workbook()
@@ -76,7 +83,7 @@ class GuiLookupPipelineServiceTest(unittest.TestCase):
             workbook.close()
 
             service = GuiUploadPipelineService(
-                client_factory=TrackerItemReferenceIdConfigFakeClient,
+                client_factory=CountingClient,
                 reader_cls=FakeExcelReader,
             )
             settings = GuiSettings(
@@ -109,9 +116,10 @@ class GuiLookupPipelineServiceTest(unittest.TestCase):
                 mapping_context.schema_df["field_name"] == "SUDS 링크"
             ].iloc[0]
             self.assertEqual(int(tracker_field_row["field_id"]), 17)
-            self.assertEqual(tracker_field_row["tracker_item_source_tracker_ids"], [13526611])
+            self.assertNotIn("tracker_item_source_tracker_ids", mapping_context.schema_df.columns)
+            self.assertEqual(configuration_requests, [])
 
-    def test_prepare_mapping_context_disables_query_for_non_tracker_configuration(self) -> None:
+    def test_prepare_mapping_context_builds_regex_setting_for_tracker_item_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "sample.xlsx"
             workbook = Workbook()
@@ -123,7 +131,7 @@ class GuiLookupPipelineServiceTest(unittest.TestCase):
             workbook.close()
 
             service = GuiUploadPipelineService(
-                client_factory=TrackerItemNonTrackerConfigFakeClient,
+                client_factory=TrackerItemQueryFakeClient,
                 reader_cls=FakeExcelReader,
             )
             settings = GuiSettings(
@@ -157,7 +165,7 @@ class GuiLookupPipelineServiceTest(unittest.TestCase):
                 for candidate in mapping_context.tracker_item_field_candidates
                 if candidate.schema_field == "연관 요구사항"
             )
-            self.assertEqual(tracker_item_candidate.query_status, "unsupported")
+            self.assertEqual(tracker_item_candidate.df_column, "연관 요구사항")
 
     def test_validate_mapping_uses_id_extraction_without_tracker_item_query(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
