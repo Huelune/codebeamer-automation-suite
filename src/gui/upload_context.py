@@ -26,9 +26,6 @@ class TrackerItemFieldCandidate:
     df_column: str
     schema_field: str
     field_type: str
-    source_tracker_ids: list[int]
-    supports_query: bool
-    query_status: str
 
 
 @dataclass

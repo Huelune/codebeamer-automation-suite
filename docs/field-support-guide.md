@@ -301,7 +301,6 @@ raw schema type을 그대로 코드 전역에 퍼뜨리지 말고,
 
 규칙:
 
-- tracker configuration 의 `fields` 목록에서 `referenceId == schema.field_id` 를 우선 매칭합니다.
 - 이름·summary query lookup은 대량 검증 시 API 호출을 줄이기 위해 비활성화되어 있습니다.
 - 입력값에서 tracker item ID를 직접 추출합니다.
 - 단일 값 또는 list 모두 허용합니다.
@@ -313,7 +312,7 @@ builtin `subjects` 는 현재 direct parse 규칙만 사용합니다.
 
 주의:
 
-- configuration의 source tracker 정보와 무관하게 ID 추출 규칙을 적용합니다.
+- tracker configuration은 조회하지 않고 ID 추출 규칙만 적용합니다.
 
 ## `Status` 처리 규칙
 

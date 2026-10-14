@@ -211,14 +211,6 @@ class GuiUploadPipelineService:
             ))
         return candidates
 
-    def _enrich_schema_df_with_tracker_configuration(
-        self,
-        schema_df: pd.DataFrame,
-        tracker_configuration: Any,
-    ) -> pd.DataFrame:
-        """TRACKER configuration 정보를 schema field에 연결한다."""
-        return self.tracker_configuration.enrich_schema(schema_df, tracker_configuration)
-
     def _normalize_tracker_item_settings(
         self,
         schema_df: pd.DataFrame,
@@ -435,13 +427,6 @@ class GuiUploadPipelineService:
         wizard.state.upload_mode = normalize_gui_upload_mode(getattr(settings, "upload_mode", None))
 
         schema, schema_df = load_tracker_schema_df(wizard)
-        tracker_configuration = None
-        if hasattr(wizard.client, "get_tracker_configuration"):
-            try:
-                tracker_configuration = wizard.client.get_tracker_configuration(int(settings.default_tracker_id))
-            except Exception:
-                tracker_configuration = None
-        schema_df = self._enrich_schema_df_with_tracker_configuration(schema_df, tracker_configuration)
         mappable_schema_df = schema_df[
             ~schema_df.apply(self._is_gui_excluded_schema_field, axis=1)
         ].reset_index(drop=True)

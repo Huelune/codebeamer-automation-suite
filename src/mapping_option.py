@@ -89,7 +89,6 @@ class MappingOptionMixin(_MappingOptionMixinSiblings):
             "preconstruction_kind": getter("preconstruction_kind"),
             "preconstruction_detail": getter("preconstruction_detail"),
             "payload_target_kind": getter("payload_target_kind"),
-            "tracker_item_source_tracker_ids": getter("tracker_item_source_tracker_ids") or [],
         }
 
     def build_option_maps_from_schema(self, schema_df: pd.DataFrame) -> dict[str, dict]:
