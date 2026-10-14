@@ -21,3 +21,5 @@ data/*
 venv/
 .ruff_cache/
 .mypy_cache/
+# 로컬 전용 에이전트 지침(내부 Notion ID 등)
+AGENTS.local.md
