@@ -61,7 +61,9 @@ API 모니터는 온라인 모드에서 발생하는 Codebeamer HTTP 호출의 �
 - Codebeamer host 이름과 전체 URL
 - 서버가 반환한 원본 오류 문자열
 
-숫자 ID, UUID와 긴 16진수 식별자 형태의 경로 segment는 `{id}`로 바꿉니다. 오류는
+숫자 ID, UUID와 긴 16진수 식별자 형태의 경로 segment는 `{id}`로 바꿉니다. 첨부·그림 다운로드는
+서버 context 경로와 첨부 파일 이름이 경로에 들어 있으므로 `/v3` API는 `/v3` 이후만, `displayDocument`는
+`/displayDocument/{name}`, 그 밖의 다운로드 경로는 `/{resource}`로만 남깁니다. 오류는
 `Timeout`, `Connection`, `RateLimit`, `HTTP`, `Parse`, `Unknown` 중 하나로만
 분류합니다. `기록 지우기`는 완료된 메모리 행만 지우며 현재 진행 중인 요청이나
 수집 설정은 바꾸지 않습니다.
