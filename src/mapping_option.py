@@ -374,9 +374,6 @@ class MappingOptionMixin(_MappingOptionMixinSiblings):
 
             if option_info.get("kind") == OptionMapKind.TRACKER_ITEM_DIRECT.value:
                 resolved_col = f"{df_col}__resolved"
-                status_col = f"{df_col}__lookup_status"
-                error_col = f"{df_col}__lookup_error"
-                tracker_item_mode = str(option_info.get("tracker_item_mode") or "")
                 multiple_values = option_info.get("multiple_values", False)
                 for _, row in upload_df.iterrows():
                     raw_value = row[df_col]
@@ -385,24 +382,6 @@ class MappingOptionMixin(_MappingOptionMixinSiblings):
 
                     resolved_value = row.get(resolved_col) if resolved_col in row.index else None
                     if resolved_value is not None:
-                        continue
-
-                    if tracker_item_mode == "query":
-                        errors.append({
-                            **self._validation_context(
-                                df_col,
-                                schema_field,
-                                option_info,
-                                row_id=row.get("_row_id"),
-                                raw_value=raw_value,
-                                error=(row.get(error_col) if error_col in row.index else None),
-                            ),
-                            "status": (
-                                row.get(status_col)
-                                if status_col in row.index and row.get(status_col)
-                                else OptionCheckStatus.LOOKUP_REQUIRED.value
-                            ),
-                        })
                         continue
 
                     regex_pattern = str(option_info.get("tracker_item_regex_pattern") or "").strip()

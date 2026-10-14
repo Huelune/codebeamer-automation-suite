@@ -50,8 +50,8 @@
 - 파일 단계 성능 수정 시 workbook/raw data/cache를 재사용하는 방향을 우선 검토하고, 같은 Excel 파일을 불필요하게 반복해서 열지 않는다.
 
 ## 도메인 및 기능 제약
-- `TrackerItemChoiceField`의 query 기반 해석은 TRACKER 기반 configuration 구조를 기준으로 지원한다.
-- TRACKER 기반이 아닌 configuration에서는 query 지원을 가장하지 말고, 정규식/ID 추출 기반 fallback만 사용한다.
+- `TrackerItemChoiceField`는 입력값에서 정규식으로 ID를 뽑아서만 처리한다. 이름·summary query 조회는 대량 검증의 API 호출을 줄이려고 꺼 두었으므로, 다시 켜려면 먼저 사용자와 정한다.
+- 예전 preset의 query 설정은 불러올 때 정규식 방식으로 바꾼다. 문서나 화면에서 query 조회를 지원하는 것처럼 보이게 하지 않는다.
 - `TableFieldValue`는 일반 필드처럼 단순 values 배열로 처리하지 말고 실제 Codebeamer payload 구조를 유지한다.
 - `create`, `update`, `upsert` 모드는 필드 사용 범위와 검증 범위를 분리해서 다룬다.
 - 다중 파일 업로드, 파일별 루트 폴더, 컬럼 기반 그룹 폴더, 기본값/수동값 입력 흐름은 핵심 기능으로 보고 회귀를 피한다.

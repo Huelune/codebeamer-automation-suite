@@ -330,15 +330,12 @@ flowchart TD
     Q -->|아니오| S["findByName 후 필요시 user id fallback"]
     S --> T["userInfo와 reference를 캐시에 저장"]
     N -->|MemberField| U["USER/ROLE/GROUP 이름 매칭"]
-    N -->|TrackerItemChoiceField| V{"source tracker 있음?"}
-    V -->|예| W["파일 전체 값을 중복 제거 후 tracker item query 사전 조회"]
-    V -->|아니오| X["regex 기반 tracker item ID 파싱"]
+    N -->|TrackerItemChoiceField| X["regex 기반 tracker item ID 파싱"]
     N -->|기타 reference| Y["LOOKUP_REQUIRED 또는 unsupported 표시"]
     O --> Z["row별 payload cache 생성"]
     R --> Z
     T --> Z
     U --> Z
-    W --> Z
     X --> Z
     Y --> Z
     Z --> AA["preview는 cache된 payload 반환"]

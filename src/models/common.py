@@ -209,21 +209,13 @@ class OptionCheckStatus(str, Enum):
     OPTION_NOT_FOUND = "OPTION_NOT_FOUND"
     OPTION_SOURCE_UNAVAILABLE = "OPTION_SOURCE_UNAVAILABLE"
     PRECONSTRUCTION_REQUIRED = "PRECONSTRUCTION_REQUIRED"
-    TRACKER_ITEM_LOOKUP_NOT_FOUND = "TRACKER_ITEM_LOOKUP_NOT_FOUND"
-    TRACKER_ITEM_LOOKUP_AMBIGUOUS = "TRACKER_ITEM_LOOKUP_AMBIGUOUS"
     TRACKER_ITEM_REGEX_MISSING = "TRACKER_ITEM_REGEX_MISSING"
 
 
 class TrackerItemResolutionMode(str, Enum):
     REGEX = "regex"
+    # 예전 preset에 남은 값이다. 불러올 때 REGEX로 바꾸며 이름·summary 조회는 하지 않는다.
     QUERY = "query"
-
-
-class TrackerItemQueryMatchStrategy(str, Enum):
-    FIRST = "first"
-    LAST = "last"
-    BEST = "best"
-    ERROR = "error"
 
 
 class UserLookupStatus(str, Enum):

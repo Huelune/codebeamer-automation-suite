@@ -97,7 +97,7 @@ class WizardTrackerItemLookupTest(unittest.TestCase):
 
         self.assertEqual(self.client.search_calls, [])
         self.assertIn("DIRECT_PARSE_FAILED", option_check_df["status"].tolist())
-        self.assertNotIn("TRACKER_ITEM_LOOKUP_NOT_FOUND", option_check_df["status"].tolist())
+        self.assertNotIn("LOOKUP_REQUIRED", option_check_df["status"].tolist())
 
 
 if __name__ == "__main__":

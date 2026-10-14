@@ -183,7 +183,6 @@ powershell -ExecutionPolicy Bypass -File scripts/render_uml.ps1
 - 사용자 관련 필드는 이름을 우선 사용하고, 숫자 입력일 때만 사용자 ID fallback 을 사용합니다.
 - `MemberField` 의 `ROLE` 은 field permission matrix, `GROUP` 은 `/v3/users/groups` 전체 목록에서 이름으로 찾습니다.
 - `TrackerItemChoiceField` 는 tracker configuration 의 `fields` 목록에서 `referenceId == schema.field_id` 로 매칭 정보를 확인할 수 있지만, 업로드·검증에서는 항상 입력값의 ID 추출만 사용합니다.
-- 위 source tracker를 찾지 못하거나 offline snapshot 만 사용하는 경우에는 기본 정규식 ID 추출 방식으로 동작합니다.
 - 테스트 모드에서는 실제 업로드를 막고 Dry Run만 허용합니다.
 - `Status` 는 workflow transition 제약을 반영해야 하므로 현재 TODO 입니다.
 - `save_state()`는 `payload_df.csv`, `payload_preview.jsonl`을 포함해 payload cache 상태도 함께 저장합니다.
