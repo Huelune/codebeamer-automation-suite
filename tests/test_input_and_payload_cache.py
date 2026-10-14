@@ -396,6 +396,33 @@ class HierarchyProcessorSplitTest(unittest.TestCase):
         self.assertEqual(table_rows[1][0]["value"], "Opened")
 
 
+    def test_record_key_errors_name_the_actual_excel_rows(self) -> None:
+        """빈 행을 건너뛴 순번이 아니라 실제 Excel 행을 알려 준다."""
+        processor = HierarchyProcessor(summary_col="요약")
+        cases = {
+            "Excel 5행": [
+                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "One", "_excel_row": 2, "_summary_indent": 0},
+                {UPLOAD_RECORD_KEY_COLUMN: None, "요약": "Two", "_excel_row": 5, "_summary_indent": 0},
+            ],
+            "Excel 7행": [
+                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "One", "_excel_row": 2, "_summary_indent": 0},
+                {UPLOAD_RECORD_KEY_COLUMN: "REQ-2", "요약": "Two", "_excel_row": 4, "_summary_indent": 0},
+                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "One", "_excel_row": 7, "_summary_indent": 0},
+            ],
+            "Excel 3-6행": [
+                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "One", "Priority": "High", "_excel_row": 3,
+                 "_summary_indent": 0},
+                {UPLOAD_RECORD_KEY_COLUMN: "REQ-1", "요약": "One", "Priority": "Low", "_excel_row": 6,
+                 "_summary_indent": 0},
+            ],
+        }
+        for expected, rows in cases.items():
+            with self.subTest(expected=expected):
+                with self.assertRaises(ValueError) as raised:
+                    processor.merge_multiline_records(pd.DataFrame(rows, dtype=object), list_cols=[])
+                self.assertIn(expected, str(raised.exception))
+
+
 class PayloadCacheWizardTest(unittest.TestCase):
     def setUp(self) -> None:
         self.schema = [
