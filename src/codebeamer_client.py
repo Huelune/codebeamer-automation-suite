@@ -101,6 +101,21 @@ class CodebeamerClient:
         """DELETE 요청을 보내고 본문이 없으면 빈 객체를 돌려준다."""
         return self._request_json("DELETE", path, params=params, empty_ok=True)
 
+    @staticmethod
+    def _resource_monitor_path(resource_path: str) -> str:
+        """다운로드 경로를 API 모니터와 진단 파일에 남길 모양으로 줄인다.
+
+        첨부·그림 경로는 서버 context 경로와 첨부 파일 이름을 담고 있다. `/v3` API는 그 뒤만 남기고,
+        그 밖의 경로는 정해 둔 이름으로만 남긴다.
+        """
+        segments = [segment for segment in str(resource_path or "").split("/") if segment]
+        lowered = [segment.casefold() for segment in segments]
+        if "v3" in lowered:
+            return "/" + "/".join(segments[lowered.index("v3"):])
+        if "displaydocument" in lowered:
+            return "/displayDocument/{name}"
+        return "/{resource}"
+
     def _request_binary(self, source_url: str, *, max_bytes: int) -> tuple[str, bytes]:
         """같은 Codebeamer origin의 첨부 리소스를 제한된 크기로 가져온다."""
         normalized_limit = max(int(max_bytes), 1)
@@ -116,16 +131,17 @@ class CodebeamerClient:
         if "attachment" not in lowered_target and "displaydocument" not in lowered_target:
             raise ValueError("확인되지 않은 Codebeamer 리소스 경로입니다.")
 
+        monitor_path = self._resource_monitor_path(parsed.path)
         retry_context = _API_REQUEST_CONTEXT.get()
         request_kind, attempt, max_attempts = (
-            (f"GET {normalize_api_path(parsed.path)}", 1, 1)
+            (f"GET {normalize_api_path(monitor_path)}", 1, 1)
             if retry_context is None
             else retry_context
         )
         monitor_handle = self.api_monitor.start_request(
             request_kind=request_kind,
             method="GET",
-            path=parsed.path,
+            path=monitor_path,
             attempt=attempt,
             max_attempts=max_attempts,
         )

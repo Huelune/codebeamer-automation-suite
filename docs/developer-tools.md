@@ -116,6 +116,8 @@ Qt slot 또는 Python thread의 미처리 예외는 다음 세 경로로 전달�
 
 민감 키, Basic/Bearer 값, URL, 이메일과 사용자 경로는 저장 전에 마스킹합니다.
 API 경로의 숫자 ID, UUID와 긴 hex 식별자는 `{id}`로 바꾸고 query는 제거합니다.
+첨부·그림 다운로드 경로는 서버 context 경로와 첨부 파일 이름을 빼고 `/v3` 이후나 `/displayDocument/{name}`처럼
+정해 둔 모양으로만 남깁니다.
 
 ## 구현 경계
 
