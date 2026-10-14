@@ -79,23 +79,11 @@
 
 ## Notion 프로젝트 관리
 
-### 상위 개발 포트폴리오
-- 개발 포트폴리오: `https://app.notion.com/p/3b1f5e6cf897818d9b4be7a92ed11508`
-- 프로젝트 데이터베이스: `https://app.notion.com/p/23c44f4364684707837b03ebd3284d27`
-- 프로젝트 데이터 소스: `collection://01f3c0b6-6b82-4748-8fdf-f4e4cabbd25c`
-
-### Codebeamer Automation Suite 프로젝트
-- 표준 프로젝트 문서: `https://app.notion.com/p/3b1f5e6cf8978198aa90d5135a726dc6`
-- 기존 제품 및 작업 허브: `https://app.notion.com/p/3acf5e6cf8978119a322d91646bf720a`
-- 개발 작업 이력 데이터베이스: `https://app.notion.com/p/c559944c655e4a5ab1903d498e04db8a`
-- 개발 작업 이력 데이터 소스: `collection://cac750a9-3434-4099-8642-7d9b45001162`
-- 작업 백로그 데이터베이스: `https://app.notion.com/p/bb9933a238434be8b55d95977a354f39`
-- 작업 백로그 데이터 소스: `collection://b4e69eb9-1dc7-47b0-8fa2-928e1748531d`
-- 포트폴리오 데이터베이스: `https://app.notion.com/p/4c7d4d4d4818430bb03a14f11f33aab7`
-- 포트폴리오 데이터 소스: `collection://f4377be9-9c4c-476c-87ea-124411a6513e`
+Notion 페이지·데이터베이스 ID는 공개 저장소에 두지 않고 저장소 루트의 `AGENTS.local.md`(git 제외)에 둔다.
+작업 이력을 기록하기 전에 이 파일을 읽는다. 파일이 없으면 사용자에게 받아 만들고, 커밋하지 않는다.
 
 ### 동기화 규칙
-- 이 저장소의 작업은 위 Codebeamer 프로젝트 문서와 전용 데이터베이스에만 기록한다.
+- 이 저장소의 작업은 `AGENTS.local.md`의 Codebeamer 프로젝트 문서와 전용 데이터베이스에만 기록한다.
 - Notion 페이지를 생성하거나 수정하기 전에 실제 데이터 소스와 현재 스키마를 다시 조회한다.
 - 하나의 논리적 작업이 완료되면 개발 작업 이력을 생성하거나 동일 작업명·대표 커밋의 기존 기록을 갱신한다.
 - 로컬 작업은 `로컬 전용`, push 또는 열린 PR은 `원격 브랜치`, 실제 `main` 병합 후에는 `main 반영`으로 기록한다.
