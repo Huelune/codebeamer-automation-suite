@@ -30,7 +30,8 @@ def _version_output_stream() -> TextIO | None:
     """Return a writable stream, attaching a parent console for windowed EXEs."""
     if sys.stdout is not None:
         return sys.stdout
-    if os.name != "nt":
+    # mypy가 Windows 전용 ctypes.windll을 다른 플랫폼에서 걸러 내도록 sys.platform으로 검사한다.
+    if sys.platform != "win32":
         return None
 
     try:
