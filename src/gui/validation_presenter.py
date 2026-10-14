@@ -233,19 +233,7 @@ class ValidationPresenter:
             return (
                 "오류",
                 f"{field_name or df_column} 필드의 정규식이 비어 있습니다.",
-                "매핑 단계에서 Tracker Item 처리 방식을 다시 선택하거나 정규식을 입력하세요.",
-            )
-        if status == OptionCheckStatus.TRACKER_ITEM_LOOKUP_NOT_FOUND.value:
-            return (
-                "오류",
-                f"{df_column} 값으로 source tracker에서 일치하는 항목을 찾지 못했습니다.",
-                "입력 문구를 확인하거나 정규식 ID 추출 방식으로 바꾼 뒤 다시 검증하세요.",
-            )
-        if status == OptionCheckStatus.TRACKER_ITEM_LOOKUP_AMBIGUOUS.value:
-            return (
-                "오류",
-                f"{df_column} 값이 source tracker에서 여러 항목과 겹칩니다.",
-                "더 구체적인 문구를 쓰거나 정규식 ID 추출 방식으로 바꾼 뒤 다시 검증하세요.",
+                "매핑 단계에서 Tracker Item ID를 뽑을 정규식을 입력하세요.",
             )
         if status == OptionCheckStatus.DF_COLUMN_MISSING.value:
             return (

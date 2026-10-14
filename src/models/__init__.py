@@ -20,7 +20,6 @@ from .common import ResolutionStrategy
 from .common import ResolvedFieldKind
 from .common import SchemaFieldType
 from .common import TrackerItemField
-from .common import TrackerItemQueryMatchStrategy
 from .common import TrackerItemResolutionMode
 from .common import TrackerSchemaName
 from .common import UploadStatus
@@ -105,7 +104,6 @@ __all__ = [
     "TextFieldValue",
     "TrackerItemBase",
     "TrackerItemField",
-    "TrackerItemQueryMatchStrategy",
     "TrackerItemReference",
     "TrackerItemResolutionMode",
     "TrackerPermissionReference",
