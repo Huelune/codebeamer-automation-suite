@@ -1016,35 +1016,3 @@ class RootItemPage(QtWidget):
 def create_root_item_page(on_preview_requested, *, page_mode: str = "structure"):
     """기존 factory 호출 계약으로 `RootItemPage`를 생성한다."""
     return RootItemPage(on_preview_requested, page_mode=page_mode)
-
-
-def create_placeholder_page(title_text: str, description: str):
-    qt = _require_qt()
-    QWidget = qt["QWidget"]
-    QVBoxLayout = qt["QVBoxLayout"]
-    QHBoxLayout = qt["QHBoxLayout"]
-    qt["QLabel"]
-    QPushButton = qt["QPushButton"]
-    QPlainTextEdit = qt["QPlainTextEdit"]
-
-    page = QWidget()
-    layout = QVBoxLayout(page)
-    _configure_page_layout(layout)
-
-    body = QPlainTextEdit()
-    body.setReadOnly(True)
-    body.setPlainText(description)
-    layout.addWidget(body, 1)
-
-    buttons = QHBoxLayout()
-    _configure_inline_layout(buttons)
-    previous_button = QPushButton("이전")
-    next_button = QPushButton("다음")
-    buttons.addWidget(previous_button)
-    buttons.addStretch(1)
-    buttons.addWidget(next_button)
-    layout.addLayout(buttons)
-
-    previous_button.clicked.connect(lambda: page.request_previous())
-    next_button.clicked.connect(lambda: page.request_next())
-    return page

@@ -141,10 +141,6 @@ class EditableTrackerSchema:
     fields: tuple[EditableTrackerField, ...]
     status_field: EditableTrackerField | None = None
 
-    @property
-    def editable_fields(self) -> tuple[EditableTrackerField, ...]:
-        return tuple(field_value for field_value in self.fields if field_value.editable)
-
 
 @dataclass(frozen=True)
 class TrackerItemFieldChange:
@@ -1130,10 +1126,6 @@ class TrackerItemEditorService:
             lambda: client.update_item_fields(int(item_id), [field_value]),
         )
         return self.query_service.load_detail(settings, int(item_id))
-
-    def transition_status(self, *args, **kwargs) -> TrackerItemDetail:
-        """호환용 별칭. 실제 동작은 workflow transition이 아닌 Status 필드 변경이다."""
-        return self.change_status_field(*args, **kwargs)
 
     def delete_item(
         self,

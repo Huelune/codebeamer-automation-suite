@@ -590,10 +590,6 @@ class TrackerItemEditorPanel(QWidget):
         return create_tracker_field_input_widget(field_value, self.field_table)
 
     @staticmethod
-    def _boolean_value(value: Any) -> bool:
-        return tracker_field_boolean_value(value)
-
-    @staticmethod
     def _reference_ids(value: Any) -> tuple[int, ...]:
         return tracker_field_reference_ids(value)
 

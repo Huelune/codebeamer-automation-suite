@@ -1322,6 +1322,3 @@ def normalize_gui_theme_name(theme_name: str | None) -> str:
 def build_gui_stylesheet(theme_name: str | None = None) -> str:
     normalized_theme = normalize_gui_theme_name(theme_name)
     return f"{_BASE_GUI_STYLESHEET}\n{_THEME_OVERRIDES.get(normalized_theme, '')}".strip()
-
-
-GUI_STYLESHEET = build_gui_stylesheet()
