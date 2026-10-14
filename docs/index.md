@@ -82,6 +82,8 @@ lint 규칙과 type check 범위는 저장소 루트 `pyproject.toml`에 정의�
 
 - [트러블슈팅](./troubleshooting.md)
   자주 발생하는 에러와 대응 방법을 정리합니다.
+- [Windows Portable ZIP 배포](./windows-release.md)
+  GitHub Release 자산의 지원 범위, 실행 방법과 배포 절차를 정리합니다.
 
 - [호환 경로 감사](./compatibility.md)
   과거 entry point와 Excel wrapper의 사용 여부, 유지 근거, 제거 조건을 기록합니다.
@@ -97,7 +99,7 @@ lint 규칙과 type check 범위는 저장소 루트 `pyproject.toml`에 정의�
 
 ## UML 및 흐름 문서
 
-- [클래스/의존 관계 UML](./class-diagram.puml)
+- [클래스/의존 관계 UML](./class-diagram.puml) (CLI 중심이던 초기 구조 기록. GUI는 포함하지 않으며 현재 구조는 [아키텍처](./architecture.md)를 봅니다)
 - [업로드 시퀀스 UML](./upload-sequence.puml)
 - [UML 렌더링 가이드](./render-uml.md)
 - 최신 mermaid 업로드 순서도는 [아키텍처 문서](./architecture.md)에 포함되어 있습니다.
