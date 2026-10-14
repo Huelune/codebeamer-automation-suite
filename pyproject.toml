@@ -54,7 +54,7 @@ exclude = '(^|/)(\.venv|build|dist)/'
 ignore_missing_imports = true
 follow_imports = "silent"
 # 점진 도입 단계다. 아래 항목은 위반을 정리한 뒤 하나씩 켠다.
-check_untyped_defs = false
+check_untyped_defs = true
 disallow_untyped_defs = false
 warn_unused_ignores = true
 warn_redundant_casts = true

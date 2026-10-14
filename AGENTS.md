@@ -14,7 +14,7 @@
 - 파일 검색은 `rg`, 파일 생성/수정은 `apply_patch`를 우선 사용한다.
 - 사용자가 만든 관련 없는 변경은 절대 되돌리지 않는다.
 - lint와 type check 설정은 `pyproject.toml`이 단일 출처다. 규칙을 끄는 대신 위반을 정리하는 방향을 우선한다.
-- mypy 제외 목록(`[[tool.mypy.overrides]]`)은 점진 도입용 백로그다. 모듈을 정리하면 목록에서 지우고, 새 모듈을 추가하지 않는다.
+- mypy는 점진 도입 중이며 남은 백로그는 `pyproject.toml`에서 꺼 둔 검사 플래그(`disallow_untyped_defs` 등)다. 위반을 정리한 뒤 플래그를 하나씩 켜고, 모듈 제외 목록(`[[tool.mypy.overrides]]`)은 새로 만들지 않는다.
 - 재내보내기만 하는 모듈을 새로 만들지 않는다. 소비자는 정의 모듈에서 직접 import 한다.
 
 ## Git 및 커밋 규칙
