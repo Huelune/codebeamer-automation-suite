@@ -49,12 +49,13 @@ known-first-party = ["src", "tests"]
 
 [tool.mypy]
 python_version = "3.13"
-files = ["src"]
+# 루트 진입점과 릴리스 검증 스크립트도 같은 규칙으로 본다.
+files = ["src", "gui_main.py", "cli_main.py", "main.py", "scripts"]
 exclude = '(^|/)(\.venv|build|dist)/'
 ignore_missing_imports = true
 follow_imports = "silent"
 # 점진 도입 단계다. 아래 항목은 위반을 정리한 뒤 하나씩 켠다.
-check_untyped_defs = false
+check_untyped_defs = true
 disallow_untyped_defs = false
 warn_unused_ignores = true
 warn_redundant_casts = true
