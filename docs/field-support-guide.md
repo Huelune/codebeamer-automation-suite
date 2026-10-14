@@ -215,7 +215,7 @@ raw schema type을 그대로 코드 전역에 퍼뜨리지 말고,
 
 - `UserReference`, `UserChoiceField`는 사용자 이름 우선 resolver가 있으므로 지원
 - `MemberField`는 `USER/ROLE/GROUP` mixed resolver가 있으므로 지원
-- `TrackerItemChoiceField`는 configuration 기반 query resolver 또는 tracker item ID parser가 있으므로 조건부 지원
+- `TrackerItemChoiceField`는 정규식 tracker item ID parser만 쓰므로 ID가 들어 있는 값만 지원(이름·summary query 조회는 비활성화)
 - `generic_reference`는 resolver가 없으므로 조기 실패
 - 모호한 필드는 text fallback으로 넘기지 않음
 

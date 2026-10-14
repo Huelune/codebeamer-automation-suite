@@ -45,7 +45,7 @@
    - `Test Steps.Expected result`
    - `Test Steps.Critical`
    - `Related Requirement`
-11. `Related Requirement`는 테스트 모드에서 query lookup이 아니라 기본 regex ID 추출 방식으로 두는 편이 맞습니다.
+11. `Related Requirement`는 기본 regex ID 추출 방식으로 처리합니다. 이름·summary query 조회는 지원하지 않습니다.
    - 샘플 값은 `[REQ:9001001]` 같은 형식이라 기본 regex로 바로 인식됩니다.
 12. `Owner`, `Review Team`은 오프라인 snapshot에 사용자/그룹 디렉터리가 없으므로 첫 성공 경로에서는 매핑하지 않는 편이 맞습니다.
 13. 업로드 단계에서는 `Dry Run`을 켠 상태로만 진행할 수 있습니다.
@@ -60,7 +60,7 @@
 
 - `files/SAMPLE_LOOKUP_TC_003.xlsx`
   - `Owner`, `Review Team`에 실제 값이 들어 있어 lookup 실패와 차단 경고를 확인하기 좋습니다.
-  - `Related Requirement`도 이름 기반 조회 예시 값이 포함되어 있어 테스트 모드에서 query 방식을 고르면 의도적으로 막히는 흐름을 볼 수 있습니다.
+  - `Related Requirement`에는 ID 없이 이름만 적은 값이 있어, 정규식으로 ID를 뽑지 못해 차단되는 흐름을 볼 수 있습니다.
 
 파일명 파싱 테스트 팁:
 
