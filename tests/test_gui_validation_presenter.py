@@ -123,6 +123,24 @@ class ValidationPresenterTest(unittest.TestCase):
 
         self.assertEqual(finalized.iloc[0]["severity"], "오류")
 
+    def test_finalize_issue_df_orders_multi_file_rows_by_file_then_row_number(self) -> None:
+        """여러 파일이면 row_id가 `경로::번호`라 숫자로 바뀌지 않아 행 순서가 무시되었다."""
+        issue_df = pd.DataFrame(
+            [
+                {"severity": "오류", "category": "값 검증", "row_id": "/w/b.xlsx::1", "source_file": "b.xlsx"},
+                {"severity": "오류", "category": "값 검증", "row_id": "/w/a.xlsx::10", "source_file": "a.xlsx"},
+                {"severity": "오류", "category": "값 검증", "row_id": "/w/a.xlsx::9", "source_file": "a.xlsx"},
+                {"severity": "오류", "category": "값 검증", "row_id": "/w/a.xlsx::2", "source_file": "a.xlsx"},
+            ]
+        ).assign(column="A", field="A")
+
+        finalized = self.presenter.finalize_issue_df(issue_df)
+
+        self.assertEqual(
+            finalized["row_id"].tolist(),
+            ["/w/a.xlsx::2", "/w/a.xlsx::9", "/w/a.xlsx::10", "/w/b.xlsx::1"],
+        )
+
     def test_server_lookup_failure_is_not_reported_as_unknown_user(self) -> None:
         """요청 제한·연결 문제로 조회하지 못한 값을 입력값 문제처럼 안내하지 않는다."""
         for status in ("USER_LOOKUP_FAILED", "MEMBER_LOOKUP_FAILED"):
