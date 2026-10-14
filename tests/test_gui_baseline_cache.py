@@ -75,8 +75,10 @@ class BaselineItemCacheTest(unittest.TestCase):
         one_file = self.cache.total_bytes()
         self.cache = BaselineItemCache(self.root, max_bytes=one_file * 2 + 100)
         self.cache.save(_key(2), big_items)
-        # 1번을 다시 읽어 2번보다 최근에 쓴 것으로 만든다.
-        time.sleep(0.05)
+        # 1번을 다시 읽어 2번보다 최근에 쓴 것으로 만든다. 파일 시각 해상도에 기대지 않도록 둘 다 과거로 돌려 둔다.
+        past = time.time() - 60
+        for key in (_key(1), _key(2)):
+            os.utime(self.root / key.file_name(), (past, past))
         self.assertIsNotNone(self.cache.load(_key(1)))
 
         self.cache.save(_key(3), big_items)
