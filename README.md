@@ -178,6 +178,8 @@ powershell -ExecutionPolicy Bypass -File scripts/render_uml.ps1
 ## 참고 사항
 
 - `TableField` 컬럼은 `TableFieldName.ColumnName` 형식의 Excel 헤더를 기준으로 감지합니다.
+- Excel 헤더 이름은 대소문자·앞뒤 공백을 무시하고 서로 달라야 합니다. 겹치면 열 위치를 알려 주고 불러오기를 멈추며, 비어 있는 헤더 칸은 `Unnamed_<순서>`로 읽습니다.
+- 한 필드에는 같은 작업(생성 또는 수정)에 한 열만 매핑할 수 있습니다. 여러 열이 겹치면 검증에서 막습니다.
 - 한 아이템에 여러 `TableField` 행을 넣을 때는 각 원본 행에 같은 `Upload Record Key`를 연속해서 입력합니다. 일반 필드는 그룹의 첫 행 값을 사용하며 다른 행의 값이 다르면 공백 차이도 업로드 전에 오류로 차단합니다.
 - 정적 option이 없는 일반 reference 필드는 아직 자동 lookup을 모두 지원하지 않습니다.
 - 사용자 관련 필드는 이름을 우선 사용하고, 숫자 입력일 때만 사용자 ID fallback 을 사용합니다.

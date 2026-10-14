@@ -208,6 +208,97 @@ class ExcelReaderTest(unittest.TestCase):
         self.assertTrue(all(app.books.last_workbook.closed for app in apps))
 
     @staticmethod
+    def _save_sheet(path: Path, rows: list[list[object]]) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Main"
+        for row in rows:
+            sheet.append(row)
+        workbook.save(path)
+        workbook.close()
+
+    def test_duplicate_headers_are_rejected_with_column_letters_on_every_read(self) -> None:
+        """헤더가 같으면 오른쪽 열 값이 왼쪽 열을 덮어써 조용히 사라진다. 읽기 전에 막는다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            self._save_sheet(
+                path,
+                [
+                    ["Summary", "Owner", "설명", " owner ", "비고"],
+                    ["REQ-001", "kim", "첫 번째", "lee", "-"],
+                ],
+            )
+            reader = ExcelReader(header_row=1, summary_col="Summary")
+            reads = {
+                "headers": lambda: reader.read_headers(str(path), "Main"),
+                "preview": lambda: reader.read_preview_rows(str(path), "Main"),
+                "full": lambda: reader.read_excel(str(path), "Main"),
+                "count": lambda: reader.count_upload_rows(str(path), "Main"),
+            }
+            for name, read in reads.items():
+                with self.subTest(read=name):
+                    with self.assertRaises(ValueError) as raised:
+                        read()
+                    self.assertIn("B열과 D열의 헤더 이름이 같습니다", str(raised.exception))
+
+    def test_every_duplicate_header_group_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            self._save_sheet(
+                path,
+                [
+                    ["Summary", "A", "B", "a", "b", "B "],
+                    ["REQ-001", 1, 2, 3, 4, 5],
+                ],
+            )
+            reader = ExcelReader(header_row=1, summary_col="Summary")
+
+            with self.assertRaises(ValueError) as raised:
+                reader.read_headers(str(path), "Main")
+
+        message = str(raised.exception)
+        self.assertIn("B열과 D열", message)
+        self.assertIn("C열·E열·F열", message)
+        self.assertIn("각각", message)
+
+    def test_blank_headers_in_the_middle_get_distinct_column_names(self) -> None:
+        """공백뿐인 헤더가 빈 이름이 되면 두 칸이 같은 이름으로 합쳐진다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            self._save_sheet(
+                path,
+                [
+                    ["Summary", "   ", "설명", " ", "비고"],
+                    ["REQ-001", "x", "첫 번째", "y", "-"],
+                ],
+            )
+            reader = ExcelReader(header_row=1, summary_col="Summary")
+
+            headers = reader.read_headers(str(path), "Main")
+            raw_df = reader.read_excel(str(path), "Main")
+
+        self.assertEqual(headers, ["Summary", "Unnamed_1", "설명", "Unnamed_3", "비고"])
+        self.assertEqual(raw_df["Unnamed_1"].tolist(), ["x"])
+        self.assertEqual(raw_df["Unnamed_3"].tolist(), ["y"])
+
+    def test_xls_duplicate_headers_use_worksheet_column_letters(self) -> None:
+        values = [
+            ["Summary", "Owner", "OWNER"],
+            ["REQ-001", "kim", "lee"],
+        ]
+        reader = ExcelReader(header_row=5, summary_col="Summary")
+        with patch.object(
+            reader,
+            "_create_xlwings_app",
+            side_effect=lambda **_kwargs: self._fake_xlwings_app(
+                values, first_row=5, first_column=3, indent_by_cell={}
+            ),
+        ), self.assertRaises(ValueError) as raised:
+            reader.read_excel("sample.xls", "Main")
+
+        self.assertIn("D열과 E열", str(raised.exception))
+
+    @staticmethod
     def _fake_xlwings_app(
         values,
         *,

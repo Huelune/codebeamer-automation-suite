@@ -167,6 +167,33 @@ class GuiPagesUploadPageTest(unittest.TestCase):
             self._expanding_policy,
         )
 
+    def test_file_selection_long_failure_message_wraps_instead_of_widening_the_page(self) -> None:
+        """긴 오류 문구가 한 줄로 남으면 좁은 창에서 파일 단계에 가로 스크롤이 생긴다."""
+        from PySide6.QtWidgets import QLabel
+
+        message = "B열과 D열, C열·E열·F열의 헤더 이름이 각각 같습니다(대소문자·앞뒤 공백 무시). " * 2
+
+        def fail_preview(*_args, **_kwargs):
+            raise ValueError(message)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            path.write_bytes(b"sample")
+            page = create_file_selection_page(
+                GuiSettings(),
+                lambda _state: None,
+                lambda _state: None,
+                on_sheet_preview_requested=fail_preview,
+            )
+            page.load_state({"file_paths": [str(path)], "preview_file_path": str(path), "sheet_name": "Main"})
+            page.preview_button.click()
+
+        status_label = next(label for label in page.findChildren(QLabel) if message.strip() in label.text())
+        self.assertLess(
+            page.minimumSizeHint().width(),
+            status_label.fontMetrics().horizontalAdvance(status_label.text()),
+        )
+
     def test_file_selection_requires_explicit_preview_and_full_load_stages(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "sample.xlsx"

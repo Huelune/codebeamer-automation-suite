@@ -770,3 +770,50 @@ class GuiMappingPipelineServiceTest(unittest.TestCase):
 
             self.assertEqual(len(result["success_df"]), 1)
             self.assertEqual(result["success_df"].iloc[0]["created_item_id"], "DRYRUN-0")
+
+    def test_validate_mapping_blocks_two_columns_mapped_to_the_same_field(self) -> None:
+        """같은 필드에 두 열을 매핑하면 사용자 정의 필드가 payload에 두 번 들어가거나 뒤 열이 앞 열을 덮어쓴다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Main"
+            sheet.append(["Summary", "담당자", "담당자 메모"])
+            sheet.append(["REQ-001", "홍길동", "김철수"])
+            workbook.save(path)
+            workbook.close()
+
+            service = GuiUploadPipelineService(client_factory=FakeClient, reader_cls=FakeExcelReader)
+            settings = GuiSettings(
+                base_url="https://example.com/cb",
+                username="user",
+                password="secret",
+                default_project_id="10",
+                default_tracker_id="1000",
+                excel_header_row=1,
+                summary_column="Summary",
+                excel_sheet_name="Main",
+            )
+            mapping_context = service.prepare_mapping_context(
+                settings,
+                {
+                    "file_path": str(path),
+                    "preview_file_path": str(path),
+                    "sheet_name": "Main",
+                    "header_row": 1,
+                    "summary_column": "Summary",
+                },
+            )
+
+            validation_context = service.validate_mapping(
+                mapping_context,
+                {"Summary": "Summary", "담당자": "담당자", "담당자 메모": "담당자"},
+            )
+
+        self.assertTrue(validation_context.has_blocking_issues)
+        issues = validation_context.issue_df
+        mapping_issues = issues[issues["category"] == "매핑"]
+        self.assertEqual(len(mapping_issues), 1)
+        self.assertEqual(mapping_issues.iloc[0]["severity"], "오류")
+        self.assertEqual(mapping_issues.iloc[0]["field"], "담당자")
+        self.assertIn("담당자 메모", mapping_issues.iloc[0]["message"])

@@ -106,6 +106,8 @@ def _initialize_file_selection_page(
 
     status_label = QLabel("Excel 파일을 선택하면 먼저 시트 정보만 불러옵니다.")
     status_label.setObjectName("status_label")
+    # 오류 문구가 길 수 있다. 한 줄로 두면 좁은 창에서 페이지가 넓어져 가로 스크롤이 생긴다.
+    status_label.setWordWrap(True)
     _configure_constrained_panel(status_label, max_width=WIDE_FORM_PANEL_MAX_WIDTH)
     layout.addWidget(status_label)
 
