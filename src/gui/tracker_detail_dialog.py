@@ -10,9 +10,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from collections.abc import Iterable
+from functools import partial
 from html import escape
 from typing import TYPE_CHECKING
 
+from PySide6.QtCore import QTimer
 from shiboken6 import isValid
 
 from .tracker_comment_models import ItemComment
@@ -24,6 +27,7 @@ from .tracker_content_models import WikiRenderResult
 from .tracker_content_models import WikiResourceReference
 from .tracker_content_service import MAX_INLINE_IMAGE_BYTES
 from .tracker_content_service import MAX_ITEM_INLINE_IMAGE_BYTES
+from .tracker_detail_panel import MAX_CONCURRENT_IMAGE_DOWNLOADS
 from .tracker_item_detail_dialog import TrackerItemDetailDialog
 from .tracker_item_detail_session import TrackerItemDetailSession
 from .tracker_query_models import TrackerItemDetail
@@ -86,6 +90,14 @@ class DetailDialogController:
         if self.page.hierarchy_panel.selected_baseline_id() == panel.baseline_id:
             self.attach_item_tree(dialog, session)
         dialog.finished.connect(lambda _result: session.invalidate())
+
+        def hydrate_after_shown() -> None:
+            # 열 때는 패널이 이미 받은 것으로 채웠다. 창이 뜬 뒤 아직 못 받은 본문 그림과 첨부를 이어서 받는다.
+            # 서비스 캐시가 있어 패널이 받은 것은 다시 내려받지 않는다.
+            if isValid(dialog):
+                self.hydrate(dialog, session, detail, session.generation)
+
+        QTimer.singleShot(0, hydrate_after_shown)
         dialog.exec()
         # 부모가 작업공간이라 지우지 않으면 닫은 창이 이미지·트리와 함께 계속 남는다.
         # 늦게 도착하는 조회 결과는 각 콜백의 확인 함수가 isValid 로 걸러 낸다.
@@ -296,6 +308,36 @@ class DetailDialogController:
             )
 
         if is_explicit_wiki_type(detail.description_format):
+
+            def description_rendered(result: WikiRenderResult) -> None:
+                if not current():
+                    return
+                dialog.set_description_html(result.html)
+                if not result.resources:
+                    return
+
+                def description_images_loaded(resources: tuple[AttachmentResource, ...]) -> None:
+                    if not current():
+                        return
+                    for resource in resources:
+                        dialog.description_view.add_attachment_resource(resource)
+
+                # 서버가 렌더링한 설명의 그림은 패널처럼 따로 받아 넣어야 보인다.
+                self.page._submit(
+                    "detail_dialog_wiki_images",
+                    lambda: self._download_within_budget(
+                        partial(
+                            self.page.content_service.download_resource,
+                            settings,
+                            resource_key=reference.resource_key,
+                            source_url=reference.source_url,
+                        )
+                        for reference in result.resources
+                    ),
+                    description_images_loaded,
+                    lambda _exc: None,
+                )
+
             self.page._submit(
                 "detail_dialog_wiki",
                 lambda: self.page.content_service.render_wiki(
@@ -303,7 +345,7 @@ class DetailDialogController:
                     self.page.detail_panel.wiki_context(detail, dialog.baseline_id),
                     detail.description,
                 ),
-                lambda result: dialog.set_description_html(result.html) if current() else None,
+                description_rendered,
                 lambda _exc: None,
             )
         # 작업공간과 같이 과거 첨부 revision을 확인할 수 없어 Baseline 첨부는 불러오지 않는다.
@@ -337,9 +379,14 @@ class DetailDialogController:
 
             self.page._submit(
                 "detail_dialog_images",
-                lambda: tuple(
-                    self.page.content_service.download_attachment(settings, image, max_bytes=MAX_INLINE_IMAGE_BYTES)
-                    for image in images[: max(1, MAX_ITEM_INLINE_IMAGE_BYTES // MAX_INLINE_IMAGE_BYTES)]
+                lambda: self._download_within_budget(
+                    partial(
+                        self.page.content_service.download_attachment,
+                        settings,
+                        image,
+                        max_bytes=MAX_INLINE_IMAGE_BYTES,
+                    )
+                    for image in images
                 ),
                 resources_loaded,
                 lambda _exc: dialog.set_images(attachments, ()) if current() else None,
@@ -353,6 +400,25 @@ class DetailDialogController:
             attachments_loaded,
             lambda _exc: None,
         )
+
+    @staticmethod
+    def _download_within_budget(
+        downloads: Iterable[Callable[[], AttachmentResource]],
+    ) -> tuple[AttachmentResource, ...]:
+        """그림을 차례로 받는다. 하나가 실패해도 나머지는 보이고, 아이템 예산을 넘으면 멈춘다."""
+        resources: list[AttachmentResource] = []
+        total = 0
+        for download in downloads:
+            try:
+                resource = download()
+            except Exception:
+                # 일시 실패나 형식 오류는 그 그림만 빠진다. 나머지까지 버리지 않는다.
+                continue
+            if total + len(resource.data) > MAX_ITEM_INLINE_IMAGE_BYTES:
+                break
+            total += len(resource.data)
+            resources.append(resource)
+        return tuple(resources)
 
     def load_comments(
         self,
@@ -411,7 +477,9 @@ class DetailDialogController:
         item_id = detail.item_id
         version = detail.version
         loaded_bytes = {"value": 0}
-        reserved = {"value": 0}
+        # 아직 시작하지 않은 그림 받기. 동시에는 MAX_CONCURRENT_IMAGE_DOWNLOADS 개만 받고 끝나면 다음을 시작한다.
+        pending: list[Callable[[], object]] = []
+        state = {"running": 0, "starting": False}
 
         def current() -> bool:
             return (
@@ -423,18 +491,31 @@ class DetailDialogController:
                 and dialog.detail.version == version
             )
 
+        def start_pending() -> None:
+            # 동기 실행에서는 시작하자마자 끝나 다시 불린다. 바깥 반복이 이어서 처리한다.
+            if state["starting"]:
+                return
+            state["starting"] = True
+            try:
+                while pending and state["running"] < MAX_CONCURRENT_IMAGE_DOWNLOADS:
+                    if not current() or loaded_bytes["value"] >= MAX_ITEM_INLINE_IMAGE_BYTES:
+                        pending.clear()
+                        return
+                    state["running"] += 1
+                    pending.pop(0)()
+            finally:
+                state["starting"] = False
+
+        def download_finished() -> None:
+            state["running"] = max(0, state["running"] - 1)
+            start_pending()
+
         def apply_resource(comment_id: str, resource: AttachmentResource) -> None:
-            reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
+            download_finished()
             if not current() or loaded_bytes["value"] + len(resource.data) > MAX_ITEM_INLINE_IMAGE_BYTES:
                 return
             if dialog.add_comment_resource(comment_id, resource):
                 loaded_bytes["value"] += len(resource.data)
-
-        def reserve() -> bool:
-            if loaded_bytes["value"] + reserved["value"] + MAX_INLINE_IMAGE_BYTES > MAX_ITEM_INLINE_IMAGE_BYTES:
-                return False
-            reserved["value"] += MAX_INLINE_IMAGE_BYTES
-            return True
 
         for comment in snapshot.comments:
             if is_explicit_wiki_type(comment.format_name):
@@ -443,14 +524,12 @@ class DetailDialogController:
                         return
                     dialog.set_comment_html(selected.comment_id, result.html)
                     for reference in result.resources:
-                        if not reserve():
-                            break
 
                         def inline_loaded(resource: AttachmentResource, *, comment_id=selected.comment_id) -> None:
                             apply_resource(comment_id, resource)
 
                         def inline_failed(_exc: Exception) -> None:
-                            reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
+                            download_finished()
 
                         def download_inline(
                             value: WikiResourceReference = reference,
@@ -461,12 +540,16 @@ class DetailDialogController:
                                 source_url=value.source_url,
                             )
 
-                        self.page._submit(
-                            f"comment_inline:{selected.comment_id}:{reference.resource_key}",
-                            download_inline,
-                            inline_loaded,
-                            inline_failed,
+                        pending.append(
+                            partial(
+                                self.page._submit,
+                                f"comment_inline:{selected.comment_id}:{reference.resource_key}",
+                                download_inline,
+                                inline_loaded,
+                                inline_failed,
+                            )
                         )
+                    start_pending()
 
                 def render_comment(selected: ItemComment = comment) -> WikiRenderResult:
                     return self.page.content_service.render_wiki(
@@ -487,8 +570,6 @@ class DetailDialogController:
                     continue
                 if attachment.size is not None and attachment.size > MAX_INLINE_IMAGE_BYTES:
                     continue
-                if not reserve():
-                    break
                 resource_key = f"comment-{comment.comment_id}-attachment-{attachment.attachment_id}"
 
                 def attachment_loaded(
@@ -499,7 +580,7 @@ class DetailDialogController:
                 ) -> None:
                     normalized_mime = str(resource.mime_type or "").split(";", 1)[0].strip().casefold()
                     if normalized_mime not in ATTACHMENT_IMAGE_MIME_TYPES:
-                        reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
+                        download_finished()
                         return
                     apply_resource(
                         comment_id,
@@ -507,7 +588,7 @@ class DetailDialogController:
                     )
 
                 def attachment_failed(_exc: Exception) -> None:
-                    reserved["value"] = max(0, reserved["value"] - MAX_INLINE_IMAGE_BYTES)
+                    download_finished()
 
                 def download_comment_attachment(
                     selected: AttachmentSummary = attachment,
@@ -518,9 +599,13 @@ class DetailDialogController:
                         max_bytes=MAX_INLINE_IMAGE_BYTES,
                     )
 
-                self.page._submit(
-                    f"comment_attachment:{comment.comment_id}:{attachment.attachment_id}",
-                    download_comment_attachment,
-                    attachment_loaded,
-                    attachment_failed,
+                pending.append(
+                    partial(
+                        self.page._submit,
+                        f"comment_attachment:{comment.comment_id}:{attachment.attachment_id}",
+                        download_comment_attachment,
+                        attachment_loaded,
+                        attachment_failed,
+                    )
                 )
+        start_pending()
