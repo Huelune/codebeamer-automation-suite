@@ -32,6 +32,7 @@ from src.gui.styles import build_gui_stylesheet
 from src.gui.tracker_baseline_compare import BaselineComparisonKind
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
 from src.gui.tracker_baseline_compare import compare_tracker_items
+from src.gui.tracker_baseline_export_dialog import BaselineExportFieldDialog
 from src.gui.tracker_bulk_update import BulkFieldChange
 from src.gui.tracker_bulk_update import BulkUpdateRunResult
 from src.gui.tracker_bulk_update import BulkUpdateRunStore
@@ -46,6 +47,7 @@ from src.gui.tracker_content_models import WikiRenderResult
 from src.gui.tracker_content_models import WikiResourceReference
 from src.gui.tracker_detail_panel import ATTACHMENT_VISIBLE_ROWS
 from src.gui.tracker_favorites_panel import UNAVAILABLE_TEXT
+from src.gui.tracker_hierarchy_export_dialog import TrackerHierarchyExportFieldDialog
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_create_dialog import TrackerItemCreateDialog
 from src.gui.tracker_item_create_dialog import TrackerItemCreateRequest
@@ -577,6 +579,19 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             self.page.hierarchy_panel._baseline_hierarchy_cache,
         )
 
+    @staticmethod
+    def _accepting_export_dialog(dialog_cls, selected_keys: tuple[str, ...]):
+        """exec만 막은 진짜 필드 선택 창. 호출부가 넘긴 실제 인자로 생성자가 불린다."""
+
+        class _AcceptingDialog(dialog_cls):
+            def exec(self) -> int:
+                return QDialog.DialogCode.Accepted
+
+            def selected_field_keys(self) -> tuple[str, ...]:
+                return selected_keys
+
+        return _AcceptingDialog
+
     def test_hierarchy_export_selects_fields_and_uses_bulk_snapshot_service(self) -> None:
         self.page.activate()
         snapshot = object()
@@ -588,10 +603,12 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             long_value_part_count=0,
         )
 
+        accepting_dialog = self._accepting_export_dialog(TrackerHierarchyExportFieldDialog, ("status", "custom:101"))
         with (
             patch(
-                "src.gui.tracker_hierarchy_panel.TrackerHierarchyExportFieldDialog"
-            ) as dialog_cls,
+                "src.gui.tracker_hierarchy_panel.TrackerHierarchyExportFieldDialog",
+                accepting_dialog,
+            ),
             patch(
                 "src.gui.tracker_hierarchy_panel.QFileDialog.getSaveFileName",
                 return_value=("hierarchy.xlsx", "Excel 통합 문서 (*.xlsx)"),
@@ -606,11 +623,6 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 return_value=summary,
             ) as export_mock,
         ):
-            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
-            dialog_cls.return_value.selected_field_keys.return_value = (
-                "status",
-                "custom:101",
-            )
 
             self.page.hierarchy_panel.hierarchy_export_button.click()
 
@@ -648,10 +660,12 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             long_value_part_count=0,
         )
 
+        accepting_dialog = self._accepting_export_dialog(TrackerHierarchyExportFieldDialog, ("status",))
         with (
             patch(
-                "src.gui.tracker_hierarchy_panel.TrackerHierarchyExportFieldDialog"
-            ) as dialog_cls,
+                "src.gui.tracker_hierarchy_panel.TrackerHierarchyExportFieldDialog",
+                accepting_dialog,
+            ),
             patch(
                 "src.gui.tracker_hierarchy_panel.QFileDialog.getSaveFileName",
                 return_value=("baseline-hierarchy.xlsx", "Excel 통합 문서 (*.xlsx)"),
@@ -669,8 +683,6 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 return_value=summary,
             ) as export_mock,
         ):
-            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
-            dialog_cls.return_value.selected_field_keys.return_value = ("status",)
 
             self.page.hierarchy_panel.hierarchy_export_button.click()
 
@@ -1007,12 +1019,9 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             long_value_part_count=0,
         )
 
+        accepting_dialog = self._accepting_export_dialog(BaselineExportFieldDialog, ("name",))
         with (
-            patch(
-                "src.gui.tracker_baseline_workspace.baseline_export_fields",
-                return_value=(object(),),
-            ),
-            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
+            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog", accepting_dialog),
             patch(
                 "src.gui.tracker_baseline_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
@@ -1022,8 +1031,6 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 return_value=summary,
             ) as export_mock,
         ):
-            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
-            dialog_cls.return_value.selected_field_keys.return_value = ("name",)
 
             self.page.baseline_workspace._export_baseline_comparison()
 
@@ -1069,12 +1076,9 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         ) or tasks[-1]
         self.page.error_notifier = lambda title, message: alerts.append((title, message))
 
+        accepting_dialog = self._accepting_export_dialog(BaselineExportFieldDialog, ("name",))
         with (
-            patch(
-                "src.gui.tracker_baseline_workspace.baseline_export_fields",
-                return_value=(object(),),
-            ),
-            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
+            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog", accepting_dialog),
             patch(
                 "src.gui.tracker_baseline_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
@@ -1084,8 +1088,6 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 side_effect=RuntimeError("save failed"),
             ),
         ):
-            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
-            dialog_cls.return_value.selected_field_keys.return_value = ("name",)
 
             self.page.baseline_workspace._export_baseline_comparison()
             tasks[0].finish()
@@ -1234,8 +1236,9 @@ class TrackerWorkspacePageTest(unittest.TestCase):
             long_value_part_count=0,
         )
 
+        accepting_dialog = self._accepting_export_dialog(BaselineExportFieldDialog, ("name",))
         with (
-            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog") as dialog_cls,
+            patch("src.gui.tracker_baseline_workspace.BaselineExportFieldDialog", accepting_dialog),
             patch(
                 "src.gui.tracker_baseline_workspace.QFileDialog.getSaveFileName",
                 return_value=("baseline.xlsx", "Excel 통합 문서 (*.xlsx)"),
@@ -1245,8 +1248,6 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 return_value=summary,
             ) as export_mock,
         ):
-            dialog_cls.return_value.exec.return_value = QDialog.DialogCode.Accepted
-            dialog_cls.return_value.selected_field_keys.return_value = ("name",)
             self.page.baseline_workspace._export_baseline_comparison()
 
         exported_result = export_mock.call_args.args[0]
