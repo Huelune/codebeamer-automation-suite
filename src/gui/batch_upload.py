@@ -29,6 +29,7 @@ from .upload_context import FailedUploadRetryContext
 from .upload_context import FailedUploadRetryJob
 from .upload_context import MappingContext
 from .upload_context import RootItemUploadSpec
+from .validation_presenter import ValidationPresenter
 
 
 def _build_file_scoped_event_forwarder(
@@ -157,12 +158,32 @@ class BatchUploadService:
         *,
         file_label: str,
         file_path: str,
+        wizard: CodebeamerUploadWizard | None = None,
     ) -> pd.DataFrame:
-        return BatchValidationService._annotate_source_frame(
+        work = BatchValidationService._annotate_source_frame(
             df,
             file_label=file_label,
             file_path=file_path,
         )
+        if work.empty or "_row_id" not in work.columns:
+            return work
+        # `_row_id`는 0부터 세는 병합 레코드 번호라 사용자가 Excel에서 찾을 수 없다. 실제 행을 붙인다.
+        row_labels: dict[str, str] = {}
+        upload_df = getattr(getattr(wizard, "state", None), "upload_df", None)
+        if isinstance(upload_df, pd.DataFrame) and "_row_id" in upload_df.columns:
+            row_labels = {
+                ValidationPresenter.to_row_key(row.get("_row_id")): ValidationPresenter.build_row_label(row)
+                for _, row in upload_df.iterrows()
+            }
+        excel_rows = [
+            row_labels.get(ValidationPresenter.to_row_key(row_id), "")
+            for row_id in work["_row_id"].tolist()
+        ]
+        if "excel_row" in work.columns:
+            work["excel_row"] = excel_rows
+        else:
+            work.insert(work.columns.get_loc("source_file_path") + 1, "excel_row", excel_rows)
+        return work
 
     @staticmethod
     def _root_item_spec_dicts(
@@ -424,6 +445,7 @@ class BatchUploadService:
             pending,
             file_label=job.file_label,
             file_path=job.file_path,
+            wizard=job.wizard,
         )
 
     def _prepare_wizard_for_file(
@@ -700,16 +722,19 @@ class BatchUploadService:
                 result.get("success_df"),
                 file_label=job.file_label,
                 file_path=job.file_path,
+                wizard=job.wizard,
             )
             failed_df = self._annotate_batch_result_frame(
                 result.get("failed_df"),
                 file_label=job.file_label,
                 file_path=job.file_path,
+                wizard=job.wizard,
             )
             unresolved_df = self._annotate_batch_result_frame(
                 result.get("unresolved_df"),
                 file_label=job.file_label,
                 file_path=job.file_path,
+                wizard=job.wizard,
             )
 
             if not success_df.empty:
@@ -1035,6 +1060,7 @@ class BatchUploadService:
                         insert_result.get(key),
                         file_label=retry_job.file_label,
                         file_path=retry_job.file_path,
+                        wizard=retry_job.wizard,
                     )
                     if not frame.empty:
                         collection.append(frame)
@@ -1087,6 +1113,7 @@ class BatchUploadService:
                         update_result.get(key),
                         file_label=retry_job.file_label,
                         file_path=retry_job.file_path,
+                        wizard=retry_job.wizard,
                     )
                     if frame.empty:
                         continue
