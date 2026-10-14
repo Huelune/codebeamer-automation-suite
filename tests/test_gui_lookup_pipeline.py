@@ -13,7 +13,6 @@ from src.models import PayloadStatus
 from tests.gui_service_fixtures import FakeExcelReader
 from tests.gui_service_fixtures import MemberReferenceDefaultFakeClient
 from tests.gui_service_fixtures import TrackerItemDefaultValueFakeClient
-from tests.gui_service_fixtures import TrackerItemNonTrackerConfigFakeClient
 from tests.gui_service_fixtures import TrackerItemQueryFakeClient
 from tests.gui_service_fixtures import TrackerItemReferenceIdConfigFakeClient
 from tests.gui_service_fixtures import UserReferenceDefaultFakeClient
@@ -71,7 +70,7 @@ class GuiLookupPipelineServiceTest(unittest.TestCase):
         class CountingClient(TrackerItemReferenceIdConfigFakeClient):
             def get_tracker_configuration(self, tracker_id: int):
                 configuration_requests.append(tracker_id)
-                return super().get_tracker_configuration(tracker_id)
+                return {}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "sample.xlsx"
@@ -120,7 +119,7 @@ class GuiLookupPipelineServiceTest(unittest.TestCase):
             self.assertNotIn("tracker_item_source_tracker_ids", mapping_context.schema_df.columns)
             self.assertEqual(configuration_requests, [])
 
-    def test_prepare_mapping_context_disables_query_for_non_tracker_configuration(self) -> None:
+    def test_prepare_mapping_context_builds_regex_setting_for_tracker_item_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "sample.xlsx"
             workbook = Workbook()
@@ -132,7 +131,7 @@ class GuiLookupPipelineServiceTest(unittest.TestCase):
             workbook.close()
 
             service = GuiUploadPipelineService(
-                client_factory=TrackerItemNonTrackerConfigFakeClient,
+                client_factory=TrackerItemQueryFakeClient,
                 reader_cls=FakeExcelReader,
             )
             settings = GuiSettings(

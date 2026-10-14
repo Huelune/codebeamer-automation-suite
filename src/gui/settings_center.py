@@ -410,14 +410,6 @@ class SettingsCenterPage(QWidget):
         schema_layout.setSpacing(6)
         schema_layout.addWidget(self.schema_path_edit, 1)
         schema_layout.addWidget(self.schema_path_button)
-        self.tracker_config_path_edit = QLineEdit()
-        self.tracker_config_path_button = QPushButton("파일 선택")
-        config_row = QWidget()
-        config_layout = QHBoxLayout(config_row)
-        config_layout.setContentsMargins(0, 0, 0, 0)
-        config_layout.setSpacing(6)
-        config_layout.addWidget(self.tracker_config_path_edit, 1)
-        config_layout.addWidget(self.tracker_config_path_button)
         self.query_data_path_edit = QLineEdit()
         self.query_data_path_button = QPushButton("파일 선택")
         query_data_row = QWidget()
@@ -427,7 +419,6 @@ class SettingsCenterPage(QWidget):
         query_data_layout.addWidget(self.query_data_path_edit, 1)
         query_data_layout.addWidget(self.query_data_path_button)
         form.addRow("Schema Snapshot", schema_row)
-        form.addRow("Config Snapshot", config_row)
         form.addRow("조회 데이터 Snapshot", query_data_row)
         card_layout.addLayout(form)
         self.test_mode_help_label = QLabel("")
@@ -439,16 +430,9 @@ class SettingsCenterPage(QWidget):
 
         self.test_mode_checkbox.toggled.connect(self._test_mode_changed)
         self.schema_path_edit.textChanged.connect(self._test_mode_changed)
-        self.tracker_config_path_edit.textChanged.connect(self._test_mode_changed)
         self.query_data_path_edit.textChanged.connect(self._test_mode_changed)
         self.schema_path_button.clicked.connect(
             lambda: self._choose_snapshot_file(self.schema_path_edit, "Schema Snapshot 선택")
-        )
-        self.tracker_config_path_button.clicked.connect(
-            lambda: self._choose_snapshot_file(
-                self.tracker_config_path_edit,
-                "Tracker Configuration Snapshot 선택",
-            )
         )
         self.query_data_path_button.clicked.connect(
             lambda: self._choose_snapshot_file(
@@ -605,9 +589,6 @@ class SettingsCenterPage(QWidget):
             self.output_dir_edit.setText(str(self.draft_settings.output_dir or "output"))
             self.test_mode_checkbox.setChecked(bool(self.draft_settings.offline_mode))
             self.schema_path_edit.setText(str(self.draft_settings.offline_schema_path or ""))
-            self.tracker_config_path_edit.setText(
-                str(self.draft_settings.offline_tracker_configuration_path or "")
-            )
             self.query_data_path_edit.setText(
                 str(self.draft_settings.offline_query_data_path or "")
             )
@@ -840,9 +821,6 @@ class SettingsCenterPage(QWidget):
             return
         self.draft_settings.offline_mode = bool(self.test_mode_checkbox.isChecked())
         self.draft_settings.offline_schema_path = self.schema_path_edit.text().strip()
-        self.draft_settings.offline_tracker_configuration_path = (
-            self.tracker_config_path_edit.text().strip()
-        )
         self.draft_settings.offline_query_data_path = self.query_data_path_edit.text().strip()
         self.draft_settings.test_mode_validated_signature = ""
         self.draft_settings.test_mode_validated_at = ""
@@ -875,8 +853,6 @@ class SettingsCenterPage(QWidget):
         for widget in (
             self.schema_path_edit,
             self.schema_path_button,
-            self.tracker_config_path_edit,
-            self.tracker_config_path_button,
             self.query_data_path_edit,
             self.query_data_path_button,
         ):
@@ -965,11 +941,6 @@ class SettingsCenterPage(QWidget):
             schema_path = Path(self.draft_settings.offline_schema_path).expanduser()
             if not schema_path.is_file():
                 raise ValueError("Schema Snapshot 파일을 확인해야 합니다.")
-            configuration_path = str(
-                self.draft_settings.offline_tracker_configuration_path or ""
-            ).strip()
-            if configuration_path and not Path(configuration_path).expanduser().is_file():
-                raise ValueError("Config Snapshot 파일을 확인해야 합니다.")
             query_data_path = str(self.draft_settings.offline_query_data_path or "").strip()
             if query_data_path and not Path(query_data_path).expanduser().is_file():
                 raise ValueError("조회 데이터 Snapshot 파일을 확인해야 합니다.")
@@ -1219,14 +1190,12 @@ class SettingsCenterPage(QWidget):
         elif self.current_category == SETTINGS_CATEGORY_TEST_MODE:
             self.draft_settings.offline_mode = False
             self.draft_settings.offline_schema_path = ""
-            self.draft_settings.offline_tracker_configuration_path = ""
             self.draft_settings.offline_query_data_path = ""
             self.draft_settings.test_mode_validated_signature = ""
             self.draft_settings.test_mode_validated_at = ""
             self._updating_controls = True
             self.test_mode_checkbox.setChecked(False)
             self.schema_path_edit.clear()
-            self.tracker_config_path_edit.clear()
             self.query_data_path_edit.clear()
             self._updating_controls = False
             self._sync_test_mode_controls()

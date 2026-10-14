@@ -353,9 +353,6 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self.settings = GuiSettings(
             offline_mode=True,
             offline_schema_path=str(SAMPLE_DIR / "offline_schema.json"),
-            offline_tracker_configuration_path=str(
-                SAMPLE_DIR / "offline_tracker_configuration.json"
-            ),
             offline_query_data_path=str(SAMPLE_DIR / "offline_tracker_items.json"),
         )
         self.service = CountingTrackerQueryService()

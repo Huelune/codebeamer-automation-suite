@@ -52,7 +52,6 @@ py -3 cli_main.py
 GUI의 최상위 `설정 > 테스트 모드`에서 사용할 수 있는 샘플 세트는 `data/gui-offline-sample/` 에 있습니다.
 
 - `offline_schema.json`
-- `offline_tracker_configuration.json`
 - `offline_tracker_items.json`
 - `files/SAMPLE_MODULE_A_TC_001.xlsx`
 - `files/SAMPLE_MODULE_B_TC_002.xlsx`
