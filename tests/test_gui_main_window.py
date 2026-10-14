@@ -32,6 +32,7 @@ from src.gui.settings_store import AppSettings
 from src.gui.settings_store import GuiSettings
 from src.gui.settings_store import GuiSettingsStore
 from src.gui.settings_store import test_mode_validation_signature
+from src.gui.styles import build_gui_stylesheet
 from src.gui.tracker_workspace import TrackerWorkspacePage
 from src.gui.window_support import GuiSessionState
 from src.gui.window_support import UploadProgressState
@@ -118,6 +119,26 @@ class GuiMainWindowRootConfigMergeTest(unittest.TestCase):
             {"Summary": {"enabled": True, "mode": "fixed_value", "value": "REQ"}},
         )
         self.assertEqual(merged["field_sources"], {"Summary": "__file_stem__"})
+
+
+class GuiThemeApplicationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        cls._app = QApplication.instance() or QApplication([])
+
+    def test_theme_change_is_applied_and_same_theme_is_kept(self) -> None:
+        """같은 테마는 다시 넣지 않지만, 테마를 바꾸면 앱 스타일시트가 바뀐다."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            window = BatchUploadWindow(GuiSettingsStore(root_dir=Path(temp_dir)))
+            try:
+                for theme_name in ("igloo", "kefico", "kefico", "igloo"):
+                    with self.subTest(theme=theme_name):
+                        window._apply_theme(theme_name)
+                        self.assertEqual(self._app.styleSheet(), build_gui_stylesheet(theme_name))
+            finally:
+                window.close()
 
 
 class GuiMainWindowPreferencesTest(unittest.TestCase):

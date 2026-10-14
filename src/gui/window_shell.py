@@ -661,8 +661,10 @@ class WindowShellMixin(_WindowShellMixinComposition):
         QApplication = self.qt["QApplication"]
         normalized_theme = normalize_gui_theme_name(theme_name)
         app = QApplication.instance()
-        if app is not None:
-            app.setStyleSheet(build_gui_stylesheet(normalized_theme))
+        stylesheet = build_gui_stylesheet(normalized_theme)
+        # 같은 내용이어도 다시 넣으면 앱의 모든 위젯을 다시 그린다. 테마가 바뀔 때만 넣는다.
+        if app is not None and app.styleSheet() != stylesheet:
+            app.setStyleSheet(stylesheet)
         return normalized_theme
 
     @staticmethod
