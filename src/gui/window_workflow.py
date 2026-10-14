@@ -690,9 +690,6 @@ class WindowWorkflowMixin(_WindowWorkflowMixinComposition):
         self.statusBar().showMessage(f"'{preset.name}' 저장 설정을 삭제했습니다.")
         self._show_info_dialog("전체 설정 삭제", f"'{preset.name}' 저장 설정을 삭제했습니다.")
 
-    def _show_mapping_page(self) -> None:
-        self._show_page(self.mapping_page)
-
     def _preview_root_item_config(self, root_item_config: dict[str, object]):
         """`preview_root_item_config` 미리보기를 계산한다."""
         if self.session_state.mapping_context is None:

@@ -830,7 +830,3 @@ class GuiUploadPipelineService:
 
     def _finalize_issue_df(self, issue_df: pd.DataFrame) -> pd.DataFrame:
         return self.validation_presenter.finalize_issue_df(issue_df)
-
-    @staticmethod
-    def _parse_payload_error(payload_error: str) -> dict[str, str]:
-        return ValidationPresenter.parse_payload_error(payload_error)

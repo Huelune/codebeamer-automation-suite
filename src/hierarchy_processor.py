@@ -67,16 +67,6 @@ class HierarchyProcessor:
             return cleaned
         raise ValueError("mode must be one of: first, last, list")
 
-    @classmethod
-    def list_to_multiline_text(cls, value: Any) -> str | None:
-        if value is None:
-            return None
-        if isinstance(value, list):
-            values = [str(item).strip() for item in value if not cls.is_blank(item)]
-            return "\n".join(values) if values else None
-        text = str(value).strip()
-        return text or None
-
     @staticmethod
     def _item_id_column(columns: Any) -> str | None:
         """update/upsert 대상 id 열. 업로드 단계와 같은 규칙으로 찾는다."""

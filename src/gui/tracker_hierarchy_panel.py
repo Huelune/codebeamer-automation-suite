@@ -164,20 +164,6 @@ class TrackerHierarchyPanel(QWidget):
     def root_cache(self) -> dict[int, tuple[TrackerItemSummary, ...]]:
         return self._root_cache
 
-    def clear_caches(self) -> None:
-        self._root_cache.clear()
-        self._child_cache.clear()
-        self._baseline_hierarchy_cache.clear()
-        self._baseline_hierarchy_loading_key = None
-
-    def clear_tree(self, message: str) -> None:
-        self.item_tree.clear()
-        self._baseline_hierarchy_loading_key = None
-        self.tree_status_label.setText(message)
-
-    def set_reload_enabled(self, enabled: bool) -> None:
-        self.reload_roots_button.setEnabled(enabled)
-
     def refresh_item(self, detail: Any) -> None:
         """수정 결과를 계층 트리에도 반영한다."""
         summary = detail.summary

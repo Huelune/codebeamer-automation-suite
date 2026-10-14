@@ -81,13 +81,6 @@ class RootItemService:
         return cls._preview_raw_df_map(preview_data).get(str(file_path).strip())
 
     @staticmethod
-    def _root_regex_target_options() -> list[tuple[str, str]]:
-        return [
-            (ROOT_REGEX_TARGET_FILE_STEM, "파일명(확장자 제외)"),
-            (ROOT_REGEX_TARGET_FILE_NAME, "전체 파일명"),
-        ]
-
-    @staticmethod
     def _normalize_root_mode(value: Any) -> str:
         normalized = str(value or ROOT_ITEM_MODE_FILE).strip()
         if normalized in {ROOT_ITEM_MODE_FILE, ROOT_ITEM_MODE_GROUP_BY_COLUMN}:
@@ -749,10 +742,6 @@ class RootItemService:
             status_message=status_message,
             has_blocking_issues=has_blocking_issues,
         )
-
-    @staticmethod
-    def _root_assignment_target_kind(preview_context: RootItemPreviewContext) -> str:
-        return "group_root" if bool(preview_context.group_enabled and preview_context.group_by_column) else "file_root"
 
     @classmethod
     def _root_field_values_for_source_row(

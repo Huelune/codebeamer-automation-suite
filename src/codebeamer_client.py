@@ -17,7 +17,6 @@ from .api_monitor import API_OUTCOME_RETRY
 from .api_monitor import API_OUTCOME_SUCCESS
 from .api_monitor import normalize_api_path
 from .models import ITEM_SEARCH_RESULT_KEYS
-from .models import OPTION_CONTAINER_KEYS
 from .models import USER_SEARCH_RESULT_KEYS
 from .models import UserInfo
 
@@ -748,17 +747,6 @@ class CodebeamerClient:
             return cls._extract_baseline_references(nested)
         return []
 
-    def get_field_options(self, item_id: int, field_id: int) -> list[dict]:
-        """특정 아이템 필드에서 선택 가능한 옵션 목록을 가져온다."""
-        data = self._get(f"/v3/items/{item_id}/fields/{field_id}/options")
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            for key in OPTION_CONTAINER_KEYS:
-                if key in data and isinstance(data[key], list):
-                    return data[key]
-        return []
-
     def get_item(self, item_id: int, baseline_id: int | None = None) -> dict:
         """아이템 한 개의 상세 정보를 가져온다."""
         params = None if baseline_id is None else {"baselineId": int(baseline_id)}
@@ -911,31 +899,6 @@ class CodebeamerClient:
             "search_users",
             lambda: self._post("/v3/users/search", json_body=body, params=params),
         )
-
-    def search_user_infos(
-        self,
-        *,
-        name: str | None = None,
-        email: str | None = None,
-        first_name: str | None = None,
-        last_name: str | None = None,
-        user_status: str | None = None,
-        project_id: int | None = None,
-        page: int = 1,
-        page_size: int = 100,
-    ) -> list[UserInfo]:
-        """사용자 검색 결과를 `UserInfo` 객체 목록으로 변환해 돌려준다."""
-        data = self.search_users(
-            name=name,
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            user_status=user_status,
-            project_id=project_id,
-            page=page,
-            page_size=page_size,
-        )
-        return [UserInfo.from_raw(item) for item in self._extract_user_payloads(data)]
 
     def create_item(self, tracker_id: int, payload: dict, parent_item_id: int | None = None) -> dict:
         """트래커에 새 아이템을 만들고 서버 응답을 돌려준다."""

@@ -27,7 +27,6 @@ from .excel_export_style import fit_column_widths
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 _HEADER_FONT = Font(color="FFFFFF", bold=True)
-_SUBHEADER_FILL = PatternFill("solid", fgColor="D9EAF7")
 _ERROR_FILL = PatternFill("solid", fgColor="FCE4D6")
 _WARNING_FILL = PatternFill("solid", fgColor="FFF2CC")
 _SUPPORTED_UPLOAD_MODES = {"create", "update", "upsert"}

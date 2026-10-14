@@ -43,14 +43,6 @@ class WizardDataPreparationMixin:
             raise ValueError("project_id must be selected first.")
         return self.client.get_trackers(self.state.project_id)
 
-    def load_tracker_items(self, tracker_id: int) -> list[dict]:
-        """트래커 안의 아이템 목록을 가져온다."""
-        return self.client.get_tracker_items(tracker_id)
-
-    def load_root_items(self, tracker_id: int) -> list[dict]:
-        """트래커 루트 바로 아래의 아이템만 가져온다."""
-        return self.client.get_tracker_children(tracker_id)
-
     def select_tracker(self, tracker_id: int) -> None:
         """업로드 대상 트래커를 저장한다."""
         if self.state.tracker_id != tracker_id:
