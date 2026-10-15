@@ -107,6 +107,13 @@ def failure_text(exc: Exception) -> str:
         return f"HTTP {status} {_HTTP_ACTIONS.get(status, '서버 오류 · 잠시 뒤 다시 실행')}"
     if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
         return "연결 실패 · 서버 주소와 네트워크 확인"
+    malformed_address = (
+        requests.exceptions.MissingSchema,
+        requests.exceptions.InvalidSchema,
+        requests.exceptions.InvalidURL,
+    )
+    if isinstance(exc, malformed_address):
+        return "서버 주소 형식 확인 · https:// 포함해 다시 실행"
     return f"{type(exc).__name__} · 응답 형식 확인 필요"
 
 

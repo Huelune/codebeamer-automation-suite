@@ -84,6 +84,16 @@ class InspectItemActivityContractTest(unittest.TestCase):
         )
         self.assertEqual(failure_text(ValueError("secret")), "ValueError · 응답 형식 확인 필요")
 
+    def test_malformed_server_address_points_to_the_address_format(self) -> None:
+        for exc in (
+            requests.exceptions.MissingSchema("secret address"),
+            requests.exceptions.InvalidSchema("secret address"),
+            requests.exceptions.InvalidURL("secret address"),
+        ):
+            text = failure_text(exc)
+            self.assertEqual(text, "서버 주소 형식 확인 · https:// 포함해 다시 실행")
+            self.assertNotIn("secret", text)
+
 
 class FakeClient:
     def __init__(self, base_url: str, username: str, password: str) -> None:
