@@ -116,6 +116,18 @@ def _clear_screen() -> None:
 
 
 def main() -> int:
+    """입력 취소와 예상하지 못한 오류도 traceback 대신 안내 문구 한 줄로 끝낸다."""
+    try:
+        return _run()
+    except (KeyboardInterrupt, EOFError):
+        print("입력을 취소했습니다. 다시 실행하세요.")
+        return 1
+    except Exception:
+        print("예상하지 못한 오류 · 다시 실행하고, 반복되면 이 화면만 알려 주세요.")
+        return 1
+
+
+def _run() -> int:
     sys.path.insert(0, str(ROOT))
     from src.codebeamer_client import CodebeamerClient
 
@@ -126,7 +138,7 @@ def main() -> int:
     item_text = input("아이템 ID(변경 이력·댓글·첨부가 있는 것): ").strip()
     # 입력한 주소와 계정이 캡처에 남지 않게 지운다.
     _clear_screen()
-    if not item_text.isdigit():
+    if not (item_text.isascii() and item_text.isdigit()):
         print("아이템 ID는 숫자여야 합니다. 다시 실행하세요.")
         return 2
     client = CodebeamerClient(base_url, username, password)
@@ -145,16 +157,24 @@ def main() -> int:
         except Exception as exc:
             responses[name] = None
             failures.append(f"  {name}: {failure_text(exc)}")
-    report = Path(tempfile.gettempdir()) / REPORT_NAME
-    report.write_text(json.dumps(responses, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    text = json.dumps(responses, ensure_ascii=False, indent=2, default=str)
+    try:
+        report = Path(tempfile.gettempdir()) / REPORT_NAME
+        report.write_text(text, encoding="utf-8")
+    except OSError:
+        footer = "전체 응답 파일 쓰기 실패 · 임시 폴더 쓰기 권한 확인"
+        status = 1
+    else:
+        footer = f"전체 응답: %TEMP%\\{REPORT_NAME} (이 PC에서만 보고 밖으로 보내지 않습니다)"
+        status = 0
     lines = summarize_contract(
         responses["history"], responses["comments"], responses["attachments"], responses["relations"]
     )
     if failures:
         lines += ["[조회 실패]", *failures]
-    lines.append(f"전체 응답: %TEMP%\\{REPORT_NAME} (이 PC에서만 보고 밖으로 보내지 않습니다)")
+    lines.append(footer)
     print("\n".join(lines[:MAX_LINES]))
-    return 0
+    return status
 
 
 if __name__ == "__main__":
