@@ -324,7 +324,8 @@ class RunActivityExportTest(unittest.TestCase):
             self._run()
 
         export_mock.assert_called_once_with(self.requests[0], "history.xlsx")
-        self.assertEqual(self.submitted, ["item_activity_export"])
+        # 작업공간은 같은 키의 앞 작업 콜백을 버리므로 패널마다 키가 달라야 한다.
+        self.assertEqual(self.submitted, [f"item_activity_export:{id(self.panel)}"])
         (record,) = self.records
         self.assertEqual(record.operation, ActivityOperation.ITEM_HISTORY_EXPORT)
         self.assertEqual(record.result, ActivityResult.SUCCESS)

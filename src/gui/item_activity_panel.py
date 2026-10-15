@@ -518,4 +518,6 @@ def run_activity_export(
         show_error(exc, prefix="변경 이력 Excel 내보내기 실패")
 
     panel.set_export_busy(True, "Excel 파일을 만드는 중입니다.")
-    submit("item_activity_export", lambda: export_item_activity_xlsx(request, output_path), completed, failed)
+    # 작업공간은 같은 키의 이전 작업 콜백을 버린다. 패널마다 키를 나눠 다른 패널 내보내기에 멈추지 않게 한다.
+    export_key = f"item_activity_export:{id(panel)}"
+    submit(export_key, lambda: export_item_activity_xlsx(request, output_path), completed, failed)
