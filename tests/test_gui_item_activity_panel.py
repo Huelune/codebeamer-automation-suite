@@ -4,6 +4,9 @@ import os
 import unittest
 from unittest.mock import patch
 
+import shiboken6
+from PySide6.QtCore import Qt
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -194,6 +197,16 @@ class ItemActivityPanelTest(unittest.TestCase):
         self.assertEqual(self.panel.summary_label.text(), "필드 변경 유형을 켜면 필드별 요약을 보입니다.")
         self.assertEqual(self.panel.status_label.text(), "#1 · 전체 · 댓글 1건 · 첨부 2건")
 
+    def test_labels_show_server_values_as_plain_text(self) -> None:
+        self.panel.set_item(1)
+        self.panel.set_active(True)
+
+        self.panel.set_source_error(1, COMMENT, "<b>권한 없음</b>")
+
+        self.assertEqual(self.panel.status_label.textFormat(), Qt.TextFormat.PlainText)
+        self.assertEqual(self.panel.summary_label.textFormat(), Qt.TextFormat.PlainText)
+        self.assertTrue(self.panel.status_label.text().endswith("댓글 조회 실패: <b>권한 없음</b>"))
+
     def test_relation_kind_is_shown_but_disabled(self) -> None:
         self.assertFalse(self.panel.relation_check.isEnabled())
         self.assertFalse(self.panel.relation_check.isChecked())
@@ -258,7 +271,7 @@ class RunActivityExportTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.panel = ItemActivityPanel(request_kind=lambda *_args: None)
-        self.addCleanup(self.panel.deleteLater)
+        self.addCleanup(lambda: shiboken6.isValid(self.panel) and self.panel.deleteLater())
         self.panel.set_item(1, item_name="Sample requirement")
         self.panel.set_active(True)
         for kind, data in SOURCES.items():
@@ -326,6 +339,54 @@ class RunActivityExportTest(unittest.TestCase):
         self.assertEqual(self.records[0].result, ActivityResult.FAILED)
         self.assertTrue(self.panel.status_label.text().endswith("Excel 내보내기 실패"))
         self.assertTrue(self.panel.export_button.isEnabled())
+
+    def _run_with_deferred_callbacks(self) -> tuple:
+        captured = []
+
+        def submit(key, operation, completed, failed):
+            captured.append((completed, failed))
+
+        run_activity_export(
+            self.panel,
+            self.panel,
+            self.requests[0],
+            submit=submit,
+            record_activity=self.records.append,
+            show_error=lambda exc, prefix="": self.errors.append(prefix),
+            source="tracker_workspace",
+            project_id=246800,
+            project_name="Offline Project",
+            tracker_id=24680001,
+            tracker_name="Offline Requirements",
+        )
+        return captured[0]
+
+    def test_success_is_recorded_even_if_the_panel_was_deleted_meanwhile(self) -> None:
+        with (
+            patch("src.gui.item_activity_panel.QFileDialog.getSaveFileName", return_value=("history.xlsx", "")),
+            patch("src.gui.item_activity_panel.export_item_activity_xlsx"),
+        ):
+            completed, _failed = self._run_with_deferred_callbacks()
+        shiboken6.delete(self.panel)
+
+        completed(ItemActivityExportSummary(entry_count=7, row_count=8, long_value_count=0))
+
+        (record,) = self.records
+        self.assertEqual(record.result, ActivityResult.SUCCESS)
+
+    def test_failure_is_recorded_and_reported_even_if_the_panel_was_deleted_meanwhile(self) -> None:
+        with (
+            patch("src.gui.item_activity_panel.QFileDialog.getSaveFileName", return_value=("history.xlsx", "")),
+            patch("src.gui.item_activity_panel.export_item_activity_xlsx"),
+        ):
+            _completed, failed = self._run_with_deferred_callbacks()
+        shiboken6.delete(self.panel)
+
+        failed(ItemActivityExportError("Excel 파일을 저장하지 못했습니다."))
+
+        (record,) = self.records
+        self.assertEqual(record.result, ActivityResult.FAILED)
+        self.assertEqual(self.errors, ["변경 이력 Excel 내보내기 실패"])
 
     def test_cancelled_file_dialog_does_nothing(self) -> None:
         with patch("src.gui.item_activity_panel.QFileDialog.getSaveFileName", return_value=("", "")):

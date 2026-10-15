@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from shiboken6 import isValid
+
 
 try:
     from PySide6.QtCore import Qt
@@ -138,6 +140,8 @@ class ItemActivityPanel(QWidget):
 
         self.status_label = QLabel(self)
         self.status_label.setObjectName("tracker_panel_status")
+        # 상태줄에는 서버 값(Baseline 이름, 오류 메시지)이 들어가므로 서식으로 해석하지 않는다.
+        self.status_label.setTextFormat(Qt.TextFormat.PlainText)
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
@@ -147,6 +151,7 @@ class ItemActivityPanel(QWidget):
         summary_layout = QVBoxLayout(summary_box)
         summary_layout.setContentsMargins(0, 0, 0, 0)
         self.summary_label = QLabel(summary_box)
+        self.summary_label.setTextFormat(Qt.TextFormat.PlainText)
         self.summary_label.setWordWrap(True)
         summary_layout.addWidget(self.summary_label)
         self.summary_table = QTableWidget(0, 5, summary_box)
@@ -479,8 +484,8 @@ def run_activity_export(
             )
         )
 
+    # 내보내는 동안 창이 닫혀 패널이 지워질 수 있다. 실행 기록을 먼저 남기고 패널은 살아 있을 때만 만진다.
     def completed(summary: Any) -> None:
-        panel.set_export_busy(False, f"Excel 내보내기 완료 · 항목 {summary.entry_count}건 · 행 {summary.row_count}개")
         record(
             ActivityResult.SUCCESS,
             f"#{request.item_id} 변경 이력 {summary.entry_count}건을 Excel로 내보냈습니다.",
@@ -491,15 +496,20 @@ def run_activity_export(
                 "longValueCount": summary.long_value_count,
             },
         )
+        if isValid(panel):
+            panel.set_export_busy(
+                False, f"Excel 내보내기 완료 · 항목 {summary.entry_count}건 · 행 {summary.row_count}개"
+            )
 
     def failed(exc: Exception) -> None:
-        panel.set_export_busy(False, "Excel 내보내기 실패")
-        show_error(exc, prefix="변경 이력 Excel 내보내기 실패")
         record(
             ActivityResult.FAILED,
             "변경 이력 Excel 내보내기 실패",
             {"kindCount": len(request.kind_labels), "entryCount": len(request.entries)},
         )
+        if isValid(panel):
+            panel.set_export_busy(False, "Excel 내보내기 실패")
+        show_error(exc, prefix="변경 이력 Excel 내보내기 실패")
 
     panel.set_export_busy(True, "Excel 파일을 만드는 중입니다.")
     submit("item_activity_export", lambda: export_item_activity_xlsx(request, output_path), completed, failed)
