@@ -13,6 +13,7 @@ import requests
 
 from src.codebeamer_client import CodebeamerClient
 from src.models.common import CONNECTED_FIELD_TYPE_VALUE_MODEL_MAP
+from src.models.common import format_codebeamer_datetime
 
 from .payload_values import optional_int
 from .service_core import _build_gui_client
@@ -706,7 +707,10 @@ def build_field_value(change: TrackerItemFieldChange) -> dict[str, Any]:
     elif kind in {FieldEditorKind.DATE, FieldEditorKind.DATETIME}:
         fallback = "DateFieldValue" if kind == FieldEditorKind.DATE else "DateTimeFieldValue"
         payload["type"] = _value_model_name(field_value, fallback)
-        payload["value"] = str(raw_value or "").strip() or None
+        try:
+            payload["value"] = format_codebeamer_datetime(str(raw_value or "").strip() or None)
+        except ValueError as exc:
+            raise ValueError(f"'{field_value.label}' {exc}") from exc
     elif kind in {FieldEditorKind.CHOICE, FieldEditorKind.STATUS}:
         references = _choice_references(field_value, raw_value)
         if kind == FieldEditorKind.STATUS and len(references) != 1:

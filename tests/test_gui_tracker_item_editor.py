@@ -309,6 +309,25 @@ class TrackerItemEditorModelTest(unittest.TestCase):
             ("UserReference", "RoleReference", "GroupReference"),
         )
 
+    def _date_field(self):
+        schema = deepcopy(SCHEMA)
+        schema["fields"].append({"id": 90, "name": "Due", "type": "DateField", "valueModel": "DateFieldValue"})
+        return next(field for field in build_editable_tracker_schema(schema, self.detail).fields if field.name == "Due")
+
+    def test_date_field_payload_uses_the_server_date_format(self) -> None:
+        """서버는 날짜를 `YYYY-MM-DDTHH:MM:SS.fff`로 돌려준다. 입력한 날짜도 같은 모양으로 보낸다."""
+        due = self._date_field()
+
+        payload = build_field_value(TrackerItemFieldChange(due, "2026-10-13 09:30"))
+
+        self.assertEqual(payload["value"], "2026-10-13T09:30:00.000")
+
+    def test_date_field_rejects_ambiguous_text_with_the_field_name(self) -> None:
+        due = self._date_field()
+
+        with self.assertRaisesRegex(ValueError, "'Due'.*날짜"):
+            build_field_value(TrackerItemFieldChange(due, "13/10/2026"))
+
     def test_member_field_payload_uses_the_chosen_type(self) -> None:
         member_field = next(
             field for field in self.schema.fields if field.name == "Approvers"
