@@ -173,7 +173,9 @@ class TrackerContentService:
             return cached
         generation = self._attachment_cache.generation()
         payloads = _attachment_payloads((raw_payload or {}).get("attachments"))
-        if not payloads and not bool(getattr(settings, "offline_mode", False)):
+        offline = bool(getattr(settings, "offline_mode", False))
+        # 테스트 모드는 테스트 데이터 파일이 있을 때만 그 파일의 첨부 목록을 쓴다.
+        if not payloads and (not offline or str(getattr(settings, "offline_query_data_path", "") or "").strip()):
             payloads = _attachment_payloads(
                 self._client(settings).get_item_attachments(int(item_id))
             )

@@ -315,6 +315,12 @@
       ]
     }
   },
+  "attachmentsByItemId": {
+    "9001001": [
+      {"id": 53001, "name": "anonymous-spec.txt", "size": 2048, "mimeType": "text/plain", "modifiedAt": "2026-07-18T11:00:00Z"},
+      {"id": 53002, "name": "anonymous-draft.txt", "size": 512, "mimeType": "text/plain", "modifiedAt": "2026-07-10T08:00:00Z"}
+    ]
+  },
   "commentsByItemId": {
     "9001001": [
       {

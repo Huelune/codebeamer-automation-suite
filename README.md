@@ -11,6 +11,7 @@ Excel 기반 계층형 데이터를 Codebeamer Tracker Item으로 변환하고 �
 - `UserChoiceField`, `MemberField`, `TrackerItemChoiceField`, `TableField` 등 reference 계열 필드를 이름·정규식·payload 구조를 유지한 채 변환합니다.
 - 트래커 작업공간에서 계층 조회, tracker 범위 검색, 단건 생성·수정·삭제, 페이지를 넘는 일괄 수정을 수행합니다.
 - 현재 상태와 Baseline을 비교하고 계층·비교 결과를 Excel로 내보냅니다.
+- 아이템 변경 이력을 기준 Baseline 이후로 추려 필드 변경·댓글·첨부별로 보고 Excel로 내보냅니다.
 - 여러 연결 프로필, 비밀번호 저장 방식 선택, 오프라인 테스트 모드, 진단 로그와 API 모니터를 제공합니다.
 
 기능별 상세 목록과 화면 단위 구현 범위는 [기능 현황](./docs/feature-status.md)에 있습니다.

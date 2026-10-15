@@ -699,16 +699,70 @@ class TrackerWorkspaceDetailTest(TrackerWorkspaceTestCase):
         self._app.processEvents()
 
         self.assertEqual(dialog.detail.version, 1)
-        self.assertEqual(dialog.history_status.text(), "변경 이력 2건 · 이 Baseline 이후 2건")
-        view = dialog.history_view
+        activity = dialog.activity_panel
+        self.assertEqual(dialog.detail.version, 1)
+        self.assertEqual(activity.baseline_combo.currentData(), 24681001)
+        self.assertEqual(
+            activity.status_label.text(),
+            "#9001001 · Offline Requirements Baseline 이후 · 버전 2건 · 필드 변경 3건 · 바뀐 필드 3개"
+            " · 댓글 2건 · 첨부 1건 · 댓글·첨부는 현재 목록이며 Baseline 시점 내용이 아닙니다",
+        )
+        view = activity.history_view
         self.assertEqual(
             [view.topLevelItem(index).text(0) for index in range(view.topLevelItemCount())],
             [
+                "[Baseline 이후] 댓글 · 2026-07-20 10:00 · Sample User B",
+                "[Baseline 이후] 댓글 · 2026-07-20 09:10 · Sample User A",
                 "[Baseline 이후] 버전 3 · 2026-07-20 09:00 · Sample User A · 필드 1개",
                 "[Baseline 이후] 버전 2 · 2026-07-19 08:00 · Sample User B · 필드 2개",
+                "[Baseline 이후] 첨부 · 2026-07-18 11:00 · anonymous-spec.txt · 2,048 bytes · text/plain",
             ],
         )
         self.assertIn("관계 조회를 지원하지 않습니다", dialog.relations_status.text())
+
+    def test_detail_dialog_export_records_the_items_own_tracker(self) -> None:
+        """상세 창에서 다른 트래커의 아이템으로 옮겨 간 뒤에도 기록은 그 아이템의 트래커와 프로젝트를 가리킨다."""
+        self.page.activate()
+        page_tracker = self.page._current_tracker
+        other = TrackerItemDetail.from_raw(
+            {
+                "id": 9009001,
+                "name": "Other tracker item",
+                "version": 1,
+                "tracker": {
+                    "id": 24689999,
+                    "name": "Other Tracker",
+                    "project": {"id": 246899, "name": "Other Project"},
+                },
+            }
+        )
+        dialog = TrackerItemDetailDialog(other, description_html="<p>x</p>")
+        self.addCleanup(dialog.close)
+        request = object()
+
+        with patch("src.gui.tracker_detail_dialog.run_activity_export") as export:
+            self.page.detail_dialog.export_activity(dialog, request)  # type: ignore[arg-type]
+
+        self.assertNotEqual(page_tracker.tracker_id, 24689999)
+        kwargs = export.call_args.kwargs
+        self.assertEqual(
+            (kwargs["tracker_id"], kwargs["tracker_name"], kwargs["project_id"], kwargs["project_name"]),
+            (24689999, "Other Tracker", 246899, "Other Project"),
+        )
+
+    def test_detail_dialog_export_falls_back_to_the_workspace_tracker(self) -> None:
+        """아이템 응답에 트래커가 없으면 작업공간에서 고른 트래커로 적는다."""
+        self.page.activate()
+        tracker = self.page._current_tracker
+        bare = TrackerItemDetail.from_raw({"id": 9009002, "name": "Bare item", "version": 1})
+        dialog = TrackerItemDetailDialog(bare, description_html="<p>x</p>")
+        self.addCleanup(dialog.close)
+
+        with patch("src.gui.tracker_detail_dialog.run_activity_export") as export:
+            self.page.detail_dialog.export_activity(dialog, object())  # type: ignore[arg-type]
+
+        kwargs = export.call_args.kwargs
+        self.assertEqual((kwargs["tracker_id"], kwargs["tracker_name"]), (tracker.tracker_id, tracker.name))
 
     def test_baseline_detail_dialog_lists_the_baseline_tree_and_stays_at_that_baseline(self) -> None:
         """Baseline 상세 창도 그 Baseline 계층을 옆에 두고, 트리로 옮겨도 같은 Baseline 시점을 연다."""

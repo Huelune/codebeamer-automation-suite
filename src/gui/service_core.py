@@ -183,6 +183,7 @@ class OfflineGuiClient:
         self._offline_relations: dict[str, Any] = {}
         self._offline_history: dict[str, Any] = {}
         self._offline_comments: dict[str, Any] = {}
+        self._offline_attachments: dict[str, Any] = {}
         if self.query_data is not None:
             self._load_query_data(self.query_data)
 
@@ -306,6 +307,10 @@ class OfflineGuiClient:
         if not isinstance(comments, dict):
             raise ValueError("테스트 댓글 데이터는 아이템 ID별 객체여야 합니다.")
         self._offline_comments = deepcopy(comments)
+        attachments = payload.get("attachmentsByItemId", {})
+        if not isinstance(attachments, dict):
+            raise ValueError("테스트 첨부 데이터는 아이템 ID별 객체여야 합니다.")
+        self._offline_attachments = deepcopy(attachments)
 
         if self._offline_projects and self.project_id not in self._offline_projects:
             self.project_id = next(iter(self._offline_projects))
@@ -623,6 +628,13 @@ class OfflineGuiClient:
             payload = payload.get("comments") or payload.get("items") or []
         if not isinstance(payload, list):
             raise ValueError("테스트 댓글 데이터 형식이 올바르지 않습니다.")
+        return deepcopy([value for value in payload if isinstance(value, dict)])
+
+    def get_item_attachments(self, item_id: int) -> list[dict[str, Any]]:
+        """테스트 데이터의 첨부 목록. 테스트 데이터가 모르는 아이템은 첨부가 없는 것으로 본다."""
+        payload = self._offline_attachments.get(str(int(item_id)), [])
+        if not isinstance(payload, list):
+            raise ValueError("테스트 첨부 데이터 형식이 올바르지 않습니다.")
         return deepcopy([value for value in payload if isinstance(value, dict)])
 
     def search_items(
