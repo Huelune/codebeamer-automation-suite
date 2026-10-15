@@ -215,7 +215,7 @@ raw schema type을 그대로 코드 전역에 퍼뜨리지 말고,
 
 - `UserReference`, `UserChoiceField`는 사용자 이름 우선 resolver가 있으므로 지원
 - `MemberField`는 `USER/ROLE/GROUP` mixed resolver가 있으므로 지원
-- `TrackerItemChoiceField`는 configuration 기반 query resolver 또는 tracker item ID parser가 있으므로 조건부 지원
+- `TrackerItemChoiceField`는 정규식 tracker item ID parser만 쓰므로 ID가 들어 있는 값만 지원(이름·summary query 조회는 비활성화)
 - `generic_reference`는 resolver가 없으므로 조기 실패
 - 모호한 필드는 text fallback으로 넘기지 않음
 
@@ -301,7 +301,6 @@ raw schema type을 그대로 코드 전역에 퍼뜨리지 말고,
 
 규칙:
 
-- tracker configuration 의 `fields` 목록에서 `referenceId == schema.field_id` 를 우선 매칭합니다.
 - 이름·summary query lookup은 대량 검증 시 API 호출을 줄이기 위해 비활성화되어 있습니다.
 - 입력값에서 tracker item ID를 직접 추출합니다.
 - 단일 값 또는 list 모두 허용합니다.
@@ -313,7 +312,17 @@ builtin `subjects` 는 현재 direct parse 규칙만 사용합니다.
 
 주의:
 
-- configuration의 source tracker 정보와 무관하게 ID 추출 규칙을 적용합니다.
+- tracker configuration은 조회하지 않고 ID 추출 규칙만 적용합니다.
+
+## 날짜 필드 처리 규칙
+
+- 사용자 정의 `DateField`와 기본 필드 `startDate`·`endDate`는 서버가 돌려주는 모양
+  `YYYY-MM-DDTHH:MM:SS.fff`(시간대 표시 없음)로 바꿔 보냅니다. 실서버 응답으로 확인했습니다(2026-10).
+- Excel 날짜 셀(datetime·date)과 `YYYY-MM-DD`, `YYYY/MM/DD`, `YYYY.MM.DD`(뒤에 `HH:MM[:SS]` 허용) 문자열을 받습니다.
+  날짜만 있으면 `00:00:00.000`으로 보냅니다.
+- `13/10/2026`처럼 일·월 순서가 모호한 문자열과 숫자는 날짜를 잘못 보낼 수 있으므로 payload 오류로 막습니다.
+- 시간대가 붙은 값은 이 PC 시각으로 바꿔 보냅니다.
+- 변환 함수는 `src/models/common.py`의 `format_codebeamer_datetime`이며, 단건 편집기도 같은 함수를 씁니다.
 
 ## `Status` 처리 규칙
 

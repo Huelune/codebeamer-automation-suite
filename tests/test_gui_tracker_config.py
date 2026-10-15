@@ -4,10 +4,9 @@ import unittest
 
 import pandas as pd
 
-from src.gui.tracker_config import TRACKER_ITEM_QUERY_STATUS_SUPPORTED
-from src.gui.tracker_config import TRACKER_ITEM_QUERY_STATUS_UNSUPPORTED
 from src.gui.tracker_config import TrackerConfigurationService
 from src.models import TrackerItemResolutionMode
+from src.upload_policy import DEFAULT_TRACKER_ITEM_ID_REGEX
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
@@ -21,80 +20,48 @@ class TrackerConfigurationServiceTest(unittest.TestCase):
                     "field_name": "Related Item",
                     "field_label": "Related Item",
                     "field_type": "TrackerItemChoiceField",
-                }
+                },
+                {
+                    "field_id": 102,
+                    "field_name": "Summary",
+                    "field_label": "Summary",
+                    "field_type": "TextField",
+                },
             ]
         )
 
-    def test_tracker_configuration_enables_query_by_reference_id(self) -> None:
-        configuration = {
-            "fields": [
-                {
-                    "referenceId": 101,
-                    "label": "Localized Label",
-                    "choiceOptionSetting": {
-                        "referenceFilters": [
-                            {"domainType": "TRACKER", "domainId": 777}
-                        ]
-                    },
-                }
-            ]
-        }
+    def test_only_mapped_tracker_item_fields_become_candidates(self) -> None:
+        candidates = self.service.build_field_candidates(
+            self.schema_df,
+            {"related_item": "Related Item", "summary": "Summary"},
+        )
 
-        enriched = self.service.enrich_schema(self.schema_df, configuration)
-
-        self.assertEqual(enriched.iloc[0]["tracker_item_source_tracker_ids"], [777])
         self.assertEqual(
-            enriched.iloc[0]["tracker_item_query_status"],
-            TRACKER_ITEM_QUERY_STATUS_SUPPORTED,
+            [(candidate.df_column, candidate.schema_field) for candidate in candidates],
+            [("related_item", "Related Item")],
         )
 
-    def test_non_tracker_configuration_forces_regex_fallback(self) -> None:
-        configuration = {
-            "fields": [
-                {
-                    "referenceId": 101,
-                    "choiceOptionSetting": {
-                        "referenceFilters": [
-                            {"domainType": "PROJECT", "domainId": 777}
-                        ]
-                    },
-                }
-            ]
-        }
-        enriched = self.service.enrich_schema(self.schema_df, configuration)
-
+    def test_legacy_query_setting_is_normalized_to_regex(self) -> None:
         candidates, settings = self.service.normalize_settings(
-            enriched,
+            self.schema_df,
             {"related_item": "Related Item"},
-            {"Related Item": {"mode": TrackerItemResolutionMode.QUERY.value}},
+            {"Related Item": {"mode": TrackerItemResolutionMode.QUERY.value, "source_tracker_ids": [777]}},
         )
 
-        self.assertFalse(candidates[0].supports_query)
+        self.assertEqual(len(candidates), 1)
         self.assertEqual(
-            candidates[0].query_status,
-            TRACKER_ITEM_QUERY_STATUS_UNSUPPORTED,
-        )
-        self.assertEqual(
-            settings["Related Item"]["mode"],
-            TrackerItemResolutionMode.REGEX.value,
+            settings["Related Item"],
+            {"mode": TrackerItemResolutionMode.REGEX.value, "regex_pattern": DEFAULT_TRACKER_ITEM_ID_REGEX},
         )
 
-    def test_duplicate_tracker_filters_are_deduplicated(self) -> None:
-        configuration = {
-            "fields": [
-                {
-                    "referenceId": 101,
-                    "referenceFilters": [
-                        {"domainType": "TRACKER", "domainId": 777},
-                        {"domainType": "TRACKER", "domainId": 777},
-                    ],
-                }
-            ]
-        }
+    def test_saved_regex_pattern_is_kept(self) -> None:
+        _candidates, settings = self.service.normalize_settings(
+            self.schema_df,
+            {"related_item": "Related Item"},
+            {"Related Item": {"mode": "regex", "regex_pattern": r"REQ-(\d+)"}},
+        )
 
-        enriched = self.service.enrich_schema(self.schema_df, configuration)
-
-        self.assertEqual(enriched.iloc[0]["tracker_item_source_tracker_ids"], [777])
+        self.assertEqual(settings["Related Item"]["regex_pattern"], r"REQ-(\d+)")
 
 
 if __name__ == "__main__":

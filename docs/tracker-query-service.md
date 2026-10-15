@@ -79,6 +79,9 @@ PTC 문서의 목록 응답은 `page`, `pageSize`, `total`을 포함하지만, �
 `total`에 도달할 때까지 중복 ID를 제외하며 모든 서버 페이지를 합칩니다. 화면에는 페이지 구분 없이 하나의
 스크롤 트리로 전달합니다. 검색의 `PageResult`는 서버 응답값과 `requested_page`, `requested_page_size`를
 함께 저장하고 `server_honored_pagination`을 별도로 제공합니다.
+검색 응답에 `total`이 없으면 `total_known`이 `False`이고 `total`은 그 페이지까지 받은 개수(하한)입니다.
+이때는 꽉 찬 페이지 뒤에 다음 페이지가 있다고 보고, 전체 수집은 빈 페이지나 덜 찬 페이지에서 멈춥니다.
+검색 화면은 다음 페이지가 남은 동안 개수를 `N개 이상`으로 표시합니다.
 
 `GET /v3/trackers/{trackerId}/schema`는 Codebeamer 버전에 따라 필드 정의 배열 또는 필드 컨테이너 객체를
 반환할 수 있습니다. 조회 서비스는 배열을 `{"id": trackerId, "fields": [...]}`로 정규화해 생성·수정
@@ -191,3 +194,7 @@ Qt widget은 서버 원본 dict를 직접 탐색하지 않고 위 모델만 사�
 - Wiki 캐시는 연결, project, item, version, Baseline과 원문 digest를 함께 사용합니다. 현재와 Baseline
   상세는 같은 item ID여도 캐시와 첨부를 공유하지 않으며 명시적 상세 새로고침은 해당 item의 content
   캐시를 비웁니다.
+- 콘텐츠·댓글·관계·이력 캐시는 작업 스레드끼리 함께 쓰므로 `ServiceCache`의 락 안에서만 읽고 씁니다.
+  비울 때마다 세대 번호를 올려, 새로고침 전에 시작한 조회가 늦게 끝나도 옛 결과를 다시 넣지 않습니다.
+- 이미지·첨부 바이트 캐시는 총 128MB를 넘으면 가장 오래 보지 않은 것부터 버립니다. 첨부 저장은 캐시를
+  거치지 않고 받아 바로 파일로 씁니다.

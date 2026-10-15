@@ -15,9 +15,12 @@ from src.upload_policy import as_operation_scope
 from src.upload_policy import default_operation_scope
 from src.upload_policy import normalize_operation_scope
 from src.upload_policy import normalize_upload_mode as normalize_gui_upload_mode
+from src.upload_policy import scope_applies_to_operation
 from src.upload_policy import scope_applies_to_upload_mode
+from src.upload_policy import upload_mode_supports_create
 from src.upload_policy import upload_mode_supports_update as gui_upload_mode_supports_update
 from src.wizard import CodebeamerUploadWizard
+from src.wizard_user_lookup import reusable_lookup_entries
 
 from .service_core import PreviewData
 from .service_core import gui_display_text
@@ -548,6 +551,84 @@ class BatchValidationService:
 
         return duplicate_item_ids, pd.DataFrame(issues, columns=issue_columns)
 
+    @staticmethod
+    def _build_duplicate_field_mapping_issue_df(
+        schema_df: pd.DataFrame,
+        selected_mapping: dict[str, str],
+        mapping_modes: dict[str, OperationScope],
+        *,
+        upload_mode: str,
+    ) -> pd.DataFrame:
+        """한 필드에 여러 열이 같은 작업(생성 또는 수정)으로 매핑되면 막는다.
+
+        사용자 정의 필드는 payload에 같은 필드가 두 번 들어가고, 기본 필드는 뒤 열이 앞 열을 덮어쓴다.
+        생성에는 한 열, 수정에는 다른 열을 쓰는 것은 한 번에 한 열만 쓰므로 허용한다.
+        TableField는 `표.열` 헤더마다 같은 표 필드로 매핑되므로 제외한다.
+        """
+        issue_columns = [
+            "severity",
+            "category",
+            "row_id",
+            "row_label",
+            "item_name",
+            "source_file",
+            "source_file_path",
+            "column",
+            "field",
+            "raw_value",
+            "message",
+            "action",
+        ]
+        table_flags = schema_df.get("is_table_field")
+        table_fields = (
+            set()
+            if table_flags is None
+            else set(schema_df.loc[table_flags.fillna(False).astype(bool), "field_name"].astype(str).str.strip())
+        )
+        operations = [
+            operation
+            for operation, supported in (
+                ("create", upload_mode_supports_create(upload_mode)),
+                ("update", gui_upload_mode_supports_update(upload_mode)),
+            )
+            if supported
+        ]
+        conflicting_columns: dict[str, set[str]] = {}
+        for operation in operations:
+            columns_by_field: dict[str, list[str]] = {}
+            for df_column, schema_field in selected_mapping.items():
+                field = str(schema_field or "").strip()
+                if not field or field in table_fields:
+                    continue
+                if scope_applies_to_operation(mapping_modes.get(df_column), operation, upload_mode=upload_mode):
+                    columns_by_field.setdefault(field, []).append(str(df_column))
+            for field, columns in columns_by_field.items():
+                if len(columns) > 1:
+                    conflicting_columns.setdefault(field, set()).update(columns)
+
+        issues: list[dict[str, str]] = []
+        for field, column_set in conflicting_columns.items():
+            # 매핑 순서(Excel 열 순서)대로 보여 준다.
+            columns = [str(column) for column in selected_mapping if str(column) in column_set]
+            issues.append({
+                "severity": "오류",
+                "category": "매핑",
+                "row_id": "",
+                "row_label": "",
+                "item_name": "",
+                "source_file": "",
+                "source_file_path": "",
+                "column": ", ".join(columns),
+                "field": field,
+                "raw_value": "",
+                "message": f"{field} 필드에 열 {len(columns)}개가 함께 매핑되어 있습니다: {', '.join(columns)}",
+                "action": (
+                    "매핑 단계에서 한 열만 남기고 나머지 열의 매핑을 해제하거나, "
+                    "열마다 생성/수정 적용 범위를 나누세요."
+                ),
+            })
+        return pd.DataFrame(issues, columns=issue_columns)
+
     def _build_upsert_root_item_issue_df(
         self,
         mapping_context: MappingContext,
@@ -710,8 +791,8 @@ class BatchValidationService:
                 )
             )
 
-        mapping_context.user_lookup_cache = dict(wizard.state.user_lookup_cache)
-        mapping_context.member_lookup_cache = dict(wizard.state.member_lookup_cache)
+        mapping_context.user_lookup_cache = reusable_lookup_entries(wizard.state.user_lookup_cache)
+        mapping_context.member_lookup_cache = reusable_lookup_entries(wizard.state.member_lookup_cache)
         mapping_context.group_lookup_cache = dict(wizard.state.group_lookup_cache)
         mapping_context.tracker_role_cache = dict(wizard.state.tracker_role_cache)
         mapping_context.tracker_item_lookup_cache = dict(wizard.state.tracker_item_lookup_cache)
@@ -750,6 +831,14 @@ class BatchValidationService:
             row_context_df=row_context_df,
             selected_default_values=normalized_default_values,
         )
+        duplicate_field_issue_df = self._build_duplicate_field_mapping_issue_df(
+            mapping_context.schema_df,
+            selected_mapping,
+            normalized_mapping_modes,
+            upload_mode=mapping_context.upload_mode,
+        )
+        if not duplicate_field_issue_df.empty:
+            issue_df = self._finalize_issue_df(pd.concat([issue_df, duplicate_field_issue_df], ignore_index=True))
         mapping_context.batch_duplicate_update_item_ids = set()
         if gui_upload_mode_supports_update(mapping_context.upload_mode):
             file_upload_dfs = {

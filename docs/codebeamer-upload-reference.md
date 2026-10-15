@@ -143,7 +143,9 @@
 추가 동작:
 
 - 생성 API는 rate limit(예: `429`)일 때 재시도합니다.
-- 현재 재시도 간격은 `rate_limit_retry_delay_seconds * attempt` 입니다.
+- 재시도 간격은 `rate_limit_retry_delay_seconds * attempt` 입니다. 응답에 초 단위 `Retry-After`가 있으면 그보다 짧게 기다리지 않고(최대 60초), 동시에 막힌 요청이 같은 순간에 몰리지 않도록 간격에 최대 25%를 무작위로 더합니다.
+- 모든 요청은 연결 10초, 응답 대기 120초(조회)·300초(생성·수정·삭제)에서 시간 초과로 끝납니다. 쓰기 요청이 응답 대기 시간을 넘기면 서버 반영 여부를 알 수 없으므로 결과를 확인한 뒤 재시도합니다.
+- HTTP 세션은 클라이언트의 스레드마다 하나를 두고 다음 요청에 연결을 다시 씁니다.
 
 ## 입력 파일 형식 계약
 
@@ -180,6 +182,8 @@
 ### 멀티라인 병합 규칙
 
 - summary 값이 있는 행이 새 논리 레코드의 시작이다.
+- `id` 열이 있으면 summary가 비어 있어도 앞 레코드와 다른 id가 나오는 행부터 새 레코드다. id가 비었거나 같은 행은 이어지는 행이다. summary가 빈 수정 레코드는 기존 이름을 그대로 둔다.
+- 첫 summary 앞의 행은 버리지 않고 레코드로 남긴다. 새로 만드는 레코드에 summary가 없으면 `ITEM_NAME_MISSING`으로 검증에서 막는다.
 - list 컬럼은 같은 논리 레코드 안에서 값들을 모아 list로 만든다.
 - list가 아닌 컬럼은 기본적으로 첫 번째 non-empty 값을 유지한다.
 
@@ -393,7 +397,6 @@ lookup 결과 부가 컬럼:
 
 규칙:
 
-- `TrackerItemChoiceField` 는 tracker configuration 의 `fields` 목록에서 `referenceId == schema.field_id` 를 우선 매칭한다.
 - 이름·summary query lookup은 대량 검증의 API 호출을 줄이기 위해 비활성화되어 있다.
 - 입력값에서 item ID를 직접 추출한다.
 - builtin `subjects` 는 현재 direct parse만 사용한다.

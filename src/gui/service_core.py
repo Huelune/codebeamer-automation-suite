@@ -156,7 +156,6 @@ class OfflineGuiClient:
         *,
         schema: dict[str, Any],
         schema_path: str,
-        tracker_configuration: Any = None,
         query_data: dict[str, Any] | None = None,
         query_data_path: str = "",
         project_id: int = DEFAULT_OFFLINE_PROJECT_ID,
@@ -165,7 +164,6 @@ class OfflineGuiClient:
         """필요한 의존성과 상태를 초기화한다."""
         self.schema = dict(schema or {})
         self.schema_path = str(schema_path)
-        self.tracker_configuration = tracker_configuration
         if query_data is not None and not isinstance(query_data, dict):
             raise ValueError("테스트 조회 데이터 snapshot은 JSON 객체여야 합니다.")
         self.query_data = deepcopy(query_data) if isinstance(query_data, dict) else None
@@ -193,15 +191,6 @@ class OfflineGuiClient:
     def from_settings(cls, settings) -> OfflineGuiClient:
         schema_path = str(getattr(settings, "offline_schema_path", "") or "").strip()
         schema = _load_json_snapshot(schema_path, label="테스트 schema")
-        tracker_configuration = None
-        configuration_path = str(
-            getattr(settings, "offline_tracker_configuration_path", "") or ""
-        ).strip()
-        if configuration_path:
-            tracker_configuration = _load_json_snapshot(
-                configuration_path,
-                label="테스트 tracker configuration",
-            )
         query_data = None
         query_data_path = str(
             getattr(settings, "offline_query_data_path", "") or ""
@@ -220,7 +209,6 @@ class OfflineGuiClient:
             return cls(
                 schema=schema,
                 schema_path=schema_path,
-                tracker_configuration=tracker_configuration,
                 query_data=query_data,
                 query_data_path=query_data_path,
                 project_id=_normalize_offline_id(
@@ -482,13 +470,6 @@ class OfflineGuiClient:
             return schema
         del tracker_id
         return deepcopy(self.schema)
-
-    def get_tracker_configuration(self, tracker_id: int) -> Any:
-        """`get_tracker_configuration` 값을 반환한다."""
-        del tracker_id
-        if self.tracker_configuration is None:
-            raise RuntimeError("offline tracker configuration snapshot is not configured")
-        return self.tracker_configuration
 
     def get_tracker_items_page(
         self,

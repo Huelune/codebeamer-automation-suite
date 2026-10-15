@@ -58,7 +58,67 @@ class CachedMemberLookupFakeClient(FakeClient):
             }],
         }]
 
+class _RateLimited(Exception):
+    def __init__(self) -> None:
+        super().__init__("rate limited")
+        self.response = type("Response", (), {"status_code": 429, "json": staticmethod(lambda: {})})()
+
+
+class FlakyMemberLookupFakeClient(CachedMemberLookupFakeClient):
+    """첫 사용자 조회만 요청 제한(429)으로 실패한다."""
+
+    def get_user_by_name(self, name: str) -> UserInfo:
+        self.__class__.all_user_lookup_calls.append(name)
+        if len(self.__class__.all_user_lookup_calls) == 1:
+            raise _RateLimited()
+        return UserInfo(id=101, name=name)
+
+
 class GuiBatchPipelineServiceTest(unittest.TestCase):
+    def test_lookup_failure_is_asked_again_on_the_next_validation(self) -> None:
+        """한 번의 일시 실패가 다음 검증까지 남아 같은 입력을 계속 막지 않는다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Main"
+            sheet.append(["Summary", "검토 담당"])
+            sheet.append(["REQ-001", "Kim QA"])
+            workbook.save(path)
+            workbook.close()
+            FlakyMemberLookupFakeClient.reset_calls()
+            service = GuiUploadPipelineService(
+                client_factory=FlakyMemberLookupFakeClient,
+                excel_service=GuiExcelService(reader_cls=FakeExcelReader),
+                reader_cls=FakeExcelReader,
+            )
+            settings = GuiSettings(
+                base_url="https://example.com/cb",
+                username="user",
+                password="secret",
+                default_project_id="10",
+                default_tracker_id="1000",
+                excel_header_row=1,
+                summary_column="Summary",
+                excel_sheet_name="Main",
+            )
+            file_state = {
+                "file_path": str(path),
+                "file_paths": [str(path)],
+                "preview_file_path": str(path),
+                "sheet_name": "Main",
+                "header_row": 1,
+                "summary_column": "Summary",
+            }
+            mapping_context = service.prepare_mapping_context(settings, file_state)
+
+            first = service.validate_mapping(mapping_context, mapping_context.selected_mapping)
+            second = service.validate_mapping(mapping_context, mapping_context.selected_mapping)
+
+            self.assertTrue(first.has_blocking_issues)
+            self.assertFalse(second.has_blocking_issues)
+            self.assertEqual(FlakyMemberLookupFakeClient.all_user_lookup_calls, ["Kim QA", "Kim QA"])
+
     def test_prepare_mapping_context_rejects_mismatched_batch_headers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             first_path = Path(tmp_dir) / "ABC_REQ-001.xlsx"

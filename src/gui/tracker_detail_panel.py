@@ -76,6 +76,8 @@ from .wiki_renderer import resolve_wiki_images
 
 # 첨부 표가 스크롤 없이 보여 주는 최대 행 수.
 ATTACHMENT_VISIBLE_ROWS = 4
+# 설명·필드 이미지와 첨부 미리보기를 동시에 받는 수. 끝나는 대로 대기열의 다음 것을 받는다.
+MAX_CONCURRENT_IMAGE_DOWNLOADS = MAX_ITEM_INLINE_IMAGE_BYTES // MAX_INLINE_IMAGE_BYTES
 
 
 @dataclass(frozen=True)
@@ -145,6 +147,11 @@ class TrackerDetailPanel(QFrame):
         self._inline_image_bytes = 0
         self._inline_resource_reservations: set[tuple[Any, ...]] = set()
         self._loaded_inline_resources: set[tuple[Any, ...]] = set()
+        # 아직 시작하지 않은 이미지 받기. (자리 키, 시작 함수) 순서대로 꺼낸다.
+        self._inline_download_queue: list[tuple[tuple[Any, ...], Callable[[], None]]] = []
+        self._starting_inline_downloads = False
+        # 칸(view)별로 넣은 이미지 바이트. 닫은 필드 창의 몫을 예산에서 돌려받을 때 쓴다.
+        self._inline_bytes_by_view: dict[int, int] = {}
         self._wiki_resource_generation = 0
         self._editor_dialog: TrackerItemEditorDialog | None = None
 
@@ -633,23 +640,11 @@ class TrackerDetailPanel(QFrame):
         item_id = detail.item_id
         version = detail.version
         for reference in result.resources:
-            if (
-                self._inline_image_bytes
-                + len(self._inline_resource_reservations) * MAX_INLINE_IMAGE_BYTES
-                + MAX_INLINE_IMAGE_BYTES
-                > MAX_ITEM_INLINE_IMAGE_BYTES
-            ):
-                break
             reservation = (
                 self._wiki_resource_generation,
                 reference.resource_key,
                 id(view),
             )
-            if reservation in self._loaded_inline_resources:
-                continue
-            if reservation in self._inline_resource_reservations:
-                continue
-            self._inline_resource_reservations.add(reservation)
 
             def loaded(
                 resource,
@@ -659,7 +654,7 @@ class TrackerDetailPanel(QFrame):
                 expected_version=version,
                 reserved=reservation,
             ) -> None:
-                self._inline_resource_reservations.discard(reserved)
+                self._finish_inline_download(reserved)
                 # Wiki 필드·표 필드 창을 닫아 대상 칸이 사라졌으면 넣지 않는다.
                 if not isValid(target):
                     return
@@ -669,11 +664,11 @@ class TrackerDetailPanel(QFrame):
                 if self._inline_image_bytes + len(resource.data) > MAX_ITEM_INLINE_IMAGE_BYTES:
                     return
                 if target.add_attachment_resource(resource):
-                    self._inline_image_bytes += len(resource.data)
+                    self._add_inline_bytes(target, len(resource.data))
                     self._loaded_inline_resources.add(reserved)
 
             def failed(_exc: Exception, *, reserved=reservation) -> None:
-                self._inline_resource_reservations.discard(reserved)
+                self._finish_inline_download(reserved)
 
             def download(selected: WikiResourceReference = reference) -> AttachmentResource:
                 return self.content_service.download_resource(
@@ -682,15 +677,82 @@ class TrackerDetailPanel(QFrame):
                     source_url=selected.source_url,
                 )
 
-            self._host.submit(
-                (
-                    f"wiki_resource:{reservation[0]}:"
-                    f"{reservation[2]}:{reference.resource_key}"
-                ),
-                download,
-                loaded,
-                failed,
-            )
+            def start(
+                *,
+                reserved=reservation,
+                key=reference.resource_key,
+                download=download,
+                loaded=loaded,
+                failed=failed,
+            ) -> None:
+                self._host.submit(
+                    f"wiki_resource:{reserved[0]}:{reserved[2]}:{key}",
+                    download,
+                    loaded,
+                    failed,
+                )
+
+            self._queue_inline_download(reservation, start)
+        self._start_queued_inline_downloads()
+
+    def _queue_inline_download(
+        self,
+        reservation: tuple[Any, ...],
+        start: Callable[[], None],
+    ) -> None:
+        if reservation in self._loaded_inline_resources or reservation in self._inline_resource_reservations:
+            return
+        if any(queued == reservation for queued, _start in self._inline_download_queue):
+            return
+        self._inline_download_queue.append((reservation, start))
+
+    def _start_queued_inline_downloads(self) -> None:
+        """자리가 비는 대로 대기열의 이미지 받기를 시작한다.
+
+        동기 실행에서는 받기가 시작하자마자 끝나 이 함수를 다시 부른다. 바깥 반복이 이어서
+        처리하도록 다시 들어온 호출은 바로 돌아간다.
+        """
+        if self._starting_inline_downloads:
+            return
+        self._starting_inline_downloads = True
+        try:
+            while (
+                self._inline_download_queue
+                and len(self._inline_resource_reservations) < MAX_CONCURRENT_IMAGE_DOWNLOADS
+            ):
+                if self._inline_image_bytes >= MAX_ITEM_INLINE_IMAGE_BYTES:
+                    # 예산을 다 썼다. 남은 것은 받아도 넣을 수 없다.
+                    self._inline_download_queue.clear()
+                    return
+                reservation, start = self._inline_download_queue.pop(0)
+                if reservation[0] != self._wiki_resource_generation:
+                    continue
+                self._inline_resource_reservations.add(reservation)
+                start()
+        finally:
+            self._starting_inline_downloads = False
+
+    def _finish_inline_download(self, reservation: tuple[Any, ...]) -> None:
+        self._inline_resource_reservations.discard(reservation)
+        self._start_queued_inline_downloads()
+
+    def _add_inline_bytes(self, view: Any, size: int) -> None:
+        self._inline_image_bytes += size
+        self._inline_bytes_by_view[id(view)] = self._inline_bytes_by_view.get(id(view), 0) + size
+
+    def _release_inline_view(self, view: Any) -> None:
+        """닫은 Wiki·표 필드 창이 쓴 이미지 예산과 아직 시작하지 않은 받기를 돌려받는다.
+
+        돌려받지 않으면 같은 창을 다시 열 때마다 바이트가 쌓여 결국 어느 칸에서도 그림을 못 받는다.
+        """
+        view_id = id(view)
+        self._inline_image_bytes -= self._inline_bytes_by_view.pop(view_id, 0)
+        self._loaded_inline_resources = {
+            reservation for reservation in self._loaded_inline_resources if reservation[2] != view_id
+        }
+        self._inline_download_queue = [
+            (reservation, start) for reservation, start in self._inline_download_queue if reservation[2] != view_id
+        ]
 
     def _open_wiki_field(self, field: TrackerFieldValue) -> None:
         detail = self._current_detail
@@ -710,6 +772,7 @@ class TrackerDetailPanel(QFrame):
             dialog.view.codebeamer_link_activated.connect(self.open_codebeamer_link)
             self._load_inline_resources(result, dialog.view, detail, baseline_id)
             dialog.exec()
+            self._release_inline_view(dialog.view)
             # 부모가 상세 영역이라 지우지 않으면 닫은 창이 이미지와 함께 남는다.
             dialog.deleteLater()
 
@@ -750,18 +813,21 @@ class TrackerDetailPanel(QFrame):
                 render_failed,
             )
 
+        cell_views: list[Any] = []
+
+        def load_cell_resources(result: WikiRenderResult, view: Any) -> None:
+            cell_views.append(view)
+            self._load_inline_resources(result, view, detail, self._detail_baseline_id)
+
         dialog = TrackerTableFieldDialog(
             field,
             self,
             wiki_render_request=request,
-            wiki_resource_loader=lambda result, view: self._load_inline_resources(
-                result,
-                view,
-                detail,
-                self._detail_baseline_id,
-            ),
+            wiki_resource_loader=load_cell_resources,
         )
         dialog.exec()
+        for view in cell_views:
+            self._release_inline_view(view)
         dialog.deleteLater()
 
     @staticmethod
@@ -859,21 +925,12 @@ class TrackerDetailPanel(QFrame):
             self.attachment_preview.clear()
             self.attachment_preview.setVisible(False)
             return
-        available_slots = max(
-            (
-                MAX_ITEM_INLINE_IMAGE_BYTES
-                - self._inline_image_bytes
-                - len(self._inline_resource_reservations) * MAX_INLINE_IMAGE_BYTES
-            )
-            // MAX_INLINE_IMAGE_BYTES,
-            0,
-        )
         candidates = [
             attachment
             for attachment in attachments
             if self.is_attachment_image(attachment)
             and (attachment.size is None or attachment.size <= MAX_INLINE_IMAGE_BYTES)
-        ][:available_slots]
+        ]
         if not candidates:
             self._preview_candidates = ()
             self._attachment_preview_resources.clear()
@@ -899,21 +956,16 @@ class TrackerDetailPanel(QFrame):
                 f"attachment-{attachment.attachment_id}",
                 id(self.attachment_preview),
             )
-            if reservation in self._loaded_inline_resources:
-                continue
-            if reservation in self._inline_resource_reservations:
-                continue
-            self._inline_resource_reservations.add(reservation)
 
             def loaded(resource, *, reserved=reservation) -> None:
-                self._inline_resource_reservations.discard(reserved)
+                self._finish_inline_download(reserved)
                 current = self._current_detail
                 if current is None or current.item_id != item_id or current.version != version:
                     return
                 if self._inline_image_bytes + len(resource.data) > MAX_ITEM_INLINE_IMAGE_BYTES:
                     return
                 if self.attachment_preview.add_attachment_resource(resource):
-                    self._inline_image_bytes += len(resource.data)
+                    self._add_inline_bytes(self.attachment_preview, len(resource.data))
                     self._loaded_inline_resources.add(reserved)
                     self._attachment_preview_resources[resource.resource_key] = resource
                     self.attachment_preview_button.setEnabled(True)
@@ -922,7 +974,7 @@ class TrackerDetailPanel(QFrame):
                 self._add_description_images()
 
             def failed(_exc: Exception, *, reserved=reservation) -> None:
-                self._inline_resource_reservations.discard(reserved)
+                self._finish_inline_download(reserved)
 
             def download_preview(selected: AttachmentSummary = attachment) -> AttachmentResource:
                 return self.content_service.download_attachment(
@@ -931,12 +983,23 @@ class TrackerDetailPanel(QFrame):
                     max_bytes=MAX_INLINE_IMAGE_BYTES,
                 )
 
-            self._host.submit(
-                f"attachment_preview:{self._wiki_resource_generation}:{attachment.attachment_id}",
-                download_preview,
-                loaded,
-                failed,
-            )
+            def start(
+                *,
+                reserved=reservation,
+                attachment_id=attachment.attachment_id,
+                download=download_preview,
+                loaded=loaded,
+                failed=failed,
+            ) -> None:
+                self._host.submit(
+                    f"attachment_preview:{reserved[0]}:{attachment_id}",
+                    download,
+                    loaded,
+                    failed,
+                )
+
+            self._queue_inline_download(reservation, start)
+        self._start_queued_inline_downloads()
 
     @staticmethod
     def _attachment_preview_html(attachments: tuple[AttachmentSummary, ...]) -> str:
@@ -1076,6 +1139,8 @@ class TrackerDetailPanel(QFrame):
         self._wiki_resource_generation += 1
         self._inline_resource_reservations.clear()
         self._loaded_inline_resources.clear()
+        self._inline_download_queue.clear()
+        self._inline_bytes_by_view.clear()
         self._attachments = ()
         self._preview_candidates = ()
         self._attachment_preview_resources.clear()
@@ -1202,6 +1267,8 @@ class TrackerDetailPanel(QFrame):
         self._wiki_resource_generation += 1
         self._inline_resource_reservations.clear()
         self._loaded_inline_resources.clear()
+        self._inline_download_queue.clear()
+        self._inline_bytes_by_view.clear()
         self.description_source_toggle.blockSignals(True)
         self.description_source_toggle.setChecked(False)
         self.description_source_toggle.blockSignals(False)
@@ -1350,6 +1417,14 @@ class TrackerDetailPanel(QFrame):
             failed,
         )
 
+    def _shows_item(self, item_id: int) -> bool:
+        """쓰기 결과를 반영할 아이템이 아직 화면에 열려 있는지 본다.
+
+        끝나기 전에 다른 아이템을 열었으면 그 화면은 그 아이템의 흐름이 맡는다.
+        """
+        current = self._current_detail
+        return current is not None and current.item_id == int(item_id)
+
     def _save_item_changes(
         self,
         changes: tuple[TrackerItemFieldChange, ...],
@@ -1380,7 +1455,8 @@ class TrackerDetailPanel(QFrame):
                 },
             )
             self._host.refresh_visible_item(updated_detail)
-            self.render_detail(updated_detail)
+            if self._shows_item(item_id):
+                self.render_detail(updated_detail)
             self._host.set_workspace_status(
                 f"#{item_id}의 필드 {len(changes)}개를 저장했습니다."
             )
@@ -1396,8 +1472,9 @@ class TrackerDetailPanel(QFrame):
                     "error": str(exc),
                 },
             )
-            self.editor_panel.set_busy(False)
-            self.editor_panel.set_error(str(exc) or "필드 저장에 실패했습니다.")
+            if self._shows_item(item_id):
+                self.editor_panel.set_busy(False)
+                self.editor_panel.set_error(str(exc) or "필드 저장에 실패했습니다.")
             self._host.show_error(exc, prefix="필드 저장 실패")
 
         self._host.submit(
@@ -1455,7 +1532,8 @@ class TrackerDetailPanel(QFrame):
                 },
             )
             self._host.refresh_visible_item(updated_detail)
-            self.render_detail(updated_detail)
+            if self._shows_item(item_id):
+                self.render_detail(updated_detail)
             self._host.set_workspace_status(
                 f"#{item_id} 상태 필드를 '{updated_detail.summary.status or target_name}'(으)로 변경했습니다."
             )
@@ -1472,8 +1550,9 @@ class TrackerDetailPanel(QFrame):
                     "error": str(exc),
                 },
             )
-            self.editor_panel.set_busy(False)
-            self.editor_panel.set_error(str(exc) or "상태 필드 변경에 실패했습니다.")
+            if self._shows_item(item_id):
+                self.editor_panel.set_busy(False)
+                self.editor_panel.set_error(str(exc) or "상태 필드 변경에 실패했습니다.")
             self._host.show_error(exc, prefix="상태 필드 변경 실패")
 
         self._host.submit(
@@ -1522,8 +1601,9 @@ class TrackerDetailPanel(QFrame):
             self._host.remove_visible_item(item_id)
             if tracker_id is not None:
                 self._host.invalidate_tracker_cache(int(tracker_id))
-            self._selected_item_id = None
-            self.reset_detail()
+            if self._shows_item(item_id):
+                self._selected_item_id = None
+                self.reset_detail()
             self._host.set_workspace_status(f"#{item_id}을(를) 삭제했습니다.")
 
         def failed(exc: Exception) -> None:
@@ -1534,8 +1614,9 @@ class TrackerDetailPanel(QFrame):
                 detail=detail,
                 details={"error": str(exc)},
             )
-            self.editor_panel.set_busy(False)
-            self.editor_panel.set_error(str(exc) or "아이템 삭제에 실패했습니다.")
+            if self._shows_item(item_id):
+                self.editor_panel.set_busy(False)
+                self.editor_panel.set_error(str(exc) or "아이템 삭제에 실패했습니다.")
             self._host.show_error(exc, prefix="아이템 삭제 실패")
 
         self._host.submit(

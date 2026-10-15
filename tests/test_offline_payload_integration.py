@@ -113,6 +113,8 @@ class OfflinePayloadIntegrationTest(unittest.TestCase):
             "상태": "Status",
             "승인": "Approved",
             "단계": "Phase",
+            # 표 필드 열도 매핑해야 보낸다.
+            "체크리스트.결과": "체크리스트",
         })
 
         payload = wizard.preview_payload(0)

@@ -43,14 +43,6 @@ class WizardDataPreparationMixin:
             raise ValueError("project_id must be selected first.")
         return self.client.get_trackers(self.state.project_id)
 
-    def load_tracker_items(self, tracker_id: int) -> list[dict]:
-        """트래커 안의 아이템 목록을 가져온다."""
-        return self.client.get_tracker_items(tracker_id)
-
-    def load_root_items(self, tracker_id: int) -> list[dict]:
-        """트래커 루트 바로 아래의 아이템만 가져온다."""
-        return self.client.get_tracker_children(tracker_id)
-
     def select_tracker(self, tracker_id: int) -> None:
         """업로드 대상 트래커를 저장한다."""
         if self.state.tracker_id != tracker_id:
@@ -121,7 +113,10 @@ class WizardDataPreparationMixin:
         return self.state.comparison_df
 
     def _detect_table_field_columns(self) -> None:
-        """`TableFieldName.ColumnName` 형태의 Excel 컬럼을 자동으로 감지한다."""
+        """`TableFieldName.ColumnName` 형태의 Excel 컬럼 중 그 표 필드에 매핑한 열을 찾는다.
+
+        매핑에서 끈 열은 보내지 않는다. 보내면 수정 모드에서 기존 표가 그 열 값으로 바뀐다.
+        """
         if self.state.schema_df is None or self.state.upload_df is None:
             return
 
@@ -141,6 +136,7 @@ class WizardDataPreparationMixin:
                     if col_name:
                         table_field_info[tf_name][col_name] = col_def
 
+        selected_mapping = self.state.selected_mapping or {}
         table_field_mapping = {}
         for df_col in self.state.upload_df.columns:
             if "." not in df_col:
@@ -153,7 +149,11 @@ class WizardDataPreparationMixin:
             potential_tf_name = parts[0].strip()
             potential_col_name = parts[1].strip()
 
-            if potential_tf_name in table_field_info and potential_col_name in table_field_info[potential_tf_name]:
+            if (
+                potential_tf_name in table_field_info
+                and potential_col_name in table_field_info[potential_tf_name]
+                and str(selected_mapping.get(df_col) or "").strip() == potential_tf_name
+            ):
                 table_field_mapping[df_col] = {
                     "table_field_name": potential_tf_name,
                     "column_name": potential_col_name,

@@ -62,7 +62,6 @@ class GuiPagesProjectSelectionTest(unittest.TestCase):
         base_settings = {
             "offline_mode": True,
             "offline_schema_path": "/tmp/schema.json",
-            "offline_tracker_configuration_path": "/tmp/config.json",
             "base_url": "https://example.test",
             "username": "tester",
         }
@@ -165,6 +164,33 @@ class GuiPagesUploadPageTest(unittest.TestCase):
         self.assertEqual(
             page.preview_table.sizePolicy().verticalPolicy(),
             self._expanding_policy,
+        )
+
+    def test_file_selection_long_failure_message_wraps_instead_of_widening_the_page(self) -> None:
+        """긴 오류 문구가 한 줄로 남으면 좁은 창에서 파일 단계에 가로 스크롤이 생긴다."""
+        from PySide6.QtWidgets import QLabel
+
+        message = "B열과 D열, C열·E열·F열의 헤더 이름이 각각 같습니다(대소문자·앞뒤 공백 무시). " * 2
+
+        def fail_preview(*_args, **_kwargs):
+            raise ValueError(message)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            path.write_bytes(b"sample")
+            page = create_file_selection_page(
+                GuiSettings(),
+                lambda _state: None,
+                lambda _state: None,
+                on_sheet_preview_requested=fail_preview,
+            )
+            page.load_state({"file_paths": [str(path)], "preview_file_path": str(path), "sheet_name": "Main"})
+            page.preview_button.click()
+
+        status_label = next(label for label in page.findChildren(QLabel) if message.strip() in label.text())
+        self.assertLess(
+            page.minimumSizeHint().width(),
+            status_label.fontMetrics().horizontalAdvance(status_label.text()),
         )
 
     def test_file_selection_requires_explicit_preview_and_full_load_stages(self) -> None:
@@ -391,6 +417,28 @@ class GuiPagesUploadPageTest(unittest.TestCase):
         )
         self.assertTrue(result_page.retry_failed_button.isEnabled())
         self.assertIn("생성, 수정, 혼합 처리", result_page.status_label.text())
+
+    def test_result_table_shows_blank_for_missing_values_and_keeps_excel_rows(self) -> None:
+        """파일 준비 실패 행처럼 일부 열이 없는 결과가 합쳐지면 빈 칸이 `nan`으로 보였다."""
+        result_page = create_result_page()
+        failed_df = pd.concat(
+            [
+                pd.DataFrame([{"source_file": "a.xlsx", "excel_row": "Excel 4행", "upload_name": "REQ-002",
+                               "phase": "insert"}]),
+                pd.DataFrame([{"source_file": "b.xlsx", "upload_name": "b", "error": "준비 실패"}]),
+            ],
+            ignore_index=True,
+        )
+
+        result_page.set_results({"success_df": pd.DataFrame(), "failed_df": failed_df, "unresolved_df": pd.DataFrame()})
+
+        table = result_page.tables["failed_df"]
+        headers = [table.horizontalHeaderItem(column).text() for column in range(table.columnCount())]
+        cells = [[table.item(row, column).text() for column in range(table.columnCount())] for row in range(2)]
+        self.assertEqual(cells[0][headers.index("excel_row")], "Excel 4행")
+        self.assertEqual(cells[1][headers.index("excel_row")], "")
+        self.assertEqual(cells[1][headers.index("phase")], "")
+        self.assertNotIn("nan", [cell for row in cells for cell in row])
 
     def test_constrained_panel_remains_horizontally_responsive(self) -> None:
         from PySide6.QtWidgets import QWidget

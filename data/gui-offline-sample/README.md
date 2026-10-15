@@ -6,8 +6,6 @@
 
 - `offline_schema.json`
   - 오프라인 트래커 schema snapshot
-- `offline_tracker_configuration.json`
-  - `TrackerItemChoiceField` source tracker 정보를 포함한 tracker configuration snapshot
 - `offline_tracker_items.json`
   - 두 tracker의 최상위·하위 아이템, 상세 필드와 검색 결과를 포함한 익명 조회 snapshot
 - `files/SAMPLE_MODULE_A_TC_001.xlsx`
@@ -21,21 +19,18 @@
 
 1. GUI 실행 후 설정 화면에서 `테스트` 토글을 켭니다.
 2. `Schema Snapshot`에 `data/gui-offline-sample/offline_schema.json`을 선택합니다.
-3. `Config Snapshot`에 `data/gui-offline-sample/offline_tracker_configuration.json`을 선택합니다.
-4. `조회 데이터 Snapshot`에 `data/gui-offline-sample/offline_tracker_items.json`을 선택합니다.
-5. `트래커 작업공간`에서 프로젝트와 트래커가 자동으로 채워지는지 확인하고 계층 노드를 펼칩니다.
+3. `조회 데이터 Snapshot`에 `data/gui-offline-sample/offline_tracker_items.json`을 선택합니다.
+4. `트래커 작업공간`에서 프로젝트와 트래커가 자동으로 채워지는지 확인하고 계층 노드를 펼칩니다.
    - `수정` 탭은 schema 기반 입력 구조와 Status options를 표시합니다.
-   - 테스트 모드이므로 저장, 상태 전환과 삭제 버튼은 비활성화됩니다.
-6. 배치 작업의 프로젝트 단계로 이동하면 테스트 프로젝트와 트래커가 자동으로 채워집니다.
-7. 파일 단계에서 `SAMPLE_MODULE_A_TC_001.xlsx`, `SAMPLE_MODULE_B_TC_002.xlsx`를 함께 선택합니다.
-8. 아래 값으로 맞춘 뒤 `데이터 불러오기`를 누릅니다.
-   - `Sheet Name`: `Upload`
-   - `Header Row`: `1`
-   - `Summary Column`: `Summary`
-9. 상단 데이터 단계는 두 가지 중 하나로 진행합니다.
-   - 루트 parent item이 필요 없으면 `파일별 상단 데이터 생성`을 끄고 넘어갑니다.
+   - 테스트 모드이므로 저장, 상태 필드 변경과 삭제 버튼은 비활성화됩니다.
+5. 배치 작업의 프로젝트 단계로 이동하면 테스트 프로젝트와 트래커가 자동으로 채워집니다.
+6. 파일 단계에서 `SAMPLE_MODULE_A_TC_001.xlsx`, `SAMPLE_MODULE_B_TC_002.xlsx`를 함께 선택합니다.
+7. `Sheet Name`은 `Upload`, `Header Row`는 `1`로 맞추고 `선택 시트 미리보기`를 누릅니다.
+   미리보기에서 `Summary Column`을 `Summary`로 고른 뒤 `전체 데이터 불러오기`를 누릅니다.
+8. 상단 데이터 단계는 두 가지 중 하나로 진행합니다.
+   - 루트 parent item이 필요 없으면 `파일별 최상단 폴더 생성`을 끄고 넘어갑니다.
    - 루트 parent item을 만들고 싶으면 기본 summary source를 파일명으로 두고, 필요 시 정규식 미리보기만 확인합니다.
-10. 첫 Dry Run에서는 아래 컬럼 위주로 매핑하면 서버 lookup 없이 끝까지 확인할 수 있습니다.
+9. 첫 Dry Run에서는 아래 컬럼 위주로 매핑하면 서버 lookup 없이 끝까지 확인할 수 있습니다.
    - `Summary`
    - `Description`
    - `Priority`
@@ -45,10 +40,10 @@
    - `Test Steps.Expected result`
    - `Test Steps.Critical`
    - `Related Requirement`
-11. `Related Requirement`는 테스트 모드에서 query lookup이 아니라 기본 regex ID 추출 방식으로 두는 편이 맞습니다.
+10. `Related Requirement`는 기본 regex ID 추출 방식으로 처리합니다. 이름·summary query 조회는 지원하지 않습니다.
    - 샘플 값은 `[REQ:9001001]` 같은 형식이라 기본 regex로 바로 인식됩니다.
-12. `Owner`, `Review Team`은 오프라인 snapshot에 사용자/그룹 디렉터리가 없으므로 첫 성공 경로에서는 매핑하지 않는 편이 맞습니다.
-13. 업로드 단계에서는 `Dry Run`을 켠 상태로만 진행할 수 있습니다.
+11. `Owner`, `Review Team`은 오프라인 snapshot에 사용자/그룹 디렉터리가 없으므로 첫 성공 경로에서는 매핑하지 않는 편이 맞습니다.
+12. 업로드 단계에서는 `Dry Run`을 켠 상태로만 진행할 수 있습니다.
 
 조회 snapshot의 tracker 범위:
 
@@ -60,11 +55,11 @@
 
 - `files/SAMPLE_LOOKUP_TC_003.xlsx`
   - `Owner`, `Review Team`에 실제 값이 들어 있어 lookup 실패와 차단 경고를 확인하기 좋습니다.
-  - `Related Requirement`도 이름 기반 조회 예시 값이 포함되어 있어 테스트 모드에서 query 방식을 고르면 의도적으로 막히는 흐름을 볼 수 있습니다.
+  - `Related Requirement`에는 ID 없이 이름만 적은 값이 있어, 정규식으로 ID를 뽑지 못해 차단되는 흐름을 볼 수 있습니다.
 
 파일명 파싱 테스트 팁:
 
-- 상단 데이터 summary를 파일명 전체로 쓰려면 정규식 `^(.*)\\.xlsx$` 를 사용하면 됩니다.
+- 정규식 대상의 기본값은 확장자를 뺀 파일명입니다. 정규식 없이도 summary에 `SAMPLE_MODULE_A_TC_001`처럼 들어갑니다.
 - 샘플 파일명은 `SAMPLE_<MODULE>_TC_<번호>.xlsx` 규칙이라 미리보기 검증에도 적합합니다.
-- 예: `^SAMPLE_(?P<module>[A-Z]+)_TC_(?P<case_no>\\d+)$`
+- 예: `^SAMPLE_(?P<module>[A-Z_]+)_TC_(?P<case_no>\d+)$`
   - `SAMPLE_MODULE_A_TC_001.xlsx` 에서는 `module=MODULE_A`, `case_no=001`

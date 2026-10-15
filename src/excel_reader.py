@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 
 OPENPYXL_PREVIEW_SCAN_ROW_LIMIT = 10_000
@@ -27,12 +28,37 @@ class ExcelReader:
             return True
         return isinstance(value, str) and value.strip() == ""
 
-    @staticmethod
-    def _normalize_headers(headers: list[Any]) -> list[str]:
-        return [
-            str(header).strip() if header is not None else f"Unnamed_{index}"
+    @classmethod
+    def _normalize_headers(cls, headers: list[Any], *, first_column: int = 1) -> list[str]:
+        """헤더를 문자열로 맞춘다. 빈 칸에는 순서로 이름을 붙이고, 이름이 겹치면 읽기 전에 막는다.
+
+        행은 헤더를 키로 한 dict가 되므로 이름이 겹치면 오른쪽 열 값이 왼쪽 열을 덮어쓴다.
+        필드 자동 매핑은 대소문자를 가리지 않으므로 대소문자와 앞뒤 공백만 다른 이름도 겹친 것으로 본다.
+        """
+        normalized = [
+            f"Unnamed_{index}" if cls.is_blank(header) else str(header).strip()
             for index, header in enumerate(headers)
         ]
+        letters_by_name: dict[str, list[str]] = {}
+        for index, header in enumerate(normalized):
+            letters_by_name.setdefault(header.casefold(), []).append(get_column_letter(first_column + index))
+        duplicate_groups = [letters for letters in letters_by_name.values() if len(letters) > 1]
+        if duplicate_groups:
+            raise ValueError(cls._duplicate_header_message(duplicate_groups))
+        return normalized
+
+    @staticmethod
+    def _duplicate_header_message(groups: list[list[str]]) -> str:
+        def group_text(letters: list[str]) -> str:
+            if len(letters) == 2:
+                return f"{letters[0]}열과 {letters[1]}열"
+            return "·".join(f"{letter}열" for letter in letters)
+
+        each = "각각 " if len(groups) > 1 else ""
+        return (
+            f"{', '.join(group_text(letters) for letters in groups)}의 헤더 이름이 {each}같습니다"
+            "(대소문자·앞뒤 공백 무시). 헤더 이름을 서로 다르게 고친 뒤 다시 불러오세요."
+        )
 
     @classmethod
     def _trim_trailing_blank_headers(cls, headers: list[Any]) -> list[Any]:
@@ -182,7 +208,7 @@ class ExcelReader:
                 row_count=1,
                 column_count=column_count,
             )
-            return self._normalize_headers(rows[0] if rows else [])
+            return self._normalize_headers(rows[0] if rows else [], first_column=first_column)
         finally:
             if workbook is not None:
                 # xlwings 는 데스크톱 Excel 을 COM 으로 다루므로 정리 실패가 pywintypes.com_error,
@@ -305,7 +331,7 @@ class ExcelReader:
                 row_count=1,
                 column_count=column_count,
             )
-            headers = self._normalize_headers(header_rows[0] if header_rows else [])
+            headers = self._normalize_headers(header_rows[0] if header_rows else [], first_column=first_column)
             if normalized_max_rows <= 0:
                 return headers, []
 
@@ -471,7 +497,7 @@ class ExcelReader:
                 row_count=1,
                 column_count=column_count,
             )
-            headers = self._normalize_headers(header_rows[0] if header_rows else [])
+            headers = self._normalize_headers(header_rows[0] if header_rows else [], first_column=used_start_col)
             if self.summary_col not in headers:
                 raise ValueError(f"'{self.summary_col}' 컬럼을 찾을 수 없습니다.")
 

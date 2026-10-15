@@ -7,8 +7,12 @@ description: PySide6 GUI를 오프스크린으로 실제 띄워서 조작하고 
 
 ## 왜 필요한가
 
-이 저장소의 GUI 테스트는 창 클래스를 통째로 `patch` 한다. 모달 창이 `exec()` 에서
-멈추기 때문이다. 그 결과 **진짜 생성자가 한 번도 불리지 않는다.**
+이 저장소의 GUI 테스트는 모달 창이 `exec()` 에서 멈추지 않도록 창 클래스를 바꿔 끼운다.
+통째로 `patch` 한 창은 **진짜 생성자가 한 번도 불리지 않는다.**
+
+상세 창, Wiki 창, 계층·Baseline 내보내기 필드 창 테스트는 이제 `exec` 만 덮은 서브클래스를 써서
+진짜 생성자를 부른다. 그 밖의 창(확인 대화상자, 일괄 수정 창 등)은 아직 통째로 바꾸는 테스트가 있으므로
+이 스킬로 직접 열어 봐야 한다.
 
 실제로 2026-09-21에 `TrackerItemDetailDialog` 의 `parent` 인자가 QWidget이 아닌
 객체로 바뀐 채 `main` 에 병합됐다. 상세 창 열기 버튼을 누르면 `TypeError` 로
@@ -114,7 +118,7 @@ check("뒤로 가능", session.can_go_back, True)
 
 드라이버 스크립트는 일회용이다. **찾은 결함은 테스트로 옮겨 심는다.**
 `open_modal` 과 같은 방식(서브클래스로 `exec` 만 덮기)을 쓰면 테스트에서도
-진짜 생성자가 불린다. `tests/test_gui_tracker_workspace.py` 의
+진짜 생성자가 불린다. `tests/test_gui_workspace_detail.py` 의
 `test_detail_dialog_is_built_with_the_real_class` 가 그 예다.
 
 고친 뒤에는 일부러 되돌려서 그 테스트가 **실패하는지** 확인한다. 실패하지

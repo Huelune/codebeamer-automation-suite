@@ -70,7 +70,7 @@
 - `referenceType`, `options`, `multipleValues`, `valueModel` 로 보조 판정
 - `UserChoiceField`, `UserReference` 는 사용자 이름 우선 lookup 대상으로 분류
 - `MemberField` 는 `USER/ROLE/GROUP` mixed member lookup 대상으로 분류
-- `TrackerItemChoiceField` 는 configuration 정보와 무관하게 regex ID 추출 경로로 분류
+- `TrackerItemChoiceField` 는 regex ID 추출 경로로 분류(tracker configuration은 조회하지 않음)
 - `Status` 는 transition 기반 후처리가 필요하므로 TODO 로 분리
 - 정적 option이 없는 일반 reference field는 `LOOKUP_REQUIRED` 또는 `FIELD_UNSUPPORTED` 로 조기 노출
 
@@ -246,7 +246,7 @@ payload cache, 업로드 실행 서비스를 조합하고 기존 payload 메서�
 - 진단 로그와 API 모니터를 묶는 확장형 개발자 창: `src/gui/developer_tools_window.py`
 - 테스트 모드 CbQL subset 평가: `src/gui/offline_query.py`
 - 업로드 context 모델: `src/gui/upload_context.py`
-- TRACKER configuration 해석: `src/gui/tracker_config.py`
+- `TrackerItemChoiceField` 정규식 설정 정규화: `src/gui/tracker_config.py`
 - 다중 파일 cache·validation 집계: `src/gui/batch_validation.py`
 - 파일별 wizard 준비·batch 실행·결과 집계: `src/gui/batch_upload.py`
 - 검증 이슈와 사용자 메시지 변환: `src/gui/validation_presenter.py`
@@ -330,15 +330,12 @@ flowchart TD
     Q -->|아니오| S["findByName 후 필요시 user id fallback"]
     S --> T["userInfo와 reference를 캐시에 저장"]
     N -->|MemberField| U["USER/ROLE/GROUP 이름 매칭"]
-    N -->|TrackerItemChoiceField| V{"source tracker 있음?"}
-    V -->|예| W["파일 전체 값을 중복 제거 후 tracker item query 사전 조회"]
-    V -->|아니오| X["regex 기반 tracker item ID 파싱"]
+    N -->|TrackerItemChoiceField| X["regex 기반 tracker item ID 파싱"]
     N -->|기타 reference| Y["LOOKUP_REQUIRED 또는 unsupported 표시"]
     O --> Z["row별 payload cache 생성"]
     R --> Z
     T --> Z
     U --> Z
-    W --> Z
     X --> Z
     Y --> Z
     Z --> AA["preview는 cache된 payload 반환"]
@@ -396,12 +393,13 @@ flowchart TD
 
 처리 흐름:
 1. schema flattening 단계에서 `TableField` 정의와 하위 컬럼 목록 식별
-2. wizard가 `TableFieldName.ColumnName` 패턴으로 일치하는 Excel 컬럼 탐지
+2. wizard가 `TableFieldName.ColumnName` 패턴으로 일치하는 Excel 컬럼 중 매핑에서 그 표 필드에 연결한 열만 사용하고, 열마다 생성/수정 사용 범위를 적용
 3. `Upload Record Key`가 있으면 같은 키의 연속 원본 행을 한 업로드 레코드로 병합하고 table 열의 빈 셀과 순서를 보존
 4. 각 원본 행의 하위 셀 값을 하나의 table row로 묶어 nested `TableFieldValue` 구조 생성
 5. 업로드 전에 `{"fieldId", "name", "type", "values":[...]}` 형태의 plain dict로 직렬화
+6. 수정은 표 전체를 바꾸므로, 수정 행에서 한 표의 일부 열만 보내면 `TABLE_FIELD_PARTIAL_UPDATE`로 막음. 표 열을 모두 매핑에서 빼면 기존 표를 그대로 둠
 
-`Upload Record Key`는 선택 사항입니다. 열이 없으면 기존 Summary 기반 멀티라인 병합을 유지합니다. 열이 있으면 모든 행의 키를 요구하고, 동일 키가 떨어져 다시 나타나는 입력과 그룹 안의 일반 필드 충돌을 payload 생성 전에 거부합니다.
+`Upload Record Key`는 선택 사항입니다. 열이 없으면 기존 Summary 기반 멀티라인 병합을 유지합니다. 이때 `id` 열이 있으면 Summary가 비어 있어도 다른 id가 나오는 행부터 새 레코드로 나눕니다. 열이 있으면 모든 행의 키를 요구하고, 동일 키가 떨어져 다시 나타나는 입력과 그룹 안의 일반 필드 충돌을 payload 생성 전에 거부합니다.
 
 ## Option 및 Reference 처리 방식
 
@@ -424,9 +422,8 @@ flowchart TD
 - 하나의 이름이 여러 후보와 겹치면 `MEMBER_LOOKUP_AMBIGUOUS` 로 실패
 
 tracker item 선택 필드 처리:
-- `TrackerItemChoiceField` 는 tracker configuration 의 `fields` 목록에서 `referenceId == schema.field_id` 를 우선 매칭합니다.
 - 이름·summary query lookup은 대량 검증의 API 호출을 줄이기 위해 비활성화되어 있습니다.
-- configuration의 source tracker 정보와 무관하게 regex ID 추출 경로를 사용합니다.
+- tracker configuration은 조회하지 않고 regex ID 추출 경로만 사용합니다.
 - builtin `subjects` 는 현재 direct parse만 사용합니다.
 - 단일 값 또는 list 모두 허용
 - 각 값에서 `[:id]` 패턴을 먼저, 없으면 `[]` 안 첫 번째 integer를 추출

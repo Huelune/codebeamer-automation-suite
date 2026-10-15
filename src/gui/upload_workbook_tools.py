@@ -27,7 +27,6 @@ from .excel_export_style import fit_column_widths
 
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 _HEADER_FONT = Font(color="FFFFFF", bold=True)
-_SUBHEADER_FILL = PatternFill("solid", fgColor="D9EAF7")
 _ERROR_FILL = PatternFill("solid", fgColor="FCE4D6")
 _WARNING_FILL = PatternFill("solid", fgColor="FFF2CC")
 _SUPPORTED_UPLOAD_MODES = {"create", "update", "upsert"}
@@ -54,7 +53,7 @@ _SUMMARY_LABELS = {
 }
 _FAILED_REPORT_COLUMN_LABELS = {
     "source_file": "파일",
-    "_row_id": "행 식별자",
+    "excel_row": "Excel 행",
     "upload_name": "아이템명",
     "phase": "작업",
     "target_item_id": "대상 아이템 ID",
@@ -201,6 +200,7 @@ def _failure_display_value(column: str, value: Any) -> Any:
     elif column == "status":
         text = {
             "failed": "실패",
+            "upload_failed": "실패",
             "unresolved_parent": "상위 항목 미해결",
             "payload_failed": "데이터 변환 실패",
         }.get(text.lower(), text)

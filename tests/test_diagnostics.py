@@ -174,6 +174,23 @@ class DiagnosticServiceTest(unittest.TestCase):
             self.assertNotIn(secret, sanitized)
         self.assertGreaterEqual(sanitized.count("<PATH>"), 3)
 
+    def test_sanitizer_masks_server_host_in_connection_errors(self) -> None:
+        """requests·urllib3 연결 오류는 URL 없이 host='…'와 이름 해석 대상으로 서버 이름을 담는다."""
+        message = (
+            "HTTPSConnectionPool(host='secret-host.example.invalid', port=443): Max retries exceeded "
+            "with url: /cb/api/v3/items/1 (Caused by NameResolutionError(\"HTTPSConnection("
+            "host='secret-host.example.invalid', port=443): Failed to resolve "
+            "'secret-host.example.invalid' ([Errno 11001] getaddrinfo failed)\"))"
+        )
+
+        sanitized = sanitize_diagnostic_text(message)
+
+        self.assertNotIn("secret-host", sanitized)
+        self.assertNotIn("/cb/api", sanitized)
+        self.assertIn("host=<HOST>", sanitized)
+        # 무슨 일이 있었는지는 남는다.
+        self.assertIn("Max retries exceeded", sanitized)
+
     def test_record_exception_keeps_only_generic_message(self) -> None:
         service = DiagnosticService()
         error = RuntimeError('HTTP 400: {"token":"secret","name":"Private Item"}')

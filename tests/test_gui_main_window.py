@@ -32,6 +32,7 @@ from src.gui.settings_store import AppSettings
 from src.gui.settings_store import GuiSettings
 from src.gui.settings_store import GuiSettingsStore
 from src.gui.settings_store import test_mode_validation_signature
+from src.gui.styles import build_gui_stylesheet
 from src.gui.tracker_workspace import TrackerWorkspacePage
 from src.gui.window_support import GuiSessionState
 from src.gui.window_support import UploadProgressState
@@ -118,6 +119,26 @@ class GuiMainWindowRootConfigMergeTest(unittest.TestCase):
             {"Summary": {"enabled": True, "mode": "fixed_value", "value": "REQ"}},
         )
         self.assertEqual(merged["field_sources"], {"Summary": "__file_stem__"})
+
+
+class GuiThemeApplicationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        cls._app = QApplication.instance() or QApplication([])
+
+    def test_theme_change_is_applied_and_same_theme_is_kept(self) -> None:
+        """같은 테마는 다시 넣지 않지만, 테마를 바꾸면 앱 스타일시트가 바뀐다."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            window = BatchUploadWindow(GuiSettingsStore(root_dir=Path(temp_dir)))
+            try:
+                for theme_name in ("igloo", "kefico", "kefico", "igloo"):
+                    with self.subTest(theme=theme_name):
+                        window._apply_theme(theme_name)
+                        self.assertEqual(self._app.styleSheet(), build_gui_stylesheet(theme_name))
+            finally:
+                window.close()
 
 
 class GuiMainWindowPreferencesTest(unittest.TestCase):
@@ -437,6 +458,122 @@ class GuiMainWindowSmokeTest(unittest.TestCase):
             self._app.processEvents()
             self.assertFalse(window.api_monitor_window.isVisible())
             API_MONITOR.reset()
+
+
+class _RunningWorker:
+    """끝나지 않은 작업 스레드 흉내. 중단 요청만 기록한다."""
+
+    def __init__(self) -> None:
+        self.running = True
+        self.cancel_requests = 0
+
+    def isRunning(self) -> bool:
+        return self.running
+
+    def request_cancel(self) -> None:
+        self.cancel_requests += 1
+
+
+class _AnswerBox:
+    answers: list[object] = []
+    asked: list[str] = []
+
+    @classmethod
+    def question(cls, parent, title, text, buttons, default):
+        del parent, title, buttons
+        from PySide6.QtWidgets import QMessageBox
+
+        assert default == QMessageBox.StandardButton.No
+        cls.asked.append(text)
+        return cls.answers.pop(0)
+
+
+class GuiMainWindowCloseWhileRunningTest(unittest.TestCase):
+    """작업이 도는 동안 닫으면 실행 중인 스레드를 지워 앱이 강제 종료되던 문제."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtWidgets import QMessageBox
+
+        cls._app = QApplication.instance() or QApplication([])
+        _AnswerBox.StandardButton = QMessageBox.StandardButton
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.window = MainWindow(GuiSettingsStore(root_dir=Path(temp_dir.name)))
+        self.addCleanup(self._force_close)
+        self.window.qt = dict(self.window.qt, QMessageBox=_AnswerBox)
+        _AnswerBox.answers = []
+        _AnswerBox.asked = []
+        self.window.show()
+        self._app.processEvents()
+
+    def _force_close(self) -> None:
+        from PySide6.QtCore import QEvent
+
+        self.window.batch_window.upload_worker = None
+        self.window.tracker_workspace_page.search_panel._bulk_worker = None
+        self.window.tracker_workspace_page._tasks.clear()
+        self.window.close()
+        # TestCase 가 창을 붙잡고 있으면 뒤 테스트의 스타일시트 적용이 남은 창까지 다시 그려 느려진다.
+        self.window.deleteLater()
+        del self.window
+        self._app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self._app.processEvents()
+
+    def test_closing_during_upload_asks_then_stops_and_waits(self) -> None:
+        worker = _RunningWorker()
+        self.window.batch_window.upload_worker = worker
+
+        _AnswerBox.answers = [_AnswerBox.StandardButton.No]
+        self.window.close()
+        self.assertTrue(self.window.isVisible())
+        self.assertEqual(worker.cancel_requests, 0)
+
+        _AnswerBox.answers = [_AnswerBox.StandardButton.Yes]
+        self.window.close()
+        # 남은 항목만 중단하고, 진행 중인 항목이 끝날 때까지 닫지 않는다.
+        self.assertTrue(self.window.isVisible())
+        self.assertEqual(worker.cancel_requests, 1)
+        self.assertIn("배치 업로드", _AnswerBox.asked[-1])
+
+        self.window._close_when_idle()
+        self.assertTrue(self.window.isVisible())
+
+        worker.running = False
+        self.window.batch_window.upload_worker = None
+        self.window._close_when_idle()
+        self.assertFalse(self.window.isVisible())
+        self.assertEqual(len(_AnswerBox.asked), 2)
+
+    def test_closing_during_bulk_update_stops_remaining_chunks(self) -> None:
+        worker = _RunningWorker()
+        self.window.tracker_workspace_page.search_panel._bulk_worker = worker
+        _AnswerBox.answers = [_AnswerBox.StandardButton.Yes]
+
+        self.window.close()
+
+        self.assertTrue(self.window.isVisible())
+        self.assertEqual(worker.cancel_requests, 1)
+        self.assertIn("일괄 수정", _AnswerBox.asked[-1])
+        self.window.tracker_workspace_page.search_panel._bulk_worker = None
+        self.window._close_when_idle()
+        self.assertFalse(self.window.isVisible())
+
+    def test_closing_with_unfinished_requests_waits_without_asking(self) -> None:
+        """조회나 단건 저장은 묻지 않고, 끝날 때까지 닫기만 미룬다."""
+        pending = object()
+        self.window.tracker_workspace_page._tasks.add(pending)
+
+        self.window.close()
+
+        self.assertEqual(_AnswerBox.asked, [])
+        self.assertTrue(self.window.isVisible())
+        self.window.tracker_workspace_page._tasks.discard(pending)
+        self.window._close_when_idle()
+        self.assertFalse(self.window.isVisible())
 
 
 if __name__ == "__main__":

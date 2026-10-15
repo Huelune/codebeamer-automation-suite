@@ -9,12 +9,16 @@ from dataclasses import replace
 from enum import Enum
 from typing import Any
 
+import requests
+
 from src.codebeamer_client import CodebeamerClient
 from src.models.common import CONNECTED_FIELD_TYPE_VALUE_MODEL_MAP
+from src.models.common import format_codebeamer_datetime
 
 from .payload_values import optional_int
 from .service_core import _build_gui_client
 from .tracker_query_models import TrackerItemDetail
+from .tracker_query_service import TRANSPORT_ERRORS
 from .tracker_query_service import TrackerQueryService
 
 
@@ -42,6 +46,8 @@ class TrackerItemWriteErrorKind(str, Enum):
     NOT_FOUND = "not_found"
     RATE_LIMITED = "rate_limited"
     NETWORK = "network"
+    # 요청은 보냈지만 응답을 기다리다 끝났다. 서버에 반영됐는지 알 수 없다.
+    TIMEOUT = "timeout"
     SERVER = "server"
     UNKNOWN = "unknown"
 
@@ -135,10 +141,6 @@ class EditableTrackerSchema:
     tracker_id: int
     fields: tuple[EditableTrackerField, ...]
     status_field: EditableTrackerField | None = None
-
-    @property
-    def editable_fields(self) -> tuple[EditableTrackerField, ...]:
-        return tuple(field_value for field_value in self.fields if field_value.editable)
 
 
 @dataclass(frozen=True)
@@ -705,7 +707,10 @@ def build_field_value(change: TrackerItemFieldChange) -> dict[str, Any]:
     elif kind in {FieldEditorKind.DATE, FieldEditorKind.DATETIME}:
         fallback = "DateFieldValue" if kind == FieldEditorKind.DATE else "DateTimeFieldValue"
         payload["type"] = _value_model_name(field_value, fallback)
-        payload["value"] = str(raw_value or "").strip() or None
+        try:
+            payload["value"] = format_codebeamer_datetime(str(raw_value or "").strip() or None)
+        except ValueError as exc:
+            raise ValueError(f"'{field_value.label}' {exc}") from exc
     elif kind in {FieldEditorKind.CHOICE, FieldEditorKind.STATUS}:
         references = _choice_references(field_value, raw_value)
         if kind == FieldEditorKind.STATUS and len(references) != 1:
@@ -842,6 +847,10 @@ _WRITE_MESSAGES = {
     TrackerItemWriteErrorKind.NOT_FOUND: "변경할 아이템을 찾을 수 없습니다.",
     TrackerItemWriteErrorKind.RATE_LIMITED: "서버 요청 제한에 도달했습니다. 잠시 후 다시 시도하세요.",
     TrackerItemWriteErrorKind.NETWORK: "Codebeamer 서버에 연결하지 못했습니다.",
+    TrackerItemWriteErrorKind.TIMEOUT: (
+        "서버 응답을 기다리다 시간이 초과되었습니다. 변경이 반영됐을 수 있으니 "
+        "상세를 다시 불러와 확인한 뒤 다시 시도하세요."
+    ),
     TrackerItemWriteErrorKind.SERVER: "Codebeamer 서버가 변경 요청을 처리하지 못했습니다.",
     TrackerItemWriteErrorKind.UNKNOWN: "아이템 변경 중 예상하지 못한 오류가 발생했습니다.",
 }
@@ -868,6 +877,14 @@ def classify_tracker_item_write_error(
         return TrackerItemWriteErrorKind.INVALID_VALUE, status_code
     if isinstance(status_code, int) and status_code >= 500:
         return TrackerItemWriteErrorKind.SERVER, status_code
+    # 200 응답이 JSON이 아니면(게이트웨이 오류 페이지 등) 입력값이 아니라 서버 쪽 문제다.
+    if isinstance(exc, requests.exceptions.JSONDecodeError):
+        return TrackerItemWriteErrorKind.SERVER, status_code
+    # 연결은 됐는데 응답이 늦은 것은 실패와 다르다. 반영됐을 수 있다.
+    if isinstance(exc, requests.exceptions.ReadTimeout):
+        return TrackerItemWriteErrorKind.TIMEOUT, None
+    if isinstance(exc, TRANSPORT_ERRORS):
+        return TrackerItemWriteErrorKind.NETWORK, None
     if isinstance(exc, (TypeError, ValueError)):
         return TrackerItemWriteErrorKind.INVALID_VALUE, None
     class_name = type(exc).__name__.casefold()
@@ -1113,10 +1130,6 @@ class TrackerItemEditorService:
             lambda: client.update_item_fields(int(item_id), [field_value]),
         )
         return self.query_service.load_detail(settings, int(item_id))
-
-    def transition_status(self, *args, **kwargs) -> TrackerItemDetail:
-        """호환용 별칭. 실제 동작은 workflow transition이 아닌 Status 필드 변경이다."""
-        return self.change_status_field(*args, **kwargs)
 
     def delete_item(
         self,

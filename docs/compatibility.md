@@ -10,6 +10,7 @@
 | `main.py` | 문서의 과거 CLI 실행 안내 | 유지(비권장) | `cli_main.main`만 다시 노출합니다. 사용자 실행 경로의 완충 역할이 있으므로 다음 major 버전 전까지 유지합니다. |
 | `src/excel_processor.py` | offline payload 통합 테스트와 과거 import | 유지(호환) | `ExcelReader`와 `HierarchyProcessor`를 합친 과거 계약입니다. 실제 처리는 두 구현 클래스에 위임합니다. 외부 import 전환 공지가 끝난 major 버전에서만 제거를 검토합니다. |
 | `src/cli_excel_utils.py` | 내부 runtime 사용 없음 | 유지(호환) | 과거 CLI helper import를 보존하며 `ExcelReader`에 위임합니다. 새 코드는 직접 `ExcelReader`를 사용합니다. 패키지 외부 사용 여부를 확인할 수 있는 major 버전 전에는 제거하지 않습니다. |
+| `src/models/__init__.py` | 모델 import 대부분이 이 패키지 경로를 씁니다 | 유지(패키지 공개 API) | 모델 패키지의 공개 이름 목록입니다. 새로 만드는 재내보내기 전용 모듈과 달리 기존 소비자가 많아 예외로 둡니다. 새 이름을 추가할 때는 정의 모듈에서 직접 import해도 되고, 일괄 전환은 별도 리팩터링으로만 합니다. |
 
 ## 제거한 경로
 

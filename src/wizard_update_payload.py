@@ -270,6 +270,16 @@ class WizardUpdatePayloadService:
         return deepcopy(existing_item)
 
     @staticmethod
+    def _item_tracker_id(item: dict[str, Any]) -> int | None:
+        """조회한 item 이 속한 트래커 id. 응답에 없으면 None."""
+        tracker = item.get("tracker")
+        raw_id = tracker.get("id") if isinstance(tracker, dict) else None
+        try:
+            return int(raw_id) if raw_id is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
     def _custom_field_key(field_payload: Any) -> tuple[str, Any] | None:
         """custom field 병합용 식별 키를 만든다."""
         if not isinstance(field_payload, dict):
@@ -354,6 +364,24 @@ class WizardUpdatePayloadService:
             row_id=row_id,
             df_col=id_column_name,
         )
+        # 다른 트래커에서 내보낸 id 열이면 그 트래커 아이템을 지금 트래커 매핑으로 덮어쓰게 된다.
+        existing_tracker_id = self._item_tracker_id(existing_item)
+        selected_tracker_id = self.state.tracker_id
+        if (
+            existing_tracker_id is None
+            or selected_tracker_id is None
+            or existing_tracker_id != int(selected_tracker_id)
+        ):
+            self._raise_payload_error(
+                "UPDATE_ITEM_TRACKER_MISMATCH",
+                schema_field="id",
+                df_col=id_column_name,
+                row_id=row_id,
+                detail=(
+                    f"item_id={int(target_item_id)} tracker_id={existing_tracker_id} "
+                    f"selected_tracker_id={selected_tracker_id}"
+                ),
+            )
         merged_payload = deepcopy(existing_item)
 
         for payload_key, payload_value in partial_payload.items():

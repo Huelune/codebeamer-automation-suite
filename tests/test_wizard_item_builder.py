@@ -14,6 +14,8 @@ class WizardItemBuilderServiceTest(unittest.TestCase):
         self.state = SimpleNamespace(
             schema_df=pd.DataFrame(),
             table_field_mapping={},
+            selected_mapping_modes={},
+            upload_mode="create",
         )
         self.service = WizardItemBuilderService(
             state=self.state,
@@ -62,12 +64,57 @@ class WizardItemBuilderServiceTest(unittest.TestCase):
         )
 
         fields = self.service._build_table_custom_fields(
-            pd.Series({"Steps": ["Open", "Close"]})
+            pd.Series({"Steps": ["Open", "Close"]}),
+            row_id=0,
+            operation="create",
         )
 
         self.assertEqual(len(fields), 1)
         self.assertEqual(len(fields[0].values), 2)
         self.assertEqual(fields[0].values[0][0].value, "Open")
+
+    def _two_column_table(self) -> pd.Series:
+        self.state.table_field_mapping = {
+            "Steps.Action": {"table_field_name": "Test Steps", "column_name": "Action"},
+        }
+        self.state.schema_df = pd.DataFrame(
+            [
+                {
+                    "field_name": "Test Steps",
+                    "field_id": 10,
+                    "is_table_field": True,
+                    "table_columns": [
+                        {"id": 11, "name": "Action", "type": "TextField", "valueModel": "TextFieldValue"},
+                        {"id": 12, "name": "Expected", "type": "TextField", "valueModel": "TextFieldValue"},
+                    ],
+                }
+            ]
+        )
+        return pd.Series({"Steps.Action": "Open"})
+
+    def test_create_may_send_only_some_table_columns(self) -> None:
+        row = self._two_column_table()
+
+        fields = self.service._build_table_custom_fields(row, row_id=0, operation="create")
+
+        self.assertEqual(len(fields), 1)
+
+    def test_update_with_only_some_table_columns_raises_payload_error(self) -> None:
+        row = self._two_column_table()
+        self.state.upload_mode = "update"
+
+        with self.assertRaisesRegex(ValueError, r"\[TABLE_FIELD_PARTIAL_UPDATE\].*Expected"):
+            self.service._build_table_custom_fields(row, row_id=0, operation="update")
+
+    def test_table_column_outside_operation_scope_is_skipped(self) -> None:
+        row = self._two_column_table()
+        self.state.upload_mode = "upsert"
+        self.state.selected_mapping_modes = {"Steps.Action": {"create": True, "update": False}}
+
+        self.assertEqual(
+            self.service._build_table_custom_fields(row, row_id=0, operation="update"),
+            [],
+        )
 
 
 if __name__ == "__main__":

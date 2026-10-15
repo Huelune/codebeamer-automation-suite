@@ -231,6 +231,10 @@ def main():
         schema_df=schema_df,
     )
 
+    upload_df = wizard.state.upload_df
+    if upload_df is None:
+        raise RuntimeError("업로드 데이터를 준비하지 못했습니다.")
+
     if list_cols:
         print("\n[multipleValues 기준 자동 선택된 list 컬럼]")
         for col in list_cols:
@@ -239,7 +243,7 @@ def main():
         print("\n[multipleValues 기준 자동 선택된 list 컬럼 없음]")
 
     print("\n[업로드 컬럼 목록]")
-    for col in wizard.state.upload_df.columns:
+    for col in upload_df.columns:
         print("-", col)
 
     selected_default_values = _prompt_default_field_values(wizard.mapper, schema_df)
@@ -253,11 +257,11 @@ def main():
     print(comparison_df[["df_column", "selected_schema_field", "status"]])
 
     if wizard.state.table_field_mapping:
-        print("\n[자동 감지된 TableField 컬럼]")
+        print("\n[매핑된 TableField 컬럼]")
         for df_col, tf_info in wizard.state.table_field_mapping.items():
             print(f"- {df_col} -> {tf_info['table_field_name']}.{tf_info['column_name']}")
     else:
-        print("\n[감지된 TableField 컬럼 없음]")
+        print("\n[매핑된 TableField 컬럼 없음]")
 
     print("\n[옵션/참조형 필드 처리 중]")
     selected_option_mapping = validation_result.selected_option_mapping
@@ -282,7 +286,7 @@ def main():
     failed_count = len(payload_df[payload_df["payload_status"] == PayloadStatus.FAILED.value])
     print(f"\n[Payload Cache] ready={ready_count}, failed={failed_count}")
 
-    preview_row_id = int(wizard.state.upload_df["_row_id"].min())
+    preview_row_id = int(upload_df["_row_id"].min())
     print(f"\n[Payload Preview row_id={preview_row_id}]")
     print(wizard.preview_payload(preview_row_id))
 

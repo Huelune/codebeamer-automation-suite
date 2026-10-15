@@ -100,6 +100,7 @@ REQUEST_BUSY_MESSAGES = {
     "baseline_saved_hierarchy": "저장해 둔 Baseline 계층을 여는 중입니다.",
     "direct": "아이템 ID의 위치와 계층을 확인하는 중입니다.",
     "editor_schema": "수정 가능한 필드를 확인하는 중입니다.",
+    "bulk_schema": "일괄 수정할 수 있는 필드를 확인하는 중입니다.",
     "required_fields": "새 아이템 필수 필드를 확인하는 중입니다.",
     "item_write": "트래커 아이템 변경 사항을 반영하는 중입니다.",
     "tracker_lookup": "트래커 ID의 소속 프로젝트를 확인하는 중입니다.",
@@ -575,6 +576,9 @@ class TrackerWorkspacePage(QWidget):
             self.content_service.clear_cache()
             self.context_service.clear_cache()
             self.comment_service.clear_cache()
+            # 새로고침은 서버에서 다시 받는다. 펼쳐 둔 계층을 캐시에서 다시 그리지 않는다.
+            self.hierarchy_panel.root_cache().clear()
+            self.hierarchy_panel.child_cache().clear()
         if settings_changed:
             self._settings_fingerprint = fingerprint
             self._clear_context_state()
@@ -957,7 +961,7 @@ class TrackerWorkspacePage(QWidget):
         self._current_tracker = None
         self.hierarchy_panel.clear_baseline_cache()
         self.hierarchy_panel.reset_source()
-        self.search_panel.reset_condition_search("트래커를 불러오는 중입니다.")
+        self.search_panel.reset_results("트래커를 불러오는 중입니다.")
         self._reset_baseline_state("트래커를 불러오는 중입니다.")
         self.detail_panel.reset_detail()
         self._load_trackers(
@@ -1771,12 +1775,16 @@ class TrackerWorkspacePage(QWidget):
         self._current_tracker = tracker
         self._remember_tracker(tracker)
         if previous_tracker_id != tracker.tracker_id:
-            self.search_panel.reset_condition_search(
+            self.search_panel.reset_results(
                 "트래커가 변경되었습니다. 상세 검색 조건을 다시 설정하세요."
             )
             self._reset_baseline_state("Baseline 비교 기준을 다시 불러오세요.")
             self.hierarchy_panel.clear_baseline_cache()
             self.hierarchy_panel.reset_source()
+            self._show_required_fields(tracker)
+        else:
+            # 현재 상태 아이템을 연다. 조회 기준이 Baseline으로 남으면 계층과 쓰기 잠금이 어긋난다.
+            self.hierarchy_panel.show_current_source()
         self.project_combo.setCurrentIndex(
             -1
             if project is None
@@ -1937,6 +1945,16 @@ class TrackerWorkspacePage(QWidget):
 
         remove_from(None)
         self.search_panel.remove_item(item_id)
+
+    def is_bulk_update_running(self) -> bool:
+        return self.search_panel.is_bulk_update_running()
+
+    def request_bulk_update_stop(self) -> None:
+        self.search_panel.request_bulk_update_stop()
+
+    def has_pending_requests(self) -> bool:
+        """끝나지 않은 조회·저장 작업 스레드가 있는지. 다 끝나야 앱을 안전하게 닫을 수 있다."""
+        return bool(self._tasks)
 
     def shutdown(self) -> None:
         """창 종료 뒤 완료되는 요청이 화면 상태를 갱신하지 않도록 무효화한다."""

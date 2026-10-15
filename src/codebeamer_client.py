@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import random
+import threading
 import time
 from contextvars import ContextVar
 from typing import Any
@@ -15,7 +17,6 @@ from .api_monitor import API_OUTCOME_RETRY
 from .api_monitor import API_OUTCOME_SUCCESS
 from .api_monitor import normalize_api_path
 from .models import ITEM_SEARCH_RESULT_KEYS
-from .models import OPTION_CONTAINER_KEYS
 from .models import USER_SEARCH_RESULT_KEYS
 from .models import UserInfo
 
@@ -24,6 +25,16 @@ _API_REQUEST_CONTEXT: ContextVar[tuple[str, int, int] | None] = ContextVar(
     "codebeamer_api_request_context",
     default=None,
 )
+
+# 서버에 닿지 않으면 빨리 포기하고, 닿은 뒤에는 큰 조회를 처리할 시간을 준다.
+CONNECT_TIMEOUT_SECONDS = 10.0
+READ_TIMEOUT_SECONDS = 120.0
+# 쓰기는 응답을 받지 못하면 반영됐는지 알 수 없다. 서버가 끝낼 시간을 더 준다.
+WRITE_READ_TIMEOUT_SECONDS = 300.0
+# 429 응답의 Retry-After 를 따르되 이보다 오래 붙잡혀 있지는 않는다.
+MAX_RETRY_AFTER_SECONDS = 60.0
+# 동시에 막힌 요청이 같은 순간에 다시 몰리지 않도록 재시도 간격에 더하는 최대 비율.
+RETRY_JITTER_RATIO = 0.25
 
 
 class CodebeamerClient:
@@ -37,6 +48,7 @@ class CodebeamerClient:
         rate_limit_retry_delay_seconds: float = 1.0,
         rate_limit_max_retries: int = 5,
         sleep_fn=time.sleep,
+        jitter_fn=random.random,
         api_monitor=API_MONITOR,
     ):
         """Codebeamer 서버에 요청할 때 필요한 접속 정보를 보관한다."""
@@ -47,10 +59,16 @@ class CodebeamerClient:
         self.rate_limit_retry_delay_seconds = rate_limit_retry_delay_seconds
         self.rate_limit_max_retries = rate_limit_max_retries
         self._sleep_fn = sleep_fn
+        self._jitter_fn = jitter_fn
         self.api_monitor = api_monitor
+        # requests.Session 은 스레드끼리 나눠 쓰면 안전하지 않다. 스레드마다 하나씩 두고 다시 쓴다.
+        self._sessions = threading.local()
 
     def _session(self) -> requests.Session:
-        """인증 헤더가 포함된 새 HTTP 세션을 만든다."""
+        """인증 헤더가 포함된 이 스레드의 HTTP 세션. 연결을 다음 요청에 다시 쓴다."""
+        session = getattr(self._sessions, "session", None)
+        if session is not None:
+            return session
         session = requests.Session()
         token = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
         session.headers.update({
@@ -58,7 +76,13 @@ class CodebeamerClient:
             "Accept": "application/json",
             "Content-Type": "application/json",
         })
+        self._sessions.session = session
         return session
+
+    @staticmethod
+    def _timeout(method: str) -> tuple[float, float]:
+        read_timeout = READ_TIMEOUT_SECONDS if method == "GET" else WRITE_READ_TIMEOUT_SECONDS
+        return (CONNECT_TIMEOUT_SECONDS, read_timeout)
 
     def _get(self, path: str, params: dict | None = None) -> Any:
         """GET 요청을 보내고 JSON 응답을 돌려준다."""
@@ -76,6 +100,21 @@ class CodebeamerClient:
         """DELETE 요청을 보내고 본문이 없으면 빈 객체를 돌려준다."""
         return self._request_json("DELETE", path, params=params, empty_ok=True)
 
+    @staticmethod
+    def _resource_monitor_path(resource_path: str) -> str:
+        """다운로드 경로를 API 모니터와 진단 파일에 남길 모양으로 줄인다.
+
+        첨부·그림 경로는 서버 context 경로와 첨부 파일 이름을 담고 있다. `/v3` API는 그 뒤만 남기고,
+        그 밖의 경로는 정해 둔 이름으로만 남긴다.
+        """
+        segments = [segment for segment in str(resource_path or "").split("/") if segment]
+        lowered = [segment.casefold() for segment in segments]
+        if "v3" in lowered:
+            return "/" + "/".join(segments[lowered.index("v3"):])
+        if "displaydocument" in lowered:
+            return "/displayDocument/{name}"
+        return "/{resource}"
+
     def _request_binary(self, source_url: str, *, max_bytes: int) -> tuple[str, bytes]:
         """같은 Codebeamer origin의 첨부 리소스를 제한된 크기로 가져온다."""
         normalized_limit = max(int(max_bytes), 1)
@@ -91,16 +130,17 @@ class CodebeamerClient:
         if "attachment" not in lowered_target and "displaydocument" not in lowered_target:
             raise ValueError("확인되지 않은 Codebeamer 리소스 경로입니다.")
 
+        monitor_path = self._resource_monitor_path(parsed.path)
         retry_context = _API_REQUEST_CONTEXT.get()
         request_kind, attempt, max_attempts = (
-            (f"GET {normalize_api_path(parsed.path)}", 1, 1)
+            (f"GET {normalize_api_path(monitor_path)}", 1, 1)
             if retry_context is None
             else retry_context
         )
         monitor_handle = self.api_monitor.start_request(
             request_kind=request_kind,
             method="GET",
-            path=parsed.path,
+            path=monitor_path,
             attempt=attempt,
             max_attempts=max_attempts,
         )
@@ -109,48 +149,50 @@ class CodebeamerClient:
         outcome = API_OUTCOME_SUCCESS
         error_kind = None
         try:
-            with self._session() as session:
+            session = self._session()
+            response = session.get(
+                absolute,
+                headers={"Accept": "*/*"},
+                stream=True,
+                allow_redirects=False,
+                timeout=self._timeout("GET"),
+            )
+            status_code = self._response_status_code(response)
+            if status_code in {301, 302, 303, 307, 308}:
+                location = response.headers.get("Location", "")
+                redirected = urljoin(absolute, location)
+                redirected_url = urlparse(redirected)
+                if (redirected_url.scheme.casefold(), redirected_url.netloc.casefold()) != (
+                    base.scheme.casefold(),
+                    base.netloc.casefold(),
+                ):
+                    raise ValueError("첨부 다운로드가 다른 서버로 이동하려고 합니다.")
+                redirected_target = f"{redirected_url.path}?{redirected_url.query}".casefold()
+                if "attachment" not in redirected_target and "displaydocument" not in redirected_target:
+                    raise ValueError("첨부 다운로드가 확인되지 않은 경로로 이동하려고 합니다.")
+                response.close()
                 response = session.get(
-                    absolute,
+                    redirected,
                     headers={"Accept": "*/*"},
                     stream=True,
                     allow_redirects=False,
+                    timeout=self._timeout("GET"),
                 )
                 status_code = self._response_status_code(response)
-                if status_code in {301, 302, 303, 307, 308}:
-                    location = response.headers.get("Location", "")
-                    redirected = urljoin(absolute, location)
-                    redirected_url = urlparse(redirected)
-                    if (redirected_url.scheme.casefold(), redirected_url.netloc.casefold()) != (
-                        base.scheme.casefold(),
-                        base.netloc.casefold(),
-                    ):
-                        raise ValueError("첨부 다운로드가 다른 서버로 이동하려고 합니다.")
-                    redirected_target = f"{redirected_url.path}?{redirected_url.query}".casefold()
-                    if "attachment" not in redirected_target and "displaydocument" not in redirected_target:
-                        raise ValueError("첨부 다운로드가 확인되지 않은 경로로 이동하려고 합니다.")
-                    response.close()
-                    response = session.get(
-                        redirected,
-                        headers={"Accept": "*/*"},
-                        stream=True,
-                        allow_redirects=False,
-                    )
-                    status_code = self._response_status_code(response)
-                response.raise_for_status()
-                content_length = response.headers.get("Content-Length")
-                if content_length is not None and content_length != "" and int(content_length) > normalized_limit:
+            response.raise_for_status()
+            content_length = response.headers.get("Content-Length")
+            if content_length is not None and content_length != "" and int(content_length) > normalized_limit:
+                raise ValueError("첨부 리소스가 허용 크기를 초과합니다.")
+            chunks: list[bytes] = []
+            received = 0
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                if not chunk:
+                    continue
+                received += len(chunk)
+                if received > normalized_limit:
                     raise ValueError("첨부 리소스가 허용 크기를 초과합니다.")
-                chunks: list[bytes] = []
-                received = 0
-                for chunk in response.iter_content(chunk_size=64 * 1024):
-                    if not chunk:
-                        continue
-                    received += len(chunk)
-                    if received > normalized_limit:
-                        raise ValueError("첨부 리소스가 허용 크기를 초과합니다.")
-                    chunks.append(chunk)
-                return str(response.headers.get("Content-Type") or ""), b"".join(chunks)
+                chunks.append(chunk)
+            return str(response.headers.get("Content-Type") or ""), b"".join(chunks)
         except Exception as exc:
             status_code = self._response_status_code(response, exc)
             is_retry = self._is_rate_limited(exc) and attempt < max_attempts
@@ -225,22 +267,24 @@ class CodebeamerClient:
         error_kind = None
         try:
             url = f"{self.base_url}{path}"
-            with self._session() as session:
-                request_method = getattr(session, normalized_method.lower())
-                request_kwargs: dict[str, Any] = {"params": params}
-                if normalized_method in {"POST", "PUT"}:
-                    request_kwargs["json"] = json_body
-                response = request_method(url, **request_kwargs)
-                status_code = self._response_status_code(response)
-                response.raise_for_status()
-                if empty_ok and not response.content:
+            request_method = getattr(self._session(), normalized_method.lower())
+            request_kwargs: dict[str, Any] = {
+                "params": params,
+                "timeout": self._timeout(normalized_method),
+            }
+            if normalized_method in {"POST", "PUT"}:
+                request_kwargs["json"] = json_body
+            response = request_method(url, **request_kwargs)
+            status_code = self._response_status_code(response)
+            response.raise_for_status()
+            if empty_ok and not response.content:
+                return {}
+            try:
+                return response.json()
+            except ValueError:
+                if empty_ok:
                     return {}
-                try:
-                    return response.json()
-                except ValueError:
-                    if empty_ok:
-                        return {}
-                    raise
+                raise
         except Exception as exc:
             status_code = self._response_status_code(response, exc)
             is_retry = self._is_rate_limited(exc) and attempt < max_attempts
@@ -574,34 +618,26 @@ class CodebeamerClient:
             max_bytes=max_bytes,
         )
 
-    def get_tracker_configuration(self, tracker_id: int) -> Any:
-        """트래커 configuration 메타데이터를 가져온다."""
-        candidate_paths = (
-            f"/v3/tracker/{tracker_id}/configuration",
-            f"/v3/trackers/{tracker_id}/configuration",
-            f"/tracker/{tracker_id}/configuration",
-        )
-        last_exc: Exception | None = None
-        for path in candidate_paths:
-            try:
-                return self._get(path)
-            except Exception as exc:
-                last_exc = exc
-        if last_exc is not None:
-            raise last_exc
-        raise RuntimeError("tracker configuration endpoint lookup failed unexpectedly")
-
     def get_project_members(self, project_id: int) -> Any:
         """프로젝트 멤버 목록을 가져온다."""
-        return self._get(f"/v3/projects/{project_id}/members")
+        return self._run_rate_limited_request(
+            "get_project_members",
+            lambda: self._get(f"/v3/projects/{project_id}/members"),
+        )
 
     def get_user_groups(self) -> Any:
         """전체 사용자 그룹 목록을 가져온다."""
-        return self._get("/v3/users/groups")
+        return self._run_rate_limited_request(
+            "get_user_groups",
+            lambda: self._get("/v3/users/groups"),
+        )
 
     def get_tracker_field_permissions(self, tracker_id: int, field_id: int) -> Any:
         """특정 field의 permission matrix를 가져온다."""
-        return self._get(f"/v3/trackers/{tracker_id}/fields/{field_id}/permissions")
+        return self._run_rate_limited_request(
+            "get_tracker_field_permissions",
+            lambda: self._get(f"/v3/trackers/{tracker_id}/fields/{field_id}/permissions"),
+        )
 
     def get_tracker_baselines(self, tracker_id: int) -> list[dict]:
         """트래커에 정의된 baseline을 서버 페이지 끝까지 수집한다."""
@@ -692,17 +728,6 @@ class CodebeamerClient:
         nested = data.get("data")
         if isinstance(nested, (dict, list)):
             return cls._extract_baseline_references(nested)
-        return []
-
-    def get_field_options(self, item_id: int, field_id: int) -> list[dict]:
-        """특정 아이템 필드에서 선택 가능한 옵션 목록을 가져온다."""
-        data = self._get(f"/v3/items/{item_id}/fields/{field_id}/options")
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            for key in OPTION_CONTAINER_KEYS:
-                if key in data and isinstance(data[key], list):
-                    return data[key]
         return []
 
     def get_item(self, item_id: int, baseline_id: int | None = None) -> dict:
@@ -804,15 +829,27 @@ class CodebeamerClient:
 
     def get_user(self, user_id: int) -> UserInfo:
         """사용자 ID로 사용자 상세 정보를 가져온다."""
-        return UserInfo.from_raw(self._get(f"/v3/users/{user_id}"))
+        return UserInfo.from_raw(
+            self._run_rate_limited_request("get_user", lambda: self._get(f"/v3/users/{user_id}"))
+        )
 
     def get_user_by_name(self, name: str) -> UserInfo:
         """이름으로 사용자를 바로 한 건 조회한다."""
-        return UserInfo.from_raw(self._get("/v3/users/findByName", params={"name": name}))
+        return UserInfo.from_raw(
+            self._run_rate_limited_request(
+                "get_user_by_name",
+                lambda: self._get("/v3/users/findByName", params={"name": name}),
+            )
+        )
 
     def get_user_by_email(self, email: str) -> UserInfo:
         """이메일 주소로 사용자를 바로 한 건 조회한다."""
-        return UserInfo.from_raw(self._get("/v3/users/findByEmail", params={"email": email}))
+        return UserInfo.from_raw(
+            self._run_rate_limited_request(
+                "get_user_by_email",
+                lambda: self._get("/v3/users/findByEmail", params={"email": email}),
+            )
+        )
 
     def search_users(
         self,
@@ -840,32 +877,11 @@ class CodebeamerClient:
             "projectId": project_id,
         }
         body = {key: value for key, value in body.items() if value not in (None, "")}
-        return self._post("/v3/users/search", json_body=body, params=params)
-
-    def search_user_infos(
-        self,
-        *,
-        name: str | None = None,
-        email: str | None = None,
-        first_name: str | None = None,
-        last_name: str | None = None,
-        user_status: str | None = None,
-        project_id: int | None = None,
-        page: int = 1,
-        page_size: int = 100,
-    ) -> list[UserInfo]:
-        """사용자 검색 결과를 `UserInfo` 객체 목록으로 변환해 돌려준다."""
-        data = self.search_users(
-            name=name,
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            user_status=user_status,
-            project_id=project_id,
-            page=page,
-            page_size=page_size,
+        # 조회용 POST라 다시 보내도 서버 상태가 바뀌지 않는다.
+        return self._run_rate_limited_request(
+            "search_users",
+            lambda: self._post("/v3/users/search", json_body=body, params=params),
         )
-        return [UserInfo.from_raw(item) for item in self._extract_user_payloads(data)]
 
     def create_item(self, tracker_id: int, payload: dict, parent_item_id: int | None = None) -> dict:
         """트래커에 새 아이템을 만들고 서버 응답을 돌려준다."""
@@ -917,6 +933,17 @@ class CodebeamerClient:
             lambda: self._delete(f"/v3/items/{int(item_id)}"),
         )
 
+    @staticmethod
+    def _retry_after_seconds(exc: Exception) -> float | None:
+        """429 응답이 알려 준 대기 시간(초). 없거나 날짜 형식이면 None."""
+        headers: Any = getattr(getattr(exc, "response", None), "headers", None)
+        raw_value = headers.get("Retry-After") if hasattr(headers, "get") else None
+        try:
+            seconds = float(str(raw_value).strip())
+        except (TypeError, ValueError):
+            return None
+        return seconds if seconds >= 0 else None
+
     def _run_rate_limited_request(self, request_name: str, request_func) -> Any:
         """rate limit 재시도를 포함해 요청을 실행한다."""
         attempts = self.rate_limit_max_retries + 1
@@ -932,6 +959,10 @@ class CodebeamerClient:
                     raise
 
                 delay_seconds = self.rate_limit_retry_delay_seconds * attempt
+                retry_after = self._retry_after_seconds(exc)
+                if retry_after is not None:
+                    delay_seconds = max(delay_seconds, min(retry_after, MAX_RETRY_AFTER_SECONDS))
+                delay_seconds += delay_seconds * RETRY_JITTER_RATIO * float(self._jitter_fn())
                 if self.logger is not None:
                     self.logger.warning(
                         "%s rate limited; retrying in %.2fs (attempt %s/%s)",

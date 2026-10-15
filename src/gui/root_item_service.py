@@ -81,13 +81,6 @@ class RootItemService:
         return cls._preview_raw_df_map(preview_data).get(str(file_path).strip())
 
     @staticmethod
-    def _root_regex_target_options() -> list[tuple[str, str]]:
-        return [
-            (ROOT_REGEX_TARGET_FILE_STEM, "파일명(확장자 제외)"),
-            (ROOT_REGEX_TARGET_FILE_NAME, "전체 파일명"),
-        ]
-
-    @staticmethod
     def _normalize_root_mode(value: Any) -> str:
         normalized = str(value or ROOT_ITEM_MODE_FILE).strip()
         if normalized in {ROOT_ITEM_MODE_FILE, ROOT_ITEM_MODE_GROUP_BY_COLUMN}:
@@ -750,10 +743,6 @@ class RootItemService:
             has_blocking_issues=has_blocking_issues,
         )
 
-    @staticmethod
-    def _root_assignment_target_kind(preview_context: RootItemPreviewContext) -> str:
-        return "group_root" if bool(preview_context.group_enabled and preview_context.group_by_column) else "file_root"
-
     @classmethod
     def _root_field_values_for_source_row(
         cls,
@@ -811,11 +800,14 @@ class RootItemService:
         if payload_df is None or payload_df.empty:
             return []
 
+        # upsert 의 수정 행은 기존 위치에 그대로 둔다. 수정 행만 있는 그룹 폴더는 빈 폴더가 된다.
+        operations = payload_df.get("_operation", pd.Series("", index=payload_df.index))
         ready_top_level_row_ids = {
             int(row_id)
             for row_id in payload_df[
                 payload_df["payload_status"].eq(PayloadStatus.READY.value)
                 & payload_df["parent_row_id"].apply(lambda value: value is None or pd.isna(value))
+                & operations.fillna("").astype(str).str.strip().str.lower().ne("update")
             ]["_row_id"].tolist()
         }
         if not ready_top_level_row_ids:

@@ -8,6 +8,7 @@ from typing import Any
 
 import pandas as pd
 
+from .diagnostics import sanitize_diagnostic_text
 from .models import PayloadStatus
 from .models import UploadStatus
 
@@ -88,6 +89,15 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
 
     def preview_payload(self, row_id: int) -> dict:
         return self.payload_cache.preview_payload(row_id)
+
+    @staticmethod
+    def _failure_reason(exc: Exception, error_response_json: Any) -> str:
+        """결과 표·로그·실패 보고서에 남길 실패 사유.
+
+        서버가 돌려준 오류 설명은 남기되, 예외 문구의 서버 주소·호스트·경로와 인증값은 가린다.
+        """
+        raw = str(error_response_json) if error_response_json is not None else str(exc)
+        return sanitize_diagnostic_text(raw, limit=2_000)
 
     def upload(
         self,
@@ -241,7 +251,7 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
             except Exception as exc:
                 error_status_code = self._http_status_code(exc)
                 error_response_json = self._response_json(exc)
-                error_message = str(error_response_json) if error_response_json is not None else str(exc)
+                error_message = self._failure_reason(exc, error_response_json)
 
                 failed_logs.append({
                     "_row_id": None,
@@ -349,7 +359,7 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
                     except Exception as exc:
                         error_status_code = self._http_status_code(exc)
                         error_response_json = self._response_json(exc)
-                        error_message = str(error_response_json) if error_response_json is not None else str(exc)
+                        error_message = self._failure_reason(exc, error_response_json)
 
                         failed_logs.append(
                             {
@@ -485,8 +495,7 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
                 except Exception as exc:
                     error_status_code = self._http_status_code(exc)
                     error_response_json = self._response_json(exc)
-                    error_message = ""
-                    error_message = str(error_response_json) if error_response_json is not None else str(exc)
+                    error_message = self._failure_reason(exc, error_response_json)
 
                     failed_logs.append({
                         "_row_id": row_id,
@@ -509,10 +518,16 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
                             "response_json": error_response_json,
                         })
 
-                    if not continue_on_error:
-                        return _finalize(ready_df[ready_df["_row_id"].isin(sorted(pending))].copy())
-
                     pending.remove(row_id)
+                    if not continue_on_error:
+                        # 실패한 행은 실패로만 남기고, 실행하지 않은 행만 미해결로 돌려준다.
+                        stopped_df = ready_df[ready_df["_row_id"].isin(sorted(pending))].copy()
+                        if not stopped_df.empty:
+                            stopped_df["phase"] = phase_name
+                            stopped_df["status"] = UploadStatus.UNRESOLVED_PARENT.value
+                            stopped_df["error"] = "이전 생성 실패로 실행이 중단되었습니다."
+                        return _finalize(stopped_df)
+
                     progress = True
 
             if not progress:
@@ -624,7 +639,7 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
             except Exception as exc:
                 error_status_code = self._http_status_code(exc)
                 error_response_json = self._response_json(exc)
-                error_message = str(error_response_json) if error_response_json is not None else str(exc)
+                error_message = self._failure_reason(exc, error_response_json)
 
                 failed_logs.append({
                     "_row_id": row_id,

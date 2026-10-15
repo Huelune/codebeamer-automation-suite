@@ -81,11 +81,10 @@ def _project_selection_refresh_button_text(is_offline: bool) -> str:
     return "스냅샷 불러오기" if bool(is_offline) else "프로젝트 불러오기"
 
 
-def _project_selection_source_signature(settings: Any) -> tuple[str, str, str, str, str]:
+def _project_selection_source_signature(settings: Any) -> tuple[str, str, str, str]:
     return (
         "offline" if bool(getattr(settings, "offline_mode", False)) else "online",
         str(getattr(settings, "offline_schema_path", "") or "").strip(),
-        str(getattr(settings, "offline_tracker_configuration_path", "") or "").strip(),
         str(getattr(settings, "base_url", "") or "").strip(),
         str(getattr(settings, "username", "") or "").strip(),
     )

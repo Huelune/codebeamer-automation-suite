@@ -32,8 +32,6 @@ BLOCKING_OPTION_STATUSES = frozenset(
         OptionCheckStatus.OPTION_MAP_MISSING.value,
         OptionCheckStatus.OPTION_NOT_FOUND.value,
         OptionCheckStatus.OPTION_SOURCE_UNAVAILABLE.value,
-        OptionCheckStatus.TRACKER_ITEM_LOOKUP_AMBIGUOUS.value,
-        OptionCheckStatus.TRACKER_ITEM_LOOKUP_NOT_FOUND.value,
         OptionCheckStatus.TRACKER_ITEM_REGEX_MISSING.value,
     }
 )

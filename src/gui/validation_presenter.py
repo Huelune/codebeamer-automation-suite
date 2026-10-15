@@ -233,19 +233,7 @@ class ValidationPresenter:
             return (
                 "오류",
                 f"{field_name or df_column} 필드의 정규식이 비어 있습니다.",
-                "매핑 단계에서 Tracker Item 처리 방식을 다시 선택하거나 정규식을 입력하세요.",
-            )
-        if status == OptionCheckStatus.TRACKER_ITEM_LOOKUP_NOT_FOUND.value:
-            return (
-                "오류",
-                f"{df_column} 값으로 source tracker에서 일치하는 항목을 찾지 못했습니다.",
-                "입력 문구를 확인하거나 정규식 ID 추출 방식으로 바꾼 뒤 다시 검증하세요.",
-            )
-        if status == OptionCheckStatus.TRACKER_ITEM_LOOKUP_AMBIGUOUS.value:
-            return (
-                "오류",
-                f"{df_column} 값이 source tracker에서 여러 항목과 겹칩니다.",
-                "더 구체적인 문구를 쓰거나 정규식 ID 추출 방식으로 바꾼 뒤 다시 검증하세요.",
+                "매핑 단계에서 Tracker Item ID를 뽑을 정규식을 입력하세요.",
             )
         if status == OptionCheckStatus.DF_COLUMN_MISSING.value:
             return (
@@ -271,13 +259,20 @@ class ValidationPresenter:
                 f"{field_name} 필드의 값을 확인할 준비가 아직 되어 있지 않습니다.",
                 "이 컬럼 매핑을 해제하거나 지원되는 다른 필드로 다시 매핑하세요.",
             )
-        if status.endswith(("USER_LOOKUP_FAILED", "USER_LOOKUP_AMBIGUOUS", "USER_NOT_FOUND")):
+        # 서버 조회 자체가 실패했다. 입력값 문제로 안내하면 맞는 값을 계속 고치게 된다.
+        if status.endswith(("USER_LOOKUP_FAILED", "MEMBER_LOOKUP_FAILED")):
+            return (
+                "오류",
+                f"{df_column} 값을 서버에서 조회하지 못했습니다.",
+                "요청 제한이나 연결 문제일 수 있습니다. 잠시 후 다시 검증하고, 계속되면 연결 설정과 권한을 확인하세요.",
+            )
+        if status.endswith(("USER_LOOKUP_AMBIGUOUS", "USER_NOT_FOUND")):
             return (
                 "오류",
                 f"{df_column} 값으로 사용자를 찾지 못했습니다.",
                 "사용자 이름, 이메일, 아이디를 확인하고 프로젝트 멤버인지 점검하세요.",
             )
-        if status.endswith(("MEMBER_LOOKUP_FAILED", "MEMBER_LOOKUP_AMBIGUOUS", "MEMBER_NOT_FOUND")):
+        if status.endswith(("MEMBER_LOOKUP_AMBIGUOUS", "MEMBER_NOT_FOUND")):
             return (
                 "오류",
                 f"{df_column} 값으로 담당자, 역할, 그룹을 찾지 못했습니다.",
@@ -373,6 +368,19 @@ class ValidationPresenter:
                 "기존 item 정보를 조회하지 못해 업데이트 payload를 만들 수 없습니다.",
                 "id 값과 서버 연결 상태를 확인한 뒤 다시 검증하세요.",
             ),
+            "UPDATE_ITEM_TRACKER_MISMATCH": (
+                "업데이트 대상 item이 선택한 트래커의 아이템이 아닙니다.",
+                "다른 트래커에서 내보낸 파일인지 확인하고, 그 트래커를 선택하거나 id 값을 고친 뒤 다시 실행하세요.",
+            ),
+            "TABLE_FIELD_PARTIAL_UPDATE": (
+                "수정 모드에서 표 필드의 일부 열만 보내면 나머지 열이 비워질 수 있습니다.",
+                "그 표 필드의 모든 열을 매핑해 수정 범위에 넣거나, "
+                "표 필드 열을 모두 매핑에서 빼 기존 표를 그대로 두세요.",
+            ),
+            "ITEM_NAME_MISSING": (
+                "새로 만드는 행의 요약(Summary)이 비어 있습니다.",
+                "요약 칸을 채우거나, 기존 아이템을 수정할 행이면 id 값을 넣은 뒤 다시 검증하세요.",
+            ),
             "UPSERT_PARENT_ID_REQUIRED": (
                 "계층형 신규 행을 연결할 기존 부모 item id가 없습니다.",
                 "부모 행에 기존 id를 넣거나, 계층을 제거한 뒤 다시 검증하세요.",
@@ -384,12 +392,15 @@ class ValidationPresenter:
         }
         if code in messages:
             message, action = messages[code]
+            if code == "ITEM_NAME_MISSING":
+                column = "요약"
             if code in {
                 "UPDATE_ITEM_ID_COLUMN_MISSING",
                 "UPDATE_ITEM_ID_MISSING",
                 "UPDATE_ITEM_ID_INVALID",
                 "UPDATE_ITEM_ID_DUPLICATE",
                 "UPDATE_ITEM_FETCH_FAILED",
+                "UPDATE_ITEM_TRACKER_MISMATCH",
                 "UPSERT_PARENT_ID_REQUIRED",
                 "UPSERT_UPDATE_WITH_NEW_ANCESTOR",
             }:
@@ -600,9 +611,12 @@ class ValidationPresenter:
         issue_df["_config_sort"] = (
             issue_df["row_id"].fillna("").astype(str).str.strip().ne("").astype(int)
         )
-        issue_df["_row_order"] = pd.to_numeric(
-            issue_df["row_id"], errors="coerce"
-        ).fillna(10**9)
+        # 여러 파일이면 row_id가 `경로::번호`다. 파일별로 묶고 번호 순서로 놓는다.
+        row_numbers = issue_df["row_id"].fillna("").astype(str).str.rsplit("::", n=1).str[-1]
+        issue_df["_row_order"] = pd.to_numeric(row_numbers, errors="coerce").fillna(10**9)
+        issue_df["_file_order"] = (
+            issue_df["source_file"].fillna("").astype(str) if "source_file" in issue_df.columns else ""
+        )
         return issue_df.sort_values(
-            by=["_sort", "_config_sort", "_row_order", "category", "column", "field"]
-        ).drop(columns=["_sort", "_config_sort", "_row_order"])
+            by=["_sort", "_config_sort", "_file_order", "_row_order", "category", "column", "field"]
+        ).drop(columns=["_sort", "_config_sort", "_file_order", "_row_order"])

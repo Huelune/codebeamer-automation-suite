@@ -309,6 +309,25 @@ class TrackerItemEditorModelTest(unittest.TestCase):
             ("UserReference", "RoleReference", "GroupReference"),
         )
 
+    def _date_field(self):
+        schema = deepcopy(SCHEMA)
+        schema["fields"].append({"id": 90, "name": "Due", "type": "DateField", "valueModel": "DateFieldValue"})
+        return next(field for field in build_editable_tracker_schema(schema, self.detail).fields if field.name == "Due")
+
+    def test_date_field_payload_uses_the_server_date_format(self) -> None:
+        """서버는 날짜를 `YYYY-MM-DDTHH:MM:SS.fff`로 돌려준다. 입력한 날짜도 같은 모양으로 보낸다."""
+        due = self._date_field()
+
+        payload = build_field_value(TrackerItemFieldChange(due, "2026-10-13 09:30"))
+
+        self.assertEqual(payload["value"], "2026-10-13T09:30:00.000")
+
+    def test_date_field_rejects_ambiguous_text_with_the_field_name(self) -> None:
+        due = self._date_field()
+
+        with self.assertRaisesRegex(ValueError, "'Due'.*날짜"):
+            build_field_value(TrackerItemFieldChange(due, "13/10/2026"))
+
     def test_member_field_payload_uses_the_chosen_type(self) -> None:
         member_field = next(
             field for field in self.schema.fields if field.name == "Approvers"
@@ -572,6 +591,28 @@ class TrackerItemEditorServiceTest(unittest.TestCase):
         self.assertEqual(raised.exception.kind, TrackerItemWriteErrorKind.WRITE_DISABLED)
         self.assertEqual(EditorFakeClient.calls, [])
 
+    def test_read_timeout_on_write_says_the_change_may_have_been_applied(self) -> None:
+        """응답을 기다리다 끝난 쓰기는 실패라고 단정하지 않는다. 반영됐을 수 있다."""
+        import requests
+
+        class SlowEditorClient(EditorFakeClient):
+            def update_item_fields(self, item_id: int, field_values: list[dict]):
+                del item_id, field_values
+                raise requests.exceptions.ReadTimeout("read timed out")
+
+        service = TrackerItemEditorService(client_factory=SlowEditorClient, query_service=self.query_service)
+
+        with self.assertRaises(TrackerItemWriteError) as raised:
+            service.update_fields(
+                self.settings,
+                item_id=1001,
+                expected_version=4,
+                changes=(TrackerItemFieldChange(self.field("Summary"), "Changed"),),
+            )
+
+        self.assertEqual(raised.exception.kind, TrackerItemWriteErrorKind.TIMEOUT)
+        self.assertIn("반영됐을 수", str(raised.exception))
+
     def test_http_write_error_is_classified_without_leaking_server_message(self) -> None:
         service = TrackerItemEditorService(
             client_factory=ForbiddenEditorClient,
@@ -588,6 +629,26 @@ class TrackerItemEditorServiceTest(unittest.TestCase):
 
         self.assertEqual(raised.exception.kind, TrackerItemWriteErrorKind.FORBIDDEN)
         self.assertNotIn("unsafe server response", str(raised.exception))
+
+
+class TrackerItemWriteErrorClassificationTest(unittest.TestCase):
+    def test_transport_errors_are_network_and_response_format_is_server(self) -> None:
+        import requests
+
+        from src.gui.tracker_item_editor import classify_tracker_item_write_error
+
+        cases = {
+            "SSLError": (requests.exceptions.SSLError("bad cert"), TrackerItemWriteErrorKind.NETWORK),
+            "ConnectTimeout": (requests.exceptions.ConnectTimeout("connect"), TrackerItemWriteErrorKind.NETWORK),
+            "JSONDecodeError": (
+                requests.exceptions.JSONDecodeError("Expecting value", "<html>", 0),
+                TrackerItemWriteErrorKind.SERVER,
+            ),
+        }
+        for name, (error, expected_kind) in cases.items():
+            with self.subTest(error=name):
+                self.assertEqual(classify_tracker_item_write_error(error)[0], expected_kind)
+
 
 
 class TrackerItemEditorPanelTest(unittest.TestCase):

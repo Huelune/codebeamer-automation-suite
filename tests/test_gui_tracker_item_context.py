@@ -8,6 +8,7 @@ from src.gui.tracker_item_context_models import ItemHistorySnapshot
 from src.gui.tracker_item_context_models import ItemRelationsSnapshot
 from src.gui.tracker_item_context_service import TrackerItemContextService
 from src.gui.tracker_item_detail_session import TrackerItemDetailSession
+from src.gui.tracker_query_models import TrackerQueryServiceError
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
 
 
@@ -71,6 +72,14 @@ class Client:
                 },
             ]
         }
+
+
+class _ServerError(Exception):
+    """서버 500. 예외 문구에 서버 주소가 들어 있다."""
+
+    def __init__(self) -> None:
+        self.response = type("Response", (), {"status_code": 500})()
+        super().__init__("500 Server Error: Internal for url: https://secret-host.example.invalid/cb/api/v3/items/1")
 
 
 class TrackerItemContextModelsTest(unittest.TestCase):
@@ -170,6 +179,22 @@ class TrackerItemContextServiceTest(unittest.TestCase):
 
         self.service.load_relations(self.settings, 1205, 4)
         self.assertEqual(Client.relation_calls, 2)
+
+    def test_server_error_message_shows_status_without_address(self) -> None:
+        class FailingClient(Client):
+            def get_item_relations(self, item_id: int):
+                raise _ServerError()
+
+            def get_item_history(self, item_id: int):
+                raise _ServerError()
+
+        service = TrackerItemContextService(client_factory=FailingClient)
+        for load in (service.load_relations, service.load_history):
+            with self.subTest(load=load.__name__), self.assertRaises(TrackerQueryServiceError) as caught:
+                load(Settings(), 1001, 3)
+            message = str(caught.exception)
+            self.assertNotIn("secret-host", message)
+            self.assertIn("500", message)
 
     def test_force_and_item_cache_invalidation(self) -> None:
         self.service.load_history(self.settings, 1205, 3)

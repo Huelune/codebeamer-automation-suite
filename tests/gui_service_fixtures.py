@@ -190,6 +190,8 @@ class UpdateModeFakeClient(FakeClient):
             "id": int(item_id),
             "name": f"기존-{item_id}",
             "description": "기존 설명",
+            # 테스트 설정이 고르는 트래커(default_tracker_id) 소속이다.
+            "tracker": {"id": 1000, "type": "TrackerReference"},
             "status": {"id": 201, "name": "Open", "type": "ChoiceOptionReference"},
             "customFields": [
                 {
@@ -247,28 +249,6 @@ class TrackerItemQueryFakeClient(FakeClient):
         })
         return schema
 
-    def get_tracker_configuration(self, tracker_id: int):
-        del tracker_id
-        return {
-            "basicInformation": {
-                "trackerId": 1000,
-                "name": "Test Tracker",
-            },
-            "fields": [
-                {
-                    "label": "연관 요구사항",
-                    "choiceOptionSetting": {
-                        "referenceFilters": [
-                            {
-                                "domainType": "TRACKER",
-                                "domainId": 13526611,
-                            }
-                        ]
-                    },
-                }
-            ],
-        }
-
     def search_tracker_items_by_name(self, *, tracker_id: int, name: str, **kwargs):
         del kwargs
         self.search_calls.append((tracker_id, name))
@@ -280,30 +260,6 @@ class TrackerItemQueryFakeClient(FakeClient):
         return lookup.get(name, [])
 
 
-class TrackerItemNonTrackerConfigFakeClient(TrackerItemQueryFakeClient):
-    def get_tracker_configuration(self, tracker_id: int):
-        del tracker_id
-        return {
-            "basicInformation": {
-                "trackerId": 1000,
-                "name": "Test Tracker",
-            },
-            "fields": [
-                {
-                    "label": "연관 요구사항",
-                    "choiceOptionSetting": {
-                        "referenceFilters": [
-                            {
-                                "domainType": "PROJECT",
-                                "domainId": 13526611,
-                            }
-                        ]
-                    },
-                }
-            ],
-        }
-
-
 class TrackerItemReferenceIdConfigFakeClient(TrackerItemQueryFakeClient):
     def get_tracker_schema(self, tracker_id: int):
         schema = super().get_tracker_schema(tracker_id)
@@ -312,29 +268,6 @@ class TrackerItemReferenceIdConfigFakeClient(TrackerItemQueryFakeClient):
                 field["id"] = 17
                 field["name"] = "SUDS 링크"
         return schema
-
-    def get_tracker_configuration(self, tracker_id: int):
-        del tracker_id
-        return {
-            "basicInformation": {
-                "trackerId": 1000,
-                "name": "Test Tracker",
-            },
-            "fields": [
-                {
-                    "referenceId": 17,
-                    "label": "Software Unit Design Specification",
-                    "choiceOptionSetting": {
-                        "referenceFilters": [
-                            {
-                                "domainType": "TRACKER",
-                                "domainId": 13526611,
-                            }
-                        ]
-                    },
-                }
-            ],
-        }
 
 
 class UserReferenceDefaultFakeClient(FakeClient):
@@ -377,29 +310,6 @@ class TrackerItemDefaultValueFakeClient(FakeClient):
             "multipleValues": False,
         })
         return schema
-
-    def get_tracker_configuration(self, tracker_id: int):
-        del tracker_id
-        return {
-            "basicInformation": {
-                "trackerId": 1000,
-                "name": "Test Tracker",
-            },
-            "fields": [
-                {
-                    "referenceId": 1007,
-                    "label": "상위 요구사항",
-                    "choiceOptionSetting": {
-                        "referenceFilters": [
-                            {
-                                "domainType": "TRACKER",
-                                "domainId": 13526611,
-                            }
-                        ]
-                    },
-                }
-            ],
-        }
 
 
 class CountingGuiExcelService(GuiExcelService):

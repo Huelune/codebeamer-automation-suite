@@ -14,7 +14,7 @@
 - 파일 검색은 `rg`, 파일 생성/수정은 `apply_patch`를 우선 사용한다.
 - 사용자가 만든 관련 없는 변경은 절대 되돌리지 않는다.
 - lint와 type check 설정은 `pyproject.toml`이 단일 출처다. 규칙을 끄는 대신 위반을 정리하는 방향을 우선한다.
-- mypy 제외 목록(`[[tool.mypy.overrides]]`)은 점진 도입용 백로그다. 모듈을 정리하면 목록에서 지우고, 새 모듈을 추가하지 않는다.
+- mypy는 점진 도입 중이며 남은 백로그는 `pyproject.toml`에서 꺼 둔 검사 플래그(`disallow_untyped_defs` 등)다. 위반을 정리한 뒤 플래그를 하나씩 켜고, 모듈 제외 목록(`[[tool.mypy.overrides]]`)은 새로 만들지 않는다.
 - 재내보내기만 하는 모듈을 새로 만들지 않는다. 소비자는 정의 모듈에서 직접 import 한다.
 
 ## Git 및 커밋 규칙
@@ -50,8 +50,8 @@
 - 파일 단계 성능 수정 시 workbook/raw data/cache를 재사용하는 방향을 우선 검토하고, 같은 Excel 파일을 불필요하게 반복해서 열지 않는다.
 
 ## 도메인 및 기능 제약
-- `TrackerItemChoiceField`의 query 기반 해석은 TRACKER 기반 configuration 구조를 기준으로 지원한다.
-- TRACKER 기반이 아닌 configuration에서는 query 지원을 가장하지 말고, 정규식/ID 추출 기반 fallback만 사용한다.
+- `TrackerItemChoiceField`는 입력값에서 정규식으로 ID를 뽑아서만 처리한다. 이름·summary query 조회는 대량 검증의 API 호출을 줄이려고 꺼 두었으므로, 다시 켜려면 먼저 사용자와 정한다.
+- 예전 preset의 query 설정은 불러올 때 정규식 방식으로 바꾼다. 문서나 화면에서 query 조회를 지원하는 것처럼 보이게 하지 않는다.
 - `TableFieldValue`는 일반 필드처럼 단순 values 배열로 처리하지 말고 실제 Codebeamer payload 구조를 유지한다.
 - `create`, `update`, `upsert` 모드는 필드 사용 범위와 검증 범위를 분리해서 다룬다.
 - 다중 파일 업로드, 파일별 루트 폴더, 컬럼 기반 그룹 폴더, 기본값/수동값 입력 흐름은 핵심 기능으로 보고 회귀를 피한다.
@@ -79,23 +79,11 @@
 
 ## Notion 프로젝트 관리
 
-### 상위 개발 포트폴리오
-- 개발 포트폴리오: `https://app.notion.com/p/3b1f5e6cf897818d9b4be7a92ed11508`
-- 프로젝트 데이터베이스: `https://app.notion.com/p/23c44f4364684707837b03ebd3284d27`
-- 프로젝트 데이터 소스: `collection://01f3c0b6-6b82-4748-8fdf-f4e4cabbd25c`
-
-### Codebeamer Automation Suite 프로젝트
-- 표준 프로젝트 문서: `https://app.notion.com/p/3b1f5e6cf8978198aa90d5135a726dc6`
-- 기존 제품 및 작업 허브: `https://app.notion.com/p/3acf5e6cf8978119a322d91646bf720a`
-- 개발 작업 이력 데이터베이스: `https://app.notion.com/p/c559944c655e4a5ab1903d498e04db8a`
-- 개발 작업 이력 데이터 소스: `collection://cac750a9-3434-4099-8642-7d9b45001162`
-- 작업 백로그 데이터베이스: `https://app.notion.com/p/bb9933a238434be8b55d95977a354f39`
-- 작업 백로그 데이터 소스: `collection://b4e69eb9-1dc7-47b0-8fa2-928e1748531d`
-- 포트폴리오 데이터베이스: `https://app.notion.com/p/4c7d4d4d4818430bb03a14f11f33aab7`
-- 포트폴리오 데이터 소스: `collection://f4377be9-9c4c-476c-87ea-124411a6513e`
+Notion 페이지·데이터베이스 ID는 공개 저장소에 두지 않고 저장소 루트의 `AGENTS.local.md`(git 제외)에 둔다.
+작업 이력을 기록하기 전에 이 파일을 읽는다. 파일이 없으면 사용자에게 받아 만들고, 커밋하지 않는다.
 
 ### 동기화 규칙
-- 이 저장소의 작업은 위 Codebeamer 프로젝트 문서와 전용 데이터베이스에만 기록한다.
+- 이 저장소의 작업은 `AGENTS.local.md`의 Codebeamer 프로젝트 문서와 전용 데이터베이스에만 기록한다.
 - Notion 페이지를 생성하거나 수정하기 전에 실제 데이터 소스와 현재 스키마를 다시 조회한다.
 - 하나의 논리적 작업이 완료되면 개발 작업 이력을 생성하거나 동일 작업명·대표 커밋의 기존 기록을 갱신한다.
 - 로컬 작업은 `로컬 전용`, push 또는 열린 PR은 `원격 브랜치`, 실제 `main` 병합 후에는 `main 반영`으로 기록한다.

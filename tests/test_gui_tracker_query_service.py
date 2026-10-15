@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import re
+import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
+from src.gui.baseline_cache import BaselineCacheKey
 from src.gui.baseline_cache import BaselineItemCache
 from src.gui.settings_store import GuiSettings
 from src.gui.tracker_baseline_compare import BaselineComparisonSource
+from src.gui.tracker_query_models import TrackerItemSummary
 from src.gui.tracker_query_models import TrackerQuery
 from src.gui.tracker_query_models import TrackerQueryCondition
 from src.gui.tracker_query_models import TrackerQueryErrorKind
@@ -170,6 +175,31 @@ class PaginatedSearchClient(QueryFakeClient):
                     "name": f"Item {item_id}",
                     "tracker": {"id": tracker_id},
                 }
+                for item_id in ids
+            ],
+        }
+
+
+class TotallessSearchClient(QueryFakeClient):
+    """검색 응답에 total을 싣지 않는 서버. 아이템 수는 클래스마다 정한다."""
+
+    item_count = 1201
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.requested_pages: list[int] = []
+
+    def search_items(self, *, query_string, baseline_id=None, page, page_size):
+        del baseline_id
+        self.requested_pages.append(page)
+        tracker_id = int(re.search(r"tracker\.id = (\d+)", query_string).group(1))
+        start = (page - 1) * page_size
+        ids = list(range(1, self.item_count + 1))[start : start + page_size]
+        return {
+            "page": page,
+            "pageSize": page_size,
+            "items": [
+                {"id": item_id, "name": f"Item {item_id}", "tracker": {"id": tracker_id}}
                 for item_id in ids
             ],
         }
@@ -511,11 +541,52 @@ class TrackerQueryServiceTest(unittest.TestCase):
                 [("item", 1001, 1)],
             )
 
+    def test_baseline_list_index_survives_concurrent_lists_and_details(self) -> None:
+        """여러 작업 스레드가 Baseline 목록을 기억하고 상세를 찾아도 예외가 나지 않는다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = TrackerQueryService(
+                client_factory=BaselineDetailFakeClient,
+                baseline_cache=BaselineItemCache(Path(tmp_dir)),
+            )
+        items = (TrackerItemSummary.from_raw({"id": 1001, "name": "Item"}),)
+        errors: list[BaseException] = []
+        stop = time.monotonic() + 0.3
+
+        def remember(offset: int) -> None:
+            try:
+                index = 0
+                while time.monotonic() < stop:
+                    key = BaselineCacheKey("https://example.test/cb", "sample", 20, offset * 100 + index % 40, "q")
+                    service._index_baseline_items(key, items, "2026-10-12T00:00:00+00:00")
+                    index += 1
+            except BaseException as exc:  # pragma: no cover - 실패 원인을 보존한다.
+                errors.append(exc)
+
+        def look_up() -> None:
+            try:
+                while time.monotonic() < stop:
+                    service._indexed_baseline_item(self.settings, 5, 1001)
+            except BaseException as exc:  # pragma: no cover
+                errors.append(exc)
+
+        previous = sys.getswitchinterval()
+        sys.setswitchinterval(1e-6)
+        try:
+            threads = [threading.Thread(target=remember, args=(offset,)) for offset in range(3)]
+            threads += [threading.Thread(target=look_up) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        finally:
+            sys.setswitchinterval(previous)
+
+        self.assertEqual(errors, [])
+
     def test_test_mode_baselines_are_not_saved(self) -> None:
         offline = GuiSettings(
             offline_mode=True,
             offline_schema_path=str(SAMPLE_DIR / "offline_schema.json"),
-            offline_tracker_configuration_path=str(SAMPLE_DIR / "offline_tracker_configuration.json"),
             offline_query_data_path=str(SAMPLE_DIR / "offline_tracker_items.json"),
         )
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -696,6 +767,30 @@ class TrackerQueryServiceTest(unittest.TestCase):
                 self.assertEqual(kind, expected_kind)
                 self.assertEqual(actual_status, status_code)
 
+    def test_transport_and_response_format_errors_get_actionable_kinds(self) -> None:
+        """클래스 이름에 timeout·connection이 없는 연결 오류와, JSON이 아닌 200 응답을 바르게 분류한다."""
+        import requests
+
+        expected = {
+            "SSLError": (requests.exceptions.SSLError("certificate verify failed"), TrackerQueryErrorKind.NETWORK),
+            "ProxyError": (requests.exceptions.ProxyError("proxy refused"), TrackerQueryErrorKind.NETWORK),
+            "ChunkedEncodingError": (
+                requests.exceptions.ChunkedEncodingError("connection broken"),
+                TrackerQueryErrorKind.NETWORK,
+            ),
+            "RetryError": (requests.exceptions.RetryError("too many retries"), TrackerQueryErrorKind.NETWORK),
+            # 게이트웨이가 HTML 오류 페이지를 200으로 돌려준 경우다. 검색 조건 문제가 아니다.
+            "JSONDecodeError": (
+                requests.exceptions.JSONDecodeError("Expecting value", "<html>", 0),
+                TrackerQueryErrorKind.SERVER,
+            ),
+        }
+
+        for name, (error, expected_kind) in expected.items():
+            with self.subTest(error=name):
+                kind, _status = classify_tracker_query_error(error)
+                self.assertEqual(kind, expected_kind)
+
     def test_search_rejects_server_results_outside_selected_tracker(self) -> None:
         service = TrackerQueryService(client_factory=LeakingSearchFakeClient)
 
@@ -724,9 +819,6 @@ class OfflineTrackerQueryServiceIntegrationTest(unittest.TestCase):
         self.settings = GuiSettings(
             offline_mode=True,
             offline_schema_path=str(SAMPLE_DIR / "offline_schema.json"),
-            offline_tracker_configuration_path=str(
-                SAMPLE_DIR / "offline_tracker_configuration.json"
-            ),
             offline_query_data_path=str(SAMPLE_DIR / "offline_tracker_items.json"),
         )
         self.service = TrackerQueryService()
@@ -904,6 +996,34 @@ class OfflineTrackerQueryServiceIntegrationTest(unittest.TestCase):
         self.assertEqual(len(items), 1201)
         self.assertEqual(items[0].item_id, 1)
         self.assertEqual(items[-1].item_id, 1201)
+
+    def test_load_all_search_items_without_total_reads_until_a_short_page(self) -> None:
+        """total이 없다고 첫 페이지에서 멈추면 Baseline 저장본·비교·내보내기가 500개로 잘린다."""
+        clients: list[TotallessSearchClient] = []
+
+        def make_client(*args, **kwargs):
+            clients.append(TotallessSearchClient(*args, **kwargs))
+            return clients[-1]
+
+        service = TrackerQueryService(client_factory=make_client)
+        settings = GuiSettings(base_url="https://example.test/cb", username="sample", password="placeholder")
+
+        items = service.load_all_search_items(settings, TrackerQuery(tracker_id=20, text="Item"))
+
+        self.assertEqual(len(items), 1201)
+        self.assertEqual(items[-1].item_id, 1201)
+        self.assertEqual([page for client in clients for page in client.requested_pages], [1, 2, 3])
+
+    def test_load_all_search_items_without_total_stops_on_an_empty_page(self) -> None:
+        class ExactPagesClient(TotallessSearchClient):
+            item_count = 1000
+
+        service = TrackerQueryService(client_factory=ExactPagesClient)
+        settings = GuiSettings(base_url="https://example.test/cb", username="sample", password="placeholder")
+
+        items = service.load_all_search_items(settings, TrackerQuery(tracker_id=20, text="Item"))
+
+        self.assertEqual(len(items), 1000)
 
     def test_full_comparison_rejects_reference_only_query_response(self) -> None:
         class ReferenceOnlyClient(QueryFakeClient):

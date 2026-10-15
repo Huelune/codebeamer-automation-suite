@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+import zipfile
+from pathlib import Path
 
 from src.api_monitor import ApiMonitorService
 from src.codebeamer_client import CodebeamerClient
+from src.diagnostics import DiagnosticService
+from src.diagnostics import export_diagnostic_bundle
 
 
 class FakeResponse:
@@ -108,6 +113,60 @@ class AttachmentDownloadTest(unittest.TestCase):
         self.assertNotIn("task_id", event.path)
         self.assertNotIn("artifact_id", event.path)
 
+    def test_monitor_hides_server_context_path_and_document_names(self) -> None:
+        """다운로드 경로에는 서버 context 경로와 첨부 파일 이름이 들어 있다. API 모니터와 진단 파일에 남기지 않는다."""
+        cases = {
+            "/secret-context/displayDocument/secret-plan.png?task_id=1001": "/displayDocument/{name}",
+            "/secret-context/v3/attachments/4392/content": "/v3/attachments/{id}/content",
+            "/secret-context/secret-folder/attachment-view": "/{resource}",
+        }
+        for source_url, expected in cases.items():
+            with self.subTest(source_url=source_url):
+                monitor = ApiMonitorService()
+                monitor.configure(enabled=True)
+                session = FakeSession([FakeResponse(headers={"Content-Type": "image/png"}, chunks=(b"ok",))])
+                client = CodebeamerClient(
+                    "https://example.test/secret-context",
+                    "sample",
+                    "placeholder",
+                    rate_limit_max_retries=0,
+                    api_monitor=monitor,
+                )
+                client._session = lambda session=session: session
+
+                client.download_authenticated_resource(source_url, max_bytes=10)
+
+                event = monitor.snapshot().events[-1]
+                self.assertEqual(event.path, expected)
+                self.assertNotIn("secret", f"{event.request_kind} {event.path}")
+
+    def test_diagnostic_bundle_has_no_download_path_names(self) -> None:
+        monitor = ApiMonitorService()
+        monitor.configure(enabled=True)
+        session = FakeSession([FakeResponse(headers={"Content-Type": "image/png"}, chunks=(b"ok",))])
+        client = CodebeamerClient(
+            "https://example.test/secret-context",
+            "sample",
+            "placeholder",
+            rate_limit_max_retries=0,
+            api_monitor=monitor,
+        )
+        client._session = lambda: session
+        client.download_authenticated_resource("/secret-context/displayDocument/secret-plan.png", max_bytes=10)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "diagnostics.zip"
+            export_diagnostic_bundle(
+                target,
+                diagnostics_snapshot=DiagnosticService().snapshot(),
+                api_events=monitor.snapshot().events,
+            )
+            with zipfile.ZipFile(target) as archive:
+                bundle_text = b"\n".join(archive.read(name) for name in archive.namelist()).decode("utf-8")
+
+        self.assertIn("/displayDocument/{name}", bundle_text)
+        self.assertNotIn("secret", bundle_text)
+
     def test_attachment_id_download_uses_v3_content_endpoint(self) -> None:
         session = FakeSession(
             [FakeResponse(headers={"Content-Type": "application/pdf"}, chunks=(b"pdf",))]
@@ -121,6 +180,8 @@ class AttachmentDownloadTest(unittest.TestCase):
         self.assertEqual(mime_type, "application/pdf")
         self.assertEqual(content, b"pdf")
         self.assertEqual(session.calls[0][0], "https://example.test/cb/v3/attachments/4392/content")
+        # 첨부를 받다가 서버가 멈춰도 무한히 기다리지 않는다.
+        self.assertEqual(session.calls[0][1]["timeout"], (10.0, 120.0))
 
 
 if __name__ == "__main__":

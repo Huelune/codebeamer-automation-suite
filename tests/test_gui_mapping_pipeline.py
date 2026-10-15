@@ -391,6 +391,63 @@ class GuiMappingPipelineServiceTest(unittest.TestCase):
                 .any()
             )
 
+    def test_upload_results_name_the_excel_row_of_each_item(self) -> None:
+        """결과의 `_row_id`는 0부터 세는 병합 레코드 번호다. Excel에서 찾을 수 있는 행을 함께 남긴다."""
+
+        class RejectSecondItemClient(FakeClient):
+            def create_item(self, tracker_id: int, payload: dict, parent_item_id: int | None = None):
+                if payload.get("name") == "REQ-002":
+                    raise RuntimeError("rejected")
+                return super().create_item(tracker_id, payload, parent_item_id)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Main"
+            sheet.append(["Summary", "담당자"])
+            sheet.append(["REQ-001", "a"])
+            sheet.append([None, None])
+            sheet.append(["REQ-002", "b"])
+            workbook.save(path)
+            workbook.close()
+
+            service = GuiUploadPipelineService(client_factory=RejectSecondItemClient, reader_cls=FakeExcelReader)
+            settings = GuiSettings(
+                base_url="https://example.com/cb",
+                username="user",
+                password="secret",
+                default_project_id="10",
+                default_tracker_id="1000",
+                excel_header_row=1,
+                summary_column="Summary",
+                excel_sheet_name="Main",
+            )
+            file_state = {
+                "file_path": str(path),
+                "file_paths": [str(path)],
+                "preview_file_path": str(path),
+                "sheet_name": "Main",
+                "header_row": 1,
+                "summary_column": "Summary",
+            }
+            mapping_context = service.prepare_mapping_context(settings, file_state)
+            service.validate_mapping(mapping_context, {"Summary": "Summary", "담당자": "담당자"})
+
+            result = service.run_batch_upload(
+                settings,
+                file_state,
+                mapping_context,
+                dry_run=False,
+                continue_on_error=True,
+                output_dir=str(Path(tmp_dir) / "output"),
+            )
+
+        # 파일별 최상단 폴더 행은 Excel 행이 없다.
+        item_successes = result["success_df"][result["success_df"]["_row_id"].notna()]
+        self.assertEqual(item_successes["excel_row"].tolist(), ["Excel 2행"])
+        self.assertEqual(result["failed_df"]["excel_row"].tolist(), ["Excel 4행"])
+
     def test_prepare_mapping_context_uses_file_selection_header_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "sample.xlsx"
@@ -770,3 +827,50 @@ class GuiMappingPipelineServiceTest(unittest.TestCase):
 
             self.assertEqual(len(result["success_df"]), 1)
             self.assertEqual(result["success_df"].iloc[0]["created_item_id"], "DRYRUN-0")
+
+    def test_validate_mapping_blocks_two_columns_mapped_to_the_same_field(self) -> None:
+        """같은 필드에 두 열을 매핑하면 사용자 정의 필드가 payload에 두 번 들어가거나 뒤 열이 앞 열을 덮어쓴다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Main"
+            sheet.append(["Summary", "담당자", "담당자 메모"])
+            sheet.append(["REQ-001", "홍길동", "김철수"])
+            workbook.save(path)
+            workbook.close()
+
+            service = GuiUploadPipelineService(client_factory=FakeClient, reader_cls=FakeExcelReader)
+            settings = GuiSettings(
+                base_url="https://example.com/cb",
+                username="user",
+                password="secret",
+                default_project_id="10",
+                default_tracker_id="1000",
+                excel_header_row=1,
+                summary_column="Summary",
+                excel_sheet_name="Main",
+            )
+            mapping_context = service.prepare_mapping_context(
+                settings,
+                {
+                    "file_path": str(path),
+                    "preview_file_path": str(path),
+                    "sheet_name": "Main",
+                    "header_row": 1,
+                    "summary_column": "Summary",
+                },
+            )
+
+            validation_context = service.validate_mapping(
+                mapping_context,
+                {"Summary": "Summary", "담당자": "담당자", "담당자 메모": "담당자"},
+            )
+
+        self.assertTrue(validation_context.has_blocking_issues)
+        issues = validation_context.issue_df
+        mapping_issues = issues[issues["category"] == "매핑"]
+        self.assertEqual(len(mapping_issues), 1)
+        self.assertEqual(mapping_issues.iloc[0]["severity"], "오류")
+        self.assertEqual(mapping_issues.iloc[0]["field"], "담당자")
+        self.assertIn("담당자 메모", mapping_issues.iloc[0]["message"])

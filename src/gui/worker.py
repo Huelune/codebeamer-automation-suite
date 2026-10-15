@@ -254,7 +254,9 @@ class BackgroundTask:
         base_cls = qt["QThread"]
         Signal = qt["Signal"]
 
-        class _BackgroundTask(base_cls):
+        # base_cls 는 런타임에 결정되는 QThread 다. 타입 체커는 동적 기반 클래스를
+        # 다루지 못하므로 이 줄에서만 무시한다. 공개 표면은 위에 선언해 두었다.
+        class _BackgroundTask(base_cls):  # type: ignore[misc, valid-type]
             completed = Signal(object)
             failed = Signal(object)
 
@@ -321,7 +323,9 @@ class BulkUpdateWorker:
         base_cls = qt["QThread"]
         Signal = qt["Signal"]
 
-        class _BulkUpdateWorker(base_cls):
+        # base_cls 는 런타임에 결정되는 QThread 다. 타입 체커는 동적 기반 클래스를
+        # 다루지 못하므로 이 줄에서만 무시한다. 공개 표면은 위에 선언해 두었다.
+        class _BulkUpdateWorker(base_cls):  # type: ignore[misc, valid-type]
             progress_changed = Signal(object)
             completed = Signal(object)
             failed = Signal(object)

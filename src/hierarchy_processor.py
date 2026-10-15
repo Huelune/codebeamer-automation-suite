@@ -67,15 +67,28 @@ class HierarchyProcessor:
             return cleaned
         raise ValueError("mode must be one of: first, last, list")
 
+    @staticmethod
+    def _item_id_column(columns: Any) -> str | None:
+        """update/upsert 대상 id 열. 업로드 단계와 같은 규칙으로 찾는다."""
+        case_insensitive_match = None
+        for column in columns:
+            name = str(column or "").strip()
+            if not name or name.startswith("_"):
+                continue
+            if name == "id":
+                return column
+            if name.casefold() == "id" and case_insensitive_match is None:
+                case_insensitive_match = column
+        return case_insensitive_match
+
     @classmethod
-    def list_to_multiline_text(cls, value: Any) -> str | None:
-        if value is None:
+    def _item_id_text(cls, value: Any) -> str | None:
+        normalized = cls.normalize_scalar(value)
+        if cls.is_blank(normalized):
             return None
-        if isinstance(value, list):
-            values = [str(item).strip() for item in value if not cls.is_blank(item)]
-            return "\n".join(values) if values else None
-        text = str(value).strip()
-        return text or None
+        if isinstance(normalized, float) and normalized.is_integer():
+            normalized = int(normalized)
+        return str(normalized).strip() or None
 
     def merge_multiline_records(
         self,
@@ -92,27 +105,43 @@ class HierarchyProcessor:
             key_to_group: dict[str, int] = {}
             closed_keys: set[str] = set()
             previous_key: str | None = None
+            # 빈 행은 읽을 때 빠지므로 순번으로는 Excel 행을 알 수 없다. 읽을 때 남긴 실제 행을 쓴다.
+            excel_rows = (
+                work["_excel_row"].tolist()
+                if "_excel_row" in work.columns
+                else [index + self.header_row + 1 for index in range(len(work.index))]
+            )
             for index, raw_key in enumerate(work[UPLOAD_RECORD_KEY_COLUMN].tolist()):
                 key = str(self.normalize_scalar(raw_key) or "").strip()
                 if not key:
                     raise ValueError(
-                        f"{UPLOAD_RECORD_KEY_COLUMN} 값이 비어 있습니다. Excel 행={index + self.header_row + 1}"
+                        f"{UPLOAD_RECORD_KEY_COLUMN} 값이 비어 있습니다. Excel {excel_rows[index]}행"
                     )
                 if previous_key is not None and key != previous_key:
                     closed_keys.add(previous_key)
                 if key in closed_keys:
                     raise ValueError(
-                        f"{UPLOAD_RECORD_KEY_COLUMN} '{key}' 행은 연속해서 배치해야 합니다."
+                        f"{UPLOAD_RECORD_KEY_COLUMN} '{key}' 행은 연속해서 배치해야 합니다. Excel {excel_rows[index]}행"
                     )
                 if key not in key_to_group:
                     key_to_group[key] = len(key_to_group) + 1
                 group_ids.append(key_to_group[key])
                 previous_key = key
         else:
+            # 수정용 파일은 id가 레코드 경계다. Summary가 비어도 다른 id가 나오면 새 레코드로 본다.
+            # 첫 Summary 앞의 행도 버리지 않고 레코드로 남겨 검증에서 이름이나 id가 없다고 알린다.
+            id_column = self._item_id_column(work.columns)
             current_group = 0
+            current_item_id: str | None = None
             for _, row in work.iterrows():
-                if not self.is_blank(row[self.summary_col]):
+                item_id = self._item_id_text(row[id_column]) if id_column is not None else None
+                if (
+                    current_group == 0
+                    or not self.is_blank(row[self.summary_col])
+                    or (item_id is not None and item_id != current_item_id)
+                ):
                     current_group += 1
+                    current_item_id = item_id
                 group_ids.append(current_group)
 
         work["_group"] = group_ids
@@ -138,8 +167,11 @@ class HierarchyProcessor:
                         for value in group_df[column].tolist()
                     ]
                     if any(value != normalized_values[0] for value in normalized_values[1:]):
+                        group_rows = group_df["_excel_row"].tolist() if "_excel_row" in group_df.columns else []
+                        location = f" Excel {group_rows[0]}-{group_rows[-1]}행" if group_rows else ""
                         raise ValueError(
                             f"{UPLOAD_RECORD_KEY_COLUMN} '{record_key}'의 일반 필드 '{column}' 값이 행마다 다릅니다."
+                            f"{location}"
                         )
             row_out = {
                 self.summary_col: (

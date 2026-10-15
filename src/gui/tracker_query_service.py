@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
@@ -7,6 +8,8 @@ from datetime import UTC
 from datetime import datetime
 from functools import partial
 from typing import Any
+
+import requests
 
 from src.codebeamer_client import CodebeamerClient
 
@@ -52,6 +55,14 @@ _ERROR_MESSAGES = {
 }
 
 
+TRANSPORT_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.RetryError,
+)
+
+
 def classify_tracker_query_error(exc: Exception) -> tuple[TrackerQueryErrorKind, int | None]:
     explicit_kind = getattr(exc, "query_error_kind", None)
     if explicit_kind is not None:
@@ -75,6 +86,12 @@ def classify_tracker_query_error(exc: Exception) -> tuple[TrackerQueryErrorKind,
     if isinstance(status_code, int) and status_code >= 500:
         return TrackerQueryErrorKind.SERVER, status_code
 
+    # 200 응답이 JSON이 아니면(게이트웨이 오류 페이지 등) 검색 조건이 아니라 서버 쪽 문제다.
+    if isinstance(exc, requests.exceptions.JSONDecodeError):
+        return TrackerQueryErrorKind.SERVER, status_code
+    # SSL·프록시·전송 끊김은 클래스 이름에 connection 이 없어도 연결 문제다.
+    if isinstance(exc, TRANSPORT_ERRORS):
+        return TrackerQueryErrorKind.NETWORK, None
     if isinstance(exc, ValueError):
         return TrackerQueryErrorKind.INVALID_QUERY, None
     if isinstance(exc, KeyError):
@@ -102,7 +119,9 @@ class TrackerQueryService:
         self._tracker_cache: dict[tuple[tuple[Any, ...], int], dict[str, Any]] = {}
         self._schema_cache: dict[tuple[tuple[Any, ...], int], dict[str, Any]] = {}
         # 받은 Baseline 전체 아이템(아이템 ID -> 원본)과 받은 시각. 그 Baseline 상세는 여기서 꺼낸다.
+        # 여러 작업 스레드가 함께 쓰므로 락 안에서만 바꾸고 읽는다.
         self._baseline_item_index: dict[BaselineCacheKey, tuple[dict[int, dict[str, Any]], str]] = {}
+        self._baseline_index_lock = threading.Lock()
 
     @staticmethod
     def _settings_cache_key(settings) -> tuple[Any, ...]:
@@ -565,10 +584,12 @@ class TrackerQueryService:
         received_at: str,
     ) -> None:
         """받은 Baseline 아이템 목록을 상세용으로 기억한다. 최근 목록 몇 개만 남긴다."""
-        self._baseline_item_index.pop(key, None)
-        self._baseline_item_index[key] = ({item.item_id: item.raw_reference for item in items}, received_at)
-        while len(self._baseline_item_index) > MAX_INDEXED_BASELINE_LISTS:
-            del self._baseline_item_index[next(iter(self._baseline_item_index))]
+        entry = ({item.item_id: item.raw_reference for item in items}, received_at)
+        with self._baseline_index_lock:
+            self._baseline_item_index.pop(key, None)
+            self._baseline_item_index[key] = entry
+            while len(self._baseline_item_index) > MAX_INDEXED_BASELINE_LISTS:
+                self._baseline_item_index.pop(next(iter(self._baseline_item_index)), None)
 
     def _indexed_baseline_item(
         self,
@@ -580,7 +601,9 @@ class TrackerQueryService:
         server = self._baseline_server(settings)
         if server is None:
             return None
-        for key, (items, received_at) in reversed(self._baseline_item_index.items()):
+        with self._baseline_index_lock:
+            indexed = list(self._baseline_item_index.items())
+        for key, (items, received_at) in reversed(indexed):
             if (key.base_url, key.username) == server and key.baseline_id == baseline_id and item_id in items:
                 return items[item_id], received_at
         return None
@@ -805,7 +828,11 @@ class TrackerQueryService:
                 seen_ids.add(summary.item_id)
                 collected.append(summary)
                 added += 1
-            if len(collected) >= result.total:
+            if result.total_known:
+                if len(collected) >= result.total:
+                    break
+            elif not result.items or len(result.items) < result.page_size:
+                # total이 없으면 빈 페이지나 덜 찬 페이지가 마지막이다.
                 break
             if not result.items or added == 0:
                 raise TrackerQueryServiceError(
