@@ -20,6 +20,7 @@ from src.gui.item_activity_export import ItemActivityExportSummary
 from src.gui.item_activity_panel import ALL_SCOPE_DATA
 from src.gui.item_activity_panel import ItemActivityPanel
 from src.gui.item_activity_panel import run_activity_export
+from src.gui.styles import build_gui_stylesheet
 from src.gui.tracker_baseline_compare import TrackerBaseline
 from src.gui.tracker_comment_models import ItemCommentsSnapshot
 from src.gui.tracker_content_models import AttachmentSummary
@@ -206,6 +207,13 @@ class ItemActivityPanelTest(unittest.TestCase):
         self.assertEqual(self.panel.status_label.textFormat(), Qt.TextFormat.PlainText)
         self.assertEqual(self.panel.summary_label.textFormat(), Qt.TextFormat.PlainText)
         self.assertTrue(self.panel.status_label.text().endswith("댓글 조회 실패: <b>권한 없음</b>"))
+
+    def test_minimum_width_stays_small_so_the_hidden_tab_does_not_widen_its_owner(self) -> None:
+        # 가려진 변경 이력 탭이 비교 탭이나 상세 창의 최소 너비를 키우면 안 된다.
+        self.panel.setStyleSheet(build_gui_stylesheet("kefico"))
+        self._app.processEvents()
+
+        self.assertLessEqual(self.panel.minimumSizeHint().width(), 520)
 
     def test_relation_kind_is_shown_but_disabled(self) -> None:
         self.assertFalse(self.panel.relation_check.isEnabled())
