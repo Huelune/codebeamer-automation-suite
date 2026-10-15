@@ -118,7 +118,7 @@ check("뒤로 가능", session.can_go_back, True)
 
 드라이버 스크립트는 일회용이다. **찾은 결함은 테스트로 옮겨 심는다.**
 `open_modal` 과 같은 방식(서브클래스로 `exec` 만 덮기)을 쓰면 테스트에서도
-진짜 생성자가 불린다. `tests/test_gui_tracker_workspace.py` 의
+진짜 생성자가 불린다. `tests/test_gui_workspace_detail.py` 의
 `test_detail_dialog_is_built_with_the_real_class` 가 그 예다.
 
 고친 뒤에는 일부러 되돌려서 그 테스트가 **실패하는지** 확인한다. 실패하지
