@@ -12,9 +12,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from html import escape
 from typing import TYPE_CHECKING
+from typing import Any
 
 from shiboken6 import isValid
 
+from .item_activity import ItemActivityKind
+from .item_activity_export import ItemActivityExportRequest
+from .item_activity_panel import run_activity_export
 from .tracker_comment_models import ItemComment
 from .tracker_comment_models import ItemCommentsSnapshot
 from .tracker_content_models import ATTACHMENT_IMAGE_MIME_TYPES
@@ -56,6 +60,7 @@ class DetailDialogController:
             attachments=panel.attachments,
             image_resources=panel.preview_resources,
             baseline_id=panel.baseline_id,
+            baselines=self.page._tracker_baselines,
             parent=self.page,
         )
         session = TrackerItemDetailSession(detail.item_id, detail.version)
@@ -73,6 +78,10 @@ class DetailDialogController:
                 dialog, session, kind, force=force
             )
         )
+        dialog.activity_requested.connect(
+            lambda kind, force=False: self.load_activity(dialog, session, ItemActivityKind(kind), force=force)
+        )
+        dialog.history_export_requested.connect(lambda request: self.export_activity(dialog, request))
         dialog.related_item_requested.connect(
             lambda item_id: self.navigate(dialog, session, item_id)
         )
@@ -132,8 +141,8 @@ class DetailDialogController:
         *,
         force: bool = False,
     ) -> None:
-        # 관계는 조회 시점의 것이라 Baseline 창에서 막는다. 이력은 아이템 전체 이력이라 Baseline 창도 조회한다.
-        if kind not in {"relations", "history"} or (dialog.baseline_id is not None and kind == "relations"):
+        # 관계는 조회 시점의 것이라 Baseline 창에서 막는다. 변경 이력은 `load_activity`가 받는다.
+        if kind != "relations" or dialog.baseline_id is not None:
             return
         detail = dialog.detail
         generation = session.generation
@@ -148,33 +157,66 @@ class DetailDialogController:
                 and session.current.item_id == detail.item_id
             )
 
-        def loaded(result) -> None:
-            if not current():
-                return
-            if kind == "relations":
-                dialog.set_relations(result)
-            else:
-                dialog.set_history(result)
-
-        def failed(exc: Exception) -> None:
-            if current():
-                dialog.set_context_error(kind, str(exc))
-
-        load_context = (
-            self.page.context_service.load_relations
-            if kind == "relations"
-            else self.page.context_service.load_history
+        self.page._submit(
+            "detail_dialog_relations",
+            lambda: self.page.context_service.load_relations(settings, detail.item_id, detail.version, force=force),
+            lambda result: dialog.set_relations(result) if current() else None,
+            lambda exc: dialog.set_context_error(kind, str(exc)) if current() else None,
         )
 
-        def operation():
-            return load_context(
-                settings,
-                detail.item_id,
-                detail.version,
-                force=force,
+    def load_activity(
+        self,
+        dialog: TrackerItemDetailDialog,
+        session: TrackerItemDetailSession,
+        kind: ItemActivityKind,
+        *,
+        force: bool = False,
+    ) -> None:
+        """변경 이력 탭의 유형 하나를 받는다. 이력·댓글·첨부는 아이템 전체 기록이라 Baseline 창도 받는다."""
+        detail = dialog.detail
+        generation = session.generation
+        settings = self.page.settings_provider()
+
+        def current() -> bool:
+            return (
+                isValid(dialog)
+                and dialog.isVisible()
+                and session.generation == generation
+                and dialog.detail.item_id == detail.item_id
             )
 
-        self.page._submit(f"detail_dialog_{kind}", operation, loaded, failed)
+        def operation() -> Any:
+            if kind is ItemActivityKind.FIELD_CHANGE:
+                return self.page.context_service.load_history(settings, detail.item_id, detail.version, force=force)
+            if kind is ItemActivityKind.COMMENT:
+                return self.page.comment_service.load_comments(settings, detail.item_id, detail.version, force=force)
+            # Baseline 창의 아이템 응답은 그 시점 것이라 첨부 목록을 따로 묻는다.
+            raw = detail.raw_payload if dialog.baseline_id is None else None
+            return self.page.content_service.load_attachments(settings, detail.item_id, raw_payload=raw)
+
+        self.page._submit(
+            f"detail_dialog_activity:{kind.value}",
+            operation,
+            lambda data: dialog.set_activity(detail.item_id, kind, data) if current() else None,
+            lambda exc: dialog.set_activity_error(detail.item_id, kind, str(exc)) if current() else None,
+        )
+
+    def export_activity(self, dialog: TrackerItemDetailDialog, request: ItemActivityExportRequest) -> None:
+        tracker = self.page._current_tracker
+        project = self.page._current_project
+        run_activity_export(
+            dialog,
+            dialog.activity_panel,
+            request,
+            submit=self.page._submit,
+            record_activity=self.page._record_activity,
+            show_error=self.page._show_error,
+            source="tracker_detail_dialog",
+            project_id=project.project_id if project else (tracker.project_id if tracker else None),
+            project_name=project.name if project else (tracker.project_name if tracker else ""),
+            tracker_id=tracker.tracker_id if tracker else None,
+            tracker_name=tracker.name if tracker else "",
+        )
 
     def navigate(
         self,

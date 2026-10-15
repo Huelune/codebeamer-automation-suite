@@ -2235,13 +2235,23 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         self._app.processEvents()
 
         self.assertEqual(dialog.detail.version, 1)
-        self.assertEqual(dialog.history_status.text(), "변경 이력 2건 · 이 Baseline 이후 2건")
-        view = dialog.history_view
+        activity = dialog.activity_panel
+        self.assertEqual(dialog.detail.version, 1)
+        self.assertEqual(activity.baseline_combo.currentData(), 24681001)
+        self.assertEqual(
+            activity.status_label.text(),
+            "#9001001 · Offline Requirements Baseline 이후 · 버전 2건 · 필드 변경 3건 · 바뀐 필드 3개"
+            " · 댓글 2건 · 첨부 1건 · 댓글·첨부는 현재 목록이며 Baseline 시점 내용이 아닙니다",
+        )
+        view = activity.history_view
         self.assertEqual(
             [view.topLevelItem(index).text(0) for index in range(view.topLevelItemCount())],
             [
+                "[Baseline 이후] 댓글 · 2026-07-20 10:00 · Sample User B",
+                "[Baseline 이후] 댓글 · 2026-07-20 09:10 · Sample User A",
                 "[Baseline 이후] 버전 3 · 2026-07-20 09:00 · Sample User A · 필드 1개",
                 "[Baseline 이후] 버전 2 · 2026-07-19 08:00 · Sample User B · 필드 2개",
+                "[Baseline 이후] 첨부 · 2026-07-18 11:00 · anonymous-spec.txt · 2,048 bytes · text/plain",
             ],
         )
         self.assertIn("관계 조회를 지원하지 않습니다", dialog.relations_status.text())

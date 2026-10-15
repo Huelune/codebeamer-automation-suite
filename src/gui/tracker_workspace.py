@@ -199,6 +199,8 @@ class TrackerWorkspacePage(QWidget):
         self.synchronous = bool(synchronous)
 
         self._activated = False
+        # 지금 트래커의 Baseline 목록. 상세 창의 기준 Baseline 선택에 넘긴다.
+        self._tracker_baselines: tuple[TrackerBaseline, ...] = ()
         self._settings_fingerprint: tuple[Any, ...] | None = None
         self._projects: tuple[ProjectSummary, ...] = ()
         self._trackers: tuple[TrackerSummary, ...] = ()
@@ -494,6 +496,7 @@ class TrackerWorkspacePage(QWidget):
 
         목록 조회는 계층 탭의 Baseline 선택과도 이어져 있어 화면이 들고 있다.
         """
+        self._tracker_baselines = ()
         self._baseline_loaded_tracker_id = None
         self._baseline_loading_tracker_id = None
         self.baseline_workspace.reset_state(message)
@@ -1670,6 +1673,7 @@ class TrackerWorkspacePage(QWidget):
             if self._current_tracker is not None and self._current_tracker.tracker_id == tracker.tracker_id:
                 self._baseline_loading_tracker_id = None
                 self._baseline_loaded_tracker_id = tracker.tracker_id
+                self._tracker_baselines = baselines
                 self.hierarchy_panel.set_baselines(baselines)
                 self.baseline_workspace.set_baselines(baselines)
                 roots = self.hierarchy_panel.root_cache().get(tracker.tracker_id)
@@ -1679,6 +1683,7 @@ class TrackerWorkspacePage(QWidget):
         def failed(exc: Exception) -> None:
             if self._baseline_loading_tracker_id == tracker.tracker_id:
                 self._baseline_loading_tracker_id = None
+            self._tracker_baselines = ()
             self.hierarchy_panel.set_baselines(())
             self.baseline_workspace.set_error(f"Baseline 목록 조회 실패: {exc}")
             self._show_error(exc, prefix="Baseline 목록 조회 실패")

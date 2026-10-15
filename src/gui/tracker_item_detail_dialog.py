@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from html import escape
+from typing import Any
 
 
 try:
@@ -34,14 +35,16 @@ except ImportError as exc:  # pragma: no cover
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
 from .item_activity import BaselineMarker
-from .item_activity import history_entries
-from .item_activity import merge_entries
-from .item_change_history_view import ItemChangeHistoryView
+from .item_activity import ItemActivityKind
+from .item_activity import baseline_scope
+from .item_activity import parse_server_time
+from .item_activity_panel import ALL_SCOPE_DATA
+from .item_activity_panel import ItemActivityPanel
+from .tracker_baseline_compare import TrackerBaseline
 from .tracker_comment_models import ItemComment
 from .tracker_comment_models import ItemCommentsSnapshot
 from .tracker_content_models import AttachmentResource
 from .tracker_content_models import AttachmentSummary
-from .tracker_item_context_models import ItemHistorySnapshot
 from .tracker_item_context_models import ItemRelationsSnapshot
 from .tracker_item_tree import TrackerItemTree
 from .tracker_query_models import TrackerItemDetail
@@ -121,6 +124,9 @@ class ZoomableImageView(QGraphicsView):
 
 class TrackerItemDetailDialog(QDialog):
     context_tab_requested = Signal(str, bool)
+    # 변경 이력 탭의 유형 하나를 받아 달라는 요청. 값은 `ItemActivityKind.value`와 force다.
+    activity_requested = Signal(str, bool)
+    history_export_requested = Signal(object)
     related_item_requested = Signal(int)
     navigate_back_requested = Signal()
     navigate_forward_requested = Signal()
@@ -137,6 +143,7 @@ class TrackerItemDetailDialog(QDialog):
         attachments: tuple[AttachmentSummary, ...] = (),
         image_resources: tuple[AttachmentResource, ...] = (),
         baseline_id: int | None = None,
+        baselines: tuple[TrackerBaseline, ...] = (),
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -146,7 +153,8 @@ class TrackerItemDetailDialog(QDialog):
             resource.resource_key: resource for resource in image_resources
         }
         self.baseline_id = baseline_id
-        self._context_states = {"relations": "idle", "history": "idle"}
+        self.baselines = tuple(baselines)
+        self._context_states = {"relations": "idle"}
         self._comments_state = "idle"
         self.comment_views: dict[str, WikiContentView] = {}
         self._comment_image_html: dict[str, str] = {}
@@ -214,6 +222,8 @@ class TrackerItemDetailDialog(QDialog):
         body.setSizes([300, 900])
         layout.addWidget(body, 1)
 
+        self.activity_panel.set_baselines(self.baselines)
+        self._reset_activity()
         if baseline_id is not None:
             self._show_baseline_context_notice()
 
@@ -292,13 +302,13 @@ class TrackerItemDetailDialog(QDialog):
     def _show_baseline_context_notice(self) -> None:
         """과거 시점에는 관계·댓글을 조회하지 않는다. 현재 상태로 대신 채우지 않는다.
 
-        변경 이력은 시점과 관계없는 아이템 전체 이력이라 조회하고, Baseline 이후 변경을 따로 표시한다.
+        변경 이력은 시점과 관계없는 아이템 전체 기록이라 이력·현재 댓글·현재 첨부를 받고, 활동 패널이 Baseline 이후를
+        나눠 보인다.
         """
         self.relations_status.setText(
             "과거 시점의 관계 조회를 지원하지 않습니다. 현재 상태를 대신 조회하지 않습니다."
         )
         self.relations_retry.setEnabled(False)
-        self.history_status.setText("탭을 열면 변경 이력을 조회합니다. 이 Baseline 이후의 변경은 따로 표시합니다.")
         self.comments_status.setText(
             "과거 시점의 댓글 조회를 지원하지 않습니다. 현재 댓글을 대신 조회하지 않습니다."
         )
@@ -343,18 +353,46 @@ class TrackerItemDetailDialog(QDialog):
     def _build_history_tab(self) -> QWidget:
         tab = QWidget(self)
         layout = QVBoxLayout(tab)
-        toolbar = QHBoxLayout()
-        self.history_status = QLabel("탭을 열면 변경 이력을 조회합니다.", tab)
-        self.history_status.setWordWrap(True)
-        toolbar.addWidget(self.history_status, 1)
-        self.history_retry = QPushButton("다시 시도", tab)
-        self.history_retry.hide()
-        self.history_retry.clicked.connect(lambda: self.context_tab_requested.emit("history", True))
-        toolbar.addWidget(self.history_retry)
-        layout.addLayout(toolbar)
-        self.history_view = ItemChangeHistoryView(tab)
-        layout.addWidget(self.history_view, 1)
+        self.activity_panel = ItemActivityPanel(
+            tab,
+            request_kind=lambda kind, force: self.activity_requested.emit(kind.value, force),
+        )
+        self.activity_panel.export_requested.connect(self.history_export_requested.emit)
+        layout.addWidget(self.activity_panel, 1)
         return tab
+
+    def _reset_activity(self) -> None:
+        """이 창의 아이템으로 변경 이력 탭을 맞춘다.
+
+        Baseline 창이면 그 Baseline 버전으로 `[Baseline 이후]`를 가르고, 목록에 생성 시각이 있으면 그 Baseline
+        이후 구간에서 시작한다. 현재 창은 전체 구간이다.
+        """
+        detail = self.detail
+        marker = None
+        scope: int | str = ALL_SCOPE_DATA
+        if self.baseline_id is not None:
+            baseline = next((value for value in self.baselines if value.baseline_id == self.baseline_id), None)
+            name = baseline.name if baseline is not None else f"Baseline #{self.baseline_id}"
+            created_at = baseline.created_at if baseline is not None else ""
+            marker = BaselineMarker(name, version=detail.version, created_at=parse_server_time(created_at))
+            if baseline is not None and baseline_scope(baseline.name, baseline.created_at) is not None:
+                scope = baseline.baseline_id
+        self.activity_panel.set_item(
+            detail.item_id,
+            item_name=detail.summary.name,
+            tracker_name=detail.summary.tracker_name,
+            current_version=detail.version if self.baseline_id is None else None,
+            marker=marker,
+        )
+        self.activity_panel.select_scope(scope)
+        if self.baseline_id is not None:
+            self.activity_panel.set_note("댓글·첨부는 현재 목록이며 Baseline 시점 내용이 아닙니다")
+
+    def set_activity(self, item_id: int, kind: ItemActivityKind, data: Any) -> None:
+        self.activity_panel.set_source(int(item_id), kind, data)
+
+    def set_activity_error(self, item_id: int, kind: ItemActivityKind, message: str) -> None:
+        self.activity_panel.set_source_error(int(item_id), kind, message)
 
     def _context_tab_changed(self, _index: int) -> None:
         if (
@@ -364,23 +402,17 @@ class TrackerItemDetailDialog(QDialog):
         ):
             self.set_context_loading("relations")
             self.context_tab_requested.emit("relations", False)
-        elif self.tabs.currentWidget() is self.history_tab and self._context_states["history"] == "idle":
-            self.set_context_loading("history")
-            self.context_tab_requested.emit("history", False)
+        self.activity_panel.set_active(self.tabs.currentWidget() is self.history_tab)
 
     def set_context_loading(self, kind: str) -> None:
         self._context_states[kind] = "loading"
-        label = self.relations_status if kind == "relations" else self.history_status
-        retry = self.relations_retry if kind == "relations" else self.history_retry
-        label.setText("불러오는 중입니다.")
-        retry.hide()
+        self.relations_status.setText("불러오는 중입니다.")
+        self.relations_retry.hide()
 
     def set_context_error(self, kind: str, message: str) -> None:
         self._context_states[kind] = "error"
-        label = self.relations_status if kind == "relations" else self.history_status
-        retry = self.relations_retry if kind == "relations" else self.history_retry
-        label.setText(message)
-        retry.show()
+        self.relations_status.setText(message)
+        self.relations_retry.show()
 
     def set_relations(self, snapshot: ItemRelationsSnapshot) -> None:
         self._context_states["relations"] = "loaded"
@@ -404,24 +436,6 @@ class TrackerItemDetailDialog(QDialog):
                 self.relations_table.setItem(row, column, item)
         self.relations_status.setText(f"관계·참조 {len(rows)}건" if rows else "관계·참조가 없습니다.")
         self.relations_retry.hide()
-
-    def set_history(self, snapshot: ItemHistorySnapshot) -> None:
-        self._context_states["history"] = "loaded"
-        entries = merge_entries(history_entries(snapshot))
-        baseline_version = self.detail.version if self.baseline_id is not None else None
-        if baseline_version is None:
-            self.history_view.show_entries(entries, current_version=snapshot.current_version)
-            status = f"변경 이력 {len(snapshot.entries)}건" if snapshot.entries else "변경 이력이 없습니다."
-        else:
-            # 이력은 아이템 전체 이력이다. 이 창의 버전이 Baseline 시점이므로 그 뒤 변경을 나눠 보인다.
-            self.history_view.show_entries(
-                entries,
-                baseline=BaselineMarker(f"Baseline #{self.baseline_id}", version=baseline_version),
-            )
-            later = sum(entry.version is not None and entry.version > baseline_version for entry in snapshot.entries)
-            status = f"변경 이력 {len(snapshot.entries)}건 · 이 Baseline 이후 {later}건"
-        self.history_status.setText(status)
-        self.history_retry.hide()
 
     def _open_selected_relation(self, index) -> None:
         item = self.relations_table.item(index.row(), 1)
@@ -649,16 +663,16 @@ class TrackerItemDetailDialog(QDialog):
         self._fill_fields_table(detail)
         self.raw_view.setPlainText(json.dumps(detail.raw_payload, ensure_ascii=False, indent=2, default=str))
         self._reset_images()
-        self._context_states = {"relations": "idle", "history": "idle"}
+        self._context_states = {"relations": "idle"}
         self._comments_state = "idle"
         self.relations_table.setRowCount(0)
-        self.history_view.clear()
         self.relations_status.setText("탭을 열면 관계·참조를 조회합니다.")
-        self.history_status.setText("탭을 열면 변경 이력을 조회합니다.")
         self.relations_retry.hide()
-        self.history_retry.hide()
         self.set_comments(ItemCommentsSnapshot())
         self._comments_state = "idle"
+        # 탭을 처음으로 되돌리므로 새 아이템 이력은 탭을 다시 열 때 묻는다.
+        self.activity_panel.set_active(False)
+        self._reset_activity()
         self.comments_status.setText("탭을 열면 댓글을 조회합니다.")
         if self.baseline_id is not None:
             # Baseline 창 안에서 옮겨 다녀도 같은 과거 시점이므로 안내를 그대로 둔다.
