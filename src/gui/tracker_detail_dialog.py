@@ -202,8 +202,23 @@ class DetailDialogController:
         )
 
     def export_activity(self, dialog: TrackerItemDetailDialog, request: ItemActivityExportRequest) -> None:
+        # 창 안에서 다른 트래커의 아이템으로 옮겨 갈 수 있으므로 지금 보이는 아이템의 값을 먼저 쓴다.
+        # 아이템 응답에 없을 때만 작업공간에서 고른 트래커로 채운다(`_record_item_activity` 와 같은 규칙).
+        summary = dialog.detail.summary
         tracker = self.page._current_tracker
         project = self.page._current_project
+        if summary.tracker_id is not None:
+            tracker_id: int | None = summary.tracker_id
+            tracker_name = summary.tracker_name
+        else:
+            tracker_id = tracker.tracker_id if tracker else None
+            tracker_name = tracker.name if tracker else ""
+        if summary.project_id is not None:
+            project_id: int | None = summary.project_id
+            project_name = summary.project_name
+        else:
+            project_id = project.project_id if project else (tracker.project_id if tracker else None)
+            project_name = project.name if project else (tracker.project_name if tracker else "")
         run_activity_export(
             dialog,
             dialog.activity_panel,
@@ -212,10 +227,10 @@ class DetailDialogController:
             record_activity=self.page._record_activity,
             show_error=self.page._show_error,
             source="tracker_detail_dialog",
-            project_id=project.project_id if project else (tracker.project_id if tracker else None),
-            project_name=project.name if project else (tracker.project_name if tracker else ""),
-            tracker_id=tracker.tracker_id if tracker else None,
-            tracker_name=tracker.name if tracker else "",
+            project_id=project_id,
+            project_name=project_name,
+            tracker_id=tracker_id,
+            tracker_name=tracker_name,
         )
 
     def navigate(

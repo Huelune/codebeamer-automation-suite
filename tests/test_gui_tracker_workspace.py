@@ -935,11 +935,89 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         request = export_mock.call_args.args[0]
         tracker = self.page._current_tracker
         self.assertEqual(request.tracker_name, f"{tracker.name} (ID {tracker.tracker_id})")
-        self.assertEqual(request.scope_label, "비교 시점 사이")
+        # 파일만 봐도 어느 두 시점인지 알 수 있어야 한다. 이름은 화면의 두 칸 글자 그대로다.
+        reference_label, comparison_label = panel.source_labels()
+        self.assertEqual(request.scope_label, f"비교 시점 사이 ({reference_label} → {comparison_label})")
+        self.assertIn("Baseline", comparison_label)
         self.assertEqual(request.kind_labels, ("필드 변경", "댓글", "첨부"))
         self.assertEqual(len(request.entries), 5)
         self.assertTrue(activity.export_button.isEnabled())
         self.assertTrue(activity.status_label.text().endswith("Excel 내보내기 완료 · 항목 5건 · 행 6개"))
+
+    def _request_comparison_attachments(self, reference_id: int | None, comparison_id: int | None) -> list[object]:
+        """비교 결과의 두 시점을 바꿔 첨부를 요청하고, 첨부 조회에 넘어간 raw_payload 를 모아 돌려준다."""
+        self._open_comparison_history()
+        workspace = self.page.baseline_workspace
+        result = workspace._baseline_comparison_result
+        comparison = next(item for item in result.items if item.item_id == 9001001)
+        comparison = replace(
+            comparison,
+            after=replace(comparison.after, raw_reference={"marker": "reference-side"}),
+            before=replace(comparison.before, raw_reference={"marker": "comparison-side"}),
+        )
+        workspace._baseline_comparison_result = replace(
+            result,
+            after_source=BaselineComparisonSource(reference_id),
+            before_source=BaselineComparisonSource(comparison_id),
+        )
+        payloads: list[object] = []
+        self.page.content_service.load_attachments = (  # type: ignore[method-assign]
+            lambda _settings, _item_id, **kwargs: payloads.append(kwargs.get("raw_payload")) or ()
+        )
+        workspace._load_comparison_activity(comparison, ItemActivityKind.ATTACHMENT, False)
+        return payloads
+
+    def test_comparison_attachments_never_cache_a_baseline_time_payload_as_current(self) -> None:
+        """두 시점이 모두 Baseline 이면 그 시점 응답을 현재 첨부로 캐시하지 않도록 raw 를 넘기지 않는다."""
+        self.assertEqual(self._request_comparison_attachments(24681001, 24681002), [None])
+
+    def test_comparison_attachments_reuse_only_the_current_state_payload(self) -> None:
+        self.assertEqual(self._request_comparison_attachments(None, 24681001), [{"marker": "reference-side"}])
+        self.assertEqual(self._request_comparison_attachments(24681001, None), [{"marker": "comparison-side"}])
+
+    def test_detail_dialog_export_records_the_items_own_tracker(self) -> None:
+        """상세 창에서 다른 트래커의 아이템으로 옮겨 간 뒤에도 기록은 그 아이템의 트래커와 프로젝트를 가리킨다."""
+        self.page.activate()
+        page_tracker = self.page._current_tracker
+        other = TrackerItemDetail.from_raw(
+            {
+                "id": 9009001,
+                "name": "Other tracker item",
+                "version": 1,
+                "tracker": {
+                    "id": 24689999,
+                    "name": "Other Tracker",
+                    "project": {"id": 246899, "name": "Other Project"},
+                },
+            }
+        )
+        dialog = TrackerItemDetailDialog(other, description_html="<p>x</p>")
+        self.addCleanup(dialog.close)
+        request = object()
+
+        with patch("src.gui.tracker_detail_dialog.run_activity_export") as export:
+            self.page.detail_dialog.export_activity(dialog, request)  # type: ignore[arg-type]
+
+        self.assertNotEqual(page_tracker.tracker_id, 24689999)
+        kwargs = export.call_args.kwargs
+        self.assertEqual(
+            (kwargs["tracker_id"], kwargs["tracker_name"], kwargs["project_id"], kwargs["project_name"]),
+            (24689999, "Other Tracker", 246899, "Other Project"),
+        )
+
+    def test_detail_dialog_export_falls_back_to_the_workspace_tracker(self) -> None:
+        """아이템 응답에 트래커가 없으면 작업공간에서 고른 트래커로 적는다."""
+        self.page.activate()
+        tracker = self.page._current_tracker
+        bare = TrackerItemDetail.from_raw({"id": 9009002, "name": "Bare item", "version": 1})
+        dialog = TrackerItemDetailDialog(bare, description_html="<p>x</p>")
+        self.addCleanup(dialog.close)
+
+        with patch("src.gui.tracker_detail_dialog.run_activity_export") as export:
+            self.page.detail_dialog.export_activity(dialog, object())  # type: ignore[arg-type]
+
+        kwargs = export.call_args.kwargs
+        self.assertEqual((kwargs["tracker_id"], kwargs["tracker_name"]), (tracker.tracker_id, tracker.name))
 
     def test_baseline_confirmation_cancel_does_not_call_full_compare(self) -> None:
         self.page.activate()

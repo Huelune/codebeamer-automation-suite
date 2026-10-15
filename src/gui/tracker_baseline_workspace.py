@@ -47,6 +47,7 @@ from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
 from .item_activity import ItemActivityKind
 from .item_activity_export import ItemActivityExportRequest
+from .item_activity_panel import BETWEEN_POINTS_LABEL
 from .item_activity_panel import run_activity_export
 from .settings_store import GuiSettings
 from .tracker_baseline_compare import BaselineComparisonKind
@@ -262,8 +263,17 @@ class BaselineWorkspacePanel(QWidget):
         present = [item for item in (comparison.reference, comparison.comparison) if item is not None]
         latest = max(present, key=lambda item: item.version if item.version is not None else -1, default=None)
         latest_version = latest.version if latest is not None else None
-        # 더 늦은 시점의 아이템 응답에 첨부가 있으면 그것을 쓰고, 없으면 첨부 목록을 묻는다.
-        raw = latest.raw_reference if latest is not None else None
+        # 첨부 캐시는 아이템의 "현재" 목록이라 Baseline 시점의 응답은 넘기지 않는다.
+        # 두 시점 중 현재 상태 쪽 응답이 있을 때만 쓰고, 아니면 첨부 목록을 묻는다.
+        raw: dict[str, Any] | None = None
+        result = self._baseline_comparison_result
+        if result is not None:
+            for item, source in (
+                (comparison.reference, result.reference_source),
+                (comparison.comparison, result.comparison_source),
+            ):
+                if item is not None and source.is_head:
+                    raw = item.raw_reference
 
         def operation() -> Any:
             if kind is ItemActivityKind.FIELD_CHANGE:
@@ -285,6 +295,12 @@ class BaselineWorkspacePanel(QWidget):
         project = self._host.current_project()
         if tracker is not None:
             request = replace(request, tracker_name=f"{tracker.name} (ID {tracker.tracker_id})")
+        if request.scope_label == BETWEEN_POINTS_LABEL:
+            # 파일만 봐도 어느 두 시점인지 알 수 있게 화면의 두 칸 글자를 붙인다.
+            reference_label, comparison_label = self.baseline_comparison_panel.source_labels()
+            request = replace(
+                request, scope_label=f"{BETWEEN_POINTS_LABEL} ({reference_label} → {comparison_label})"
+            )
         run_activity_export(
             self,
             self.baseline_comparison_panel.activity_panel,

@@ -32,6 +32,7 @@ from .item_activity import ActivityScope
 from .item_activity import ItemActivityKind
 from .item_activity import parse_server_time
 from .item_activity_export import ItemActivityExportRequest
+from .item_activity_panel import BETWEEN_POINTS_LABEL
 from .item_activity_panel import ItemActivityPanel
 from .tracker_baseline_compare import BaselineComparisonKind
 from .tracker_baseline_compare import BaselineComparisonResult
@@ -340,7 +341,7 @@ class BaselineComparisonPanel(QWidget):
             earliest = datetime.min.replace(tzinfo=UTC)
             start, end = sorted(times, key=lambda value: (value is None, value or earliest))
         return ActivityScope(
-            "비교 시점 사이",
+            BETWEEN_POINTS_LABEL,
             after=start,
             until=end,
             versions=version_range,

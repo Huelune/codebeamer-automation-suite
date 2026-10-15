@@ -63,6 +63,7 @@ from .tracker_workspace_support import SortableTableItem
 
 
 BETWEEN_POINTS = "between"
+BETWEEN_POINTS_LABEL = "비교 시점 사이"
 ALL_SCOPE_DATA = ""
 _RELATION_TOOLTIP = "서버 응답에 시각 정보가 없어 지원하지 않습니다"
 _NO_CREATED_AT_TOOLTIP = "생성 시각이 없어 기준으로 쓸 수 없습니다"
@@ -283,7 +284,7 @@ class ItemActivityPanel(QWidget):
         combo.blockSignals(True)
         combo.clear()
         if self._between_points:
-            combo.addItem("비교 시점 사이", BETWEEN_POINTS)
+            combo.addItem(BETWEEN_POINTS_LABEL, BETWEEN_POINTS)
         combo.addItem("전체", ALL_SCOPE_DATA)
         model = combo.model()
         for baseline in self._baselines.values():
