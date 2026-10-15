@@ -17,6 +17,7 @@ from .common import _camel_to_snake
 from .common import _coerce_bool
 from .common import _drop_none
 from .common import _stringify_scalar
+from .common import format_codebeamer_datetime
 from .field_values import AbstractFieldValue
 from .field_values import _build_field_value
 from .references import AbstractReference
@@ -87,6 +88,11 @@ class TrackerItemBase(DomainModel):
         "ordinal",
         "story_points",
         "version",
+    }
+    # 서버 날짜 형식으로 바꿔 보내는 기본 필드
+    DATE_FIELDS: ClassVar[set[str]] = {
+        "end_date",
+        "start_date",
     }
     STRING_FIELDS: ClassVar[set[str]] = {
         "closed_at",
@@ -315,6 +321,10 @@ class TrackerItemBase(DomainModel):
 
         if field_type == SchemaFieldType.BOOL.value and value is not None:
             setattr(self, tracker_field, _coerce_bool(value))
+            return True
+
+        if tracker_field in self.DATE_FIELDS and value is not None:
+            setattr(self, tracker_field, format_codebeamer_datetime(value))
             return True
 
         if tracker_field in self.STRING_FIELDS and value is not None:

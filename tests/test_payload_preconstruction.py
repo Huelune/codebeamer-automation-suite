@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
+from datetime import datetime
 
 import pandas as pd
 
@@ -203,6 +205,52 @@ class TrackerItemPreconstructionTest(unittest.TestCase):
                     "preconstruction_kind": PreconstructionKind.NONE.value,
                 },
             )
+
+
+    DATE_CASES = (
+        (datetime(2026, 10, 13, 9, 30), "2026-10-13T09:30:00.000"),
+        (date(2026, 10, 13), "2026-10-13T00:00:00.000"),
+        (pd.Timestamp("2026-10-13 09:30:15.123456"), "2026-10-13T09:30:15.123"),
+        ("2026-10-13", "2026-10-13T00:00:00.000"),
+        (" 2026/10/13 09:30 ", "2026-10-13T09:30:00.000"),
+        ("2026.10.13", "2026-10-13T00:00:00.000"),
+        ("2026-10-13T09:30:00.000", "2026-10-13T09:30:00.000"),
+    )
+
+    @staticmethod
+    def _date_field_info(*, builtin: bool) -> dict:
+        return {
+            "field_id": 1,
+            "field_name": "Start Date" if builtin else "Due Date",
+            "field_type": "DateField",
+            "is_supported": True,
+            "payload_target_kind": (
+                PayloadTargetKind.BUILTIN_FIELD.value if builtin else PayloadTargetKind.CUSTOM_FIELD.value
+            ),
+            "preconstruction_kind": (
+                PreconstructionKind.BUILTIN_DIRECT.value if builtin else PreconstructionKind.FIELD_VALUE.value
+            ),
+        }
+
+    def test_date_values_are_sent_in_the_server_format(self) -> None:
+        """서버는 날짜를 `YYYY-MM-DDTHH:MM:SS.fff`로 돌려준다. 보낼 때도 같은 모양으로 맞춘다."""
+        for raw_value, expected in self.DATE_CASES:
+            with self.subTest(raw_value=raw_value):
+                custom = TrackerItemBase()._create_field_value(self._date_field_info(builtin=False), raw_value)
+                self.assertIsInstance(custom, DateFieldValue)
+                self.assertEqual(custom.value, expected)
+
+                item = TrackerItemBase()
+                item.set_field_value("start_date", raw_value, self._date_field_info(builtin=True))
+                self.assertEqual(item.start_date, expected)
+
+    def test_unreadable_date_text_is_rejected_instead_of_sent_as_is(self) -> None:
+        for raw_value in ("13/10/2026", "내일", 46308):
+            with self.subTest(raw_value=raw_value):
+                with self.assertRaisesRegex(ValueError, "날짜"):
+                    TrackerItemBase()._create_field_value(self._date_field_info(builtin=False), raw_value)
+                with self.assertRaisesRegex(ValueError, "날짜"):
+                    TrackerItemBase().set_field_value("end_date", raw_value, self._date_field_info(builtin=True))
 
 
 class WizardPayloadResolutionTest(unittest.TestCase):

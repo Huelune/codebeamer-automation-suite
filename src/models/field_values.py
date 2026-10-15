@@ -15,6 +15,7 @@ from .common import _coerce_bool
 from .common import _drop_none
 from .common import _serialize_value
 from .common import _stringify_scalar
+from .common import format_codebeamer_datetime
 from .references import _build_reference
 
 
@@ -376,10 +377,10 @@ class DateFieldValue(AbstractFieldValue):
 
     @classmethod
     def from_value(cls, field_info: FieldInfo, value: Any) -> DateFieldValue:
-        """입력값을 문자열로 보존해 날짜 필드 값 객체를 만든다."""
+        """입력값을 서버 날짜 형식으로 바꿔 날짜 필드 값 객체를 만든다."""
         return cls(
             **cls._base_kwargs(field_info),
-            value=_stringify_scalar(value),
+            value=format_codebeamer_datetime(value),
         )
 
 
