@@ -18,6 +18,7 @@ except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
 
+import html
 from collections.abc import Sequence
 
 from .item_activity import BaselineMarker
@@ -34,6 +35,14 @@ MAX_TOOLTIP_TEXT = 4000
 
 def _short(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def plain_tooltip(text: str) -> str:
+    """서버 값을 툴팁에 글자 그대로 보인다. Qt는 HTML처럼 보이는 글을 서식으로 해석하므로 막는다."""
+    if not text:
+        # 빈 글을 <qt></qt>로 감싸면 내용 없는 툴팁 상자가 뜬다.
+        return ""
+    return "<qt>" + html.escape(str(text)).replace("\n", "<br>") + "</qt>"
 
 
 def history_time_text(value: str) -> str:
@@ -82,7 +91,7 @@ class ItemChangeHistoryView(QTreeWidget):
                 boundary_shown = True
             text = self._entry_text(entry, current_version)
             row = self._add_spanned_row(f"[Baseline 이후] {text}" if after_baseline else text)
-            row.setToolTip(0, entry.at)
+            row.setToolTip(0, plain_tooltip(entry.at))
             font = row.font(0)
             font.setBold(True)
             row.setFont(0, font)
@@ -106,13 +115,13 @@ class ItemChangeHistoryView(QTreeWidget):
             ]
             child = QTreeWidgetItem([_short(value, MAX_CELL_TEXT) for value in values])
             for column, value in enumerate(values):
-                child.setToolTip(column, _short(value, MAX_TOOLTIP_TEXT))
+                child.setToolTip(column, plain_tooltip(_short(value, MAX_TOOLTIP_TEXT)))
             row.addChild(child)
 
     @staticmethod
     def _add_text_row(row: QTreeWidgetItem, text: str) -> None:
         child = QTreeWidgetItem([_short(text, MAX_CELL_TEXT)])
-        child.setToolTip(0, _short(text, MAX_TOOLTIP_TEXT))
+        child.setToolTip(0, plain_tooltip(_short(text, MAX_TOOLTIP_TEXT)))
         row.addChild(child)
         child.setFirstColumnSpanned(True)
 

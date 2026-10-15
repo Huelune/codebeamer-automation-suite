@@ -27,6 +27,7 @@ class ActivityOperation(str, Enum):
     BATCH_UPLOAD = "batch_upload"
     BASELINE_EXPORT = "baseline_export"
     TRACKER_HIERARCHY_EXPORT = "tracker_hierarchy_export"
+    ITEM_HISTORY_EXPORT = "item_history_export"
 
 
 class ActivityResult(str, Enum):
@@ -45,6 +46,7 @@ ACTIVITY_OPERATION_LABELS = {
     ActivityOperation.BATCH_UPLOAD: "배치 작업",
     ActivityOperation.BASELINE_EXPORT: "Baseline Excel 내보내기",
     ActivityOperation.TRACKER_HIERARCHY_EXPORT: "트래커 계층 Excel 내보내기",
+    ActivityOperation.ITEM_HISTORY_EXPORT: "변경 이력 Excel 내보내기",
 }
 
 ACTIVITY_RESULT_LABELS = {

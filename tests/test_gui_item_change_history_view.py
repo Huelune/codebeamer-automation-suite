@@ -136,6 +136,24 @@ class ItemChangeHistoryViewTest(unittest.TestCase):
         # Baseline 안쪽 이력이 없으면 구분선도 두지 않는다.
         self.assertEqual(view.topLevelItemCount(), 1)
 
+    def test_tooltips_show_server_values_as_plain_text(self) -> None:
+        view = self._view()
+
+        view.show_entries(
+            (
+                ItemActivityEntry(
+                    FIELD, version=2, changes=(ItemFieldChange("Note", "<b>old</b>", "<img src=x>"),)
+                ),
+                ItemActivityEntry(ItemActivityKind.COMMENT, at="2026-07-20T09:10:00Z", body="<i>hi</i>\nnext"),
+            )
+        )
+
+        field_row = view.topLevelItem(0).child(0)
+        self.assertEqual(field_row.toolTip(1), "<qt>&lt;b&gt;old&lt;/b&gt;</qt>")
+        self.assertEqual(field_row.toolTip(2), "<qt>&lt;img src=x&gt;</qt>")
+        comment_body = view.topLevelItem(1).child(0)
+        self.assertEqual(comment_body.toolTip(0), "<qt>&lt;i&gt;hi&lt;/i&gt;<br>next</qt>")
+
     def test_time_text_keeps_unknown_shapes(self) -> None:
         self.assertEqual(history_time_text("2026-07-20T10:45:36.456"), "2026-07-20 10:45")
         self.assertEqual(history_time_text("2026-07-20T10:45:36Z"), "2026-07-20 10:45")
