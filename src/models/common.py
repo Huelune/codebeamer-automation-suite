@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 import re
+from datetime import date
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -274,6 +276,55 @@ def _stringify_scalar(value: Any) -> str | None:
     if normalized is None:
         return None
     return str(normalized)
+
+
+# 서버가 날짜를 돌려주는 모양. 보낼 때도 같은 모양으로 맞춘다(시간대 표시 없음, 밀리초 3자리).
+CODEBEAMER_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
+_DATE_TEXT_FORMATS = (
+    "%Y/%m/%d %H:%M:%S",
+    "%Y/%m/%d %H:%M",
+    "%Y/%m/%d",
+    "%Y.%m.%d %H:%M:%S",
+    "%Y.%m.%d %H:%M",
+    "%Y.%m.%d",
+)
+
+
+def format_codebeamer_datetime(value: Any) -> str | None:
+    """날짜 셀 값을 서버 형식 `YYYY-MM-DDTHH:MM:SS.fff`로 바꾼다.
+
+    datetime·date와 `YYYY-MM-DD`(`/`, `.` 구분 포함) 문자열만 받는다. 일·월 순서가 모호한 문자열이나
+    숫자는 날짜를 잘못 보낼 수 있으므로 그대로 보내지 않고 오류로 막는다.
+    """
+    normalized = _normalize_scalar_value(value)
+    # pandas의 빈 시각(NaT)은 자기 자신과도 같지 않다.
+    if normalized is None or normalized != normalized:
+        return None
+    if isinstance(normalized, datetime):
+        moment = normalized
+    elif isinstance(normalized, date):
+        moment = datetime(normalized.year, normalized.month, normalized.day)
+    elif isinstance(normalized, str) and normalized.strip():
+        moment = _parse_date_text(normalized.strip())
+    else:
+        raise ValueError("날짜 값을 읽을 수 없습니다. YYYY-MM-DD 또는 YYYY-MM-DD HH:MM 형식으로 적어 주세요.")
+    if moment.tzinfo is not None:
+        # 서버 값에는 시간대 표시가 없다. 시간대가 붙은 값은 이 PC 시각으로 바꿔 보낸다.
+        moment = moment.astimezone().replace(tzinfo=None)
+    return f"{moment.strftime(CODEBEAMER_DATETIME_FORMAT)}.{moment.microsecond // 1000:03d}"
+
+
+def _parse_date_text(text: str) -> datetime:
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        pass
+    for date_format in _DATE_TEXT_FORMATS:
+        try:
+            return datetime.strptime(text, date_format)
+        except ValueError:
+            continue
+    raise ValueError("날짜 값을 읽을 수 없습니다. YYYY-MM-DD 또는 YYYY-MM-DD HH:MM 형식으로 적어 주세요.")
 
 
 def _serialize_value(value: Any) -> Any:

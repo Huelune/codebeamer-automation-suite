@@ -314,6 +314,16 @@ builtin `subjects` 는 현재 direct parse 규칙만 사용합니다.
 
 - tracker configuration은 조회하지 않고 ID 추출 규칙만 적용합니다.
 
+## 날짜 필드 처리 규칙
+
+- 사용자 정의 `DateField`와 기본 필드 `startDate`·`endDate`는 서버가 돌려주는 모양
+  `YYYY-MM-DDTHH:MM:SS.fff`(시간대 표시 없음)로 바꿔 보냅니다. 실서버 응답으로 확인했습니다(2026-10).
+- Excel 날짜 셀(datetime·date)과 `YYYY-MM-DD`, `YYYY/MM/DD`, `YYYY.MM.DD`(뒤에 `HH:MM[:SS]` 허용) 문자열을 받습니다.
+  날짜만 있으면 `00:00:00.000`으로 보냅니다.
+- `13/10/2026`처럼 일·월 순서가 모호한 문자열과 숫자는 날짜를 잘못 보낼 수 있으므로 payload 오류로 막습니다.
+- 시간대가 붙은 값은 이 PC 시각으로 바꿔 보냅니다.
+- 변환 함수는 `src/models/common.py`의 `format_codebeamer_datetime`이며, 단건 편집기도 같은 함수를 씁니다.
+
 ## `Status` 처리 규칙
 
 현재 구현은 `Status` 를 schema option 기준으로만 해석하고 있으며,
