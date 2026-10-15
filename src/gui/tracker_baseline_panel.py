@@ -25,6 +25,8 @@ try:
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
+from .item_activity import history_entries
+from .item_activity import merge_entries
 from .item_change_history_view import ItemChangeHistoryView
 from .tracker_baseline_compare import BaselineComparisonKind
 from .tracker_baseline_compare import BaselineComparisonResult
@@ -313,7 +315,7 @@ class BaselineComparisonPanel(QWidget):
         entries = [
             entry for entry in snapshot.entries if entry.version is not None and low < entry.version <= high
         ]
-        self.history_view.show_entries(entries)
+        self.history_view.show_entries(merge_entries(history_entries(ItemHistorySnapshot(tuple(entries)))))
         if low == high:
             text = f"두 시점의 버전이 같아(버전 {high}) 사이 변경이 없습니다."
         elif low == 0:

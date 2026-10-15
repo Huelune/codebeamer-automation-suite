@@ -33,6 +33,9 @@ try:
 except ImportError as exc:  # pragma: no cover
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
+from .item_activity import BaselineMarker
+from .item_activity import history_entries
+from .item_activity import merge_entries
 from .item_change_history_view import ItemChangeHistoryView
 from .tracker_comment_models import ItemComment
 from .tracker_comment_models import ItemCommentsSnapshot
@@ -404,15 +407,16 @@ class TrackerItemDetailDialog(QDialog):
 
     def set_history(self, snapshot: ItemHistorySnapshot) -> None:
         self._context_states["history"] = "loaded"
+        entries = merge_entries(history_entries(snapshot))
         baseline_version = self.detail.version if self.baseline_id is not None else None
         if baseline_version is None:
-            self.history_view.show_entries(snapshot.entries, current_version=snapshot.current_version)
+            self.history_view.show_entries(entries, current_version=snapshot.current_version)
             status = f"변경 이력 {len(snapshot.entries)}건" if snapshot.entries else "변경 이력이 없습니다."
         else:
             # 이력은 아이템 전체 이력이다. 이 창의 버전이 Baseline 시점이므로 그 뒤 변경을 나눠 보인다.
             self.history_view.show_entries(
-                snapshot.entries,
-                baseline=(baseline_version, f"Baseline #{self.baseline_id}"),
+                entries,
+                baseline=BaselineMarker(f"Baseline #{self.baseline_id}", version=baseline_version),
             )
             later = sum(entry.version is not None and entry.version > baseline_version for entry in snapshot.entries)
             status = f"변경 이력 {len(snapshot.entries)}건 · 이 Baseline 이후 {later}건"

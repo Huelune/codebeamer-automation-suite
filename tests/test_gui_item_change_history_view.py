@@ -6,12 +6,18 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from src.gui.item_activity import BaselineMarker
+from src.gui.item_activity import ItemActivityEntry
+from src.gui.item_activity import ItemActivityKind
+from src.gui.item_activity import parse_server_time
 from src.gui.item_change_history_view import MAX_CELL_TEXT
 from src.gui.item_change_history_view import ItemChangeHistoryView
 from src.gui.item_change_history_view import history_time_text
 from src.gui.tracker_item_context_models import ItemFieldChange
-from src.gui.tracker_item_context_models import ItemHistoryEntry
 from tests.gui_widget_cleanup import tearDownModule  # noqa: F401
+
+
+FIELD = ItemActivityKind.FIELD_CHANGE
 
 
 class ItemChangeHistoryViewTest(unittest.TestCase):
@@ -32,10 +38,11 @@ class ItemChangeHistoryViewTest(unittest.TestCase):
 
         view.show_entries(
             (
-                ItemHistoryEntry(
-                    2,
-                    "2026-07-20T10:45:36.456",
-                    "Sample User A",
+                ItemActivityEntry(
+                    FIELD,
+                    at="2026-07-20T10:45:36.456",
+                    by="Sample User A",
+                    version=2,
                     changes=(
                         ItemFieldChange("Description", "짧은 설명", long_text),
                         ItemFieldChange(
@@ -45,7 +52,9 @@ class ItemChangeHistoryViewTest(unittest.TestCase):
                         ),
                     ),
                 ),
-                ItemHistoryEntry(1, "2026-07-19T08:00:00Z", "Sample User B", change_summary="Created"),
+                ItemActivityEntry(
+                    FIELD, at="2026-07-19T08:00:00Z", by="Sample User B", version=1, change_summary="Created"
+                ),
             ),
             current_version=2,
         )
@@ -61,29 +70,70 @@ class ItemChangeHistoryViewTest(unittest.TestCase):
         owners = first.child(1)
         self.assertEqual(owners.text(1), "-")
         self.assertIn("Sample User A", owners.text(2))
-        # 바뀐 필드 정보가 없는 버전은 변경 요약을 보인다.
         second = view.topLevelItem(1)
         self.assertEqual(second.text(0), "버전 1 · 2026-07-19 08:00 · Sample User B")
         self.assertEqual(second.child(0).text(0), "Created")
 
-    def test_baseline_boundary_is_placed_before_the_baseline_version(self) -> None:
+    def test_comment_and_attachment_rows(self) -> None:
         view = self._view()
-        entries = [ItemHistoryEntry(version) for version in (3, 2, 1)]
 
-        view.show_entries(entries, baseline=(2, "Baseline #7"))
+        view.show_entries(
+            (
+                ItemActivityEntry(
+                    ItemActivityKind.COMMENT,
+                    at="2026-07-20T09:10:00Z",
+                    by="Sample User B",
+                    title="댓글 #51001",
+                    body="Review note",
+                    edited=True,
+                    attachment_names=("anonymous-evidence.txt",),
+                ),
+                ItemActivityEntry(
+                    ItemActivityKind.ATTACHMENT,
+                    at="2026-07-18T11:00:00Z",
+                    title="anonymous-spec.txt",
+                    body="2,048 bytes · text/plain",
+                ),
+            )
+        )
+
+        comment = view.topLevelItem(0)
+        self.assertEqual(comment.text(0), "댓글 · 2026-07-20 09:10 · Sample User B (수정됨)")
+        self.assertEqual(
+            [comment.child(index).text(0) for index in range(comment.childCount())],
+            ["Review note", "첨부: anonymous-evidence.txt"],
+        )
+        attachment = view.topLevelItem(1)
+        self.assertEqual(
+            attachment.text(0), "첨부 · 2026-07-18 11:00 · anonymous-spec.txt · 2,048 bytes · text/plain"
+        )
+        self.assertEqual(attachment.childCount(), 0)
+
+    def test_baseline_boundary_is_placed_before_the_first_entry_inside_the_baseline(self) -> None:
+        view = self._view()
+        marker = BaselineMarker("Baseline #7", version=2, created_at=parse_server_time("2026-07-19T00:00:00Z"))
+        entries = [
+            ItemActivityEntry(FIELD, version=3),
+            ItemActivityEntry(ItemActivityKind.COMMENT, at="2026-07-20T00:00:00Z", by="Sample User A"),
+            ItemActivityEntry(FIELD, version=2),
+            ItemActivityEntry(FIELD, version=1),
+        ]
+
+        view.show_entries(entries, baseline=marker)
 
         self.assertEqual(
             [view.topLevelItem(index).text(0) for index in range(view.topLevelItemCount())],
             [
                 "[Baseline 이후] 버전 3",
+                "[Baseline 이후] 댓글 · 2026-07-20 00:00 · Sample User A",
                 "── Baseline #7 시점 (버전 2) ──",
                 "버전 2",
                 "버전 1",
             ],
         )
 
-        view.show_entries([ItemHistoryEntry(5)], baseline=(2, "Baseline #7"))
-        # Baseline 버전 이전 이력이 없으면 구분선도 두지 않는다.
+        view.show_entries([ItemActivityEntry(FIELD, version=5)], baseline=marker)
+        # Baseline 안쪽 이력이 없으면 구분선도 두지 않는다.
         self.assertEqual(view.topLevelItemCount(), 1)
 
     def test_time_text_keeps_unknown_shapes(self) -> None:
