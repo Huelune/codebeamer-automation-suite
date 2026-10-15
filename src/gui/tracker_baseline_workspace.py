@@ -12,6 +12,7 @@ Baseline 두 개를 골라 비교하고, 결과 표를 걸러 보고, Excel 로 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace
 
 
 try:
@@ -44,6 +45,9 @@ from typing import Any
 from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
+from .item_activity import ItemActivityKind
+from .item_activity_export import ItemActivityExportRequest
+from .item_activity_panel import run_activity_export
 from .settings_store import GuiSettings
 from .tracker_baseline_compare import BaselineComparisonKind
 from .tracker_baseline_compare import BaselineComparisonResult
@@ -102,13 +106,17 @@ class BaselineWorkspacePanel(QWidget):
         settings_provider: Callable[[], GuiSettings],
         service: Any,
         context_service: Any,
+        comment_service: Any,
+        content_service: Any,
     ) -> None:
         super().__init__(parent)
         self._host = host
         self.settings_provider = settings_provider
         self.service = service
-        # 비교 결과에서 고른 아이템의 변경 이력. 상세 창 이력 탭과 같은 조회·캐시를 쓴다.
+        # 비교 결과에서 고른 아이템의 이력·댓글·첨부. 상세 창과 같은 서비스와 캐시를 쓴다.
         self.context_service = context_service
+        self.comment_service = comment_service
+        self.content_service = content_service
 
         self._baseline_selected_item_id: int | None = None
         self._baseline_comparison_result: BaselineComparisonResult | None = None
@@ -218,7 +226,8 @@ class BaselineWorkspacePanel(QWidget):
             self._on_baseline_sources_changed,
             self._export_baseline_comparison,
             splitter,
-            request_history=self._load_comparison_history,
+            request_activity=self._load_comparison_activity,
+            export_activity=self._export_comparison_activity,
         )
         panel.setObjectName("tracker_baseline_comparison_panel")
         self.baseline_comparison_panel = panel
@@ -241,21 +250,53 @@ class BaselineWorkspacePanel(QWidget):
     def set_error(self, message: str) -> None:
         self.baseline_comparison_panel.set_error(message)
 
-    def _load_comparison_history(self, comparison: TrackerItemComparison) -> None:
-        """고른 아이템의 전체 이력을 받는다. 두 시점 사이 버전은 비교 패널이 고른다."""
+    def _load_comparison_activity(
+        self,
+        comparison: TrackerItemComparison,
+        kind: ItemActivityKind,
+        force: bool,
+    ) -> None:
+        """고른 아이템의 이력·댓글·첨부를 유형마다 따로 받는다. 한 유형이 실패해도 나머지는 보인다."""
         settings = self.settings_provider()
         item_id = comparison.item_id
-        versions = [
-            item.version
-            for item in (comparison.reference, comparison.comparison)
-            if item is not None and item.version is not None
-        ]
+        present = [item for item in (comparison.reference, comparison.comparison) if item is not None]
+        latest = max(present, key=lambda item: item.version if item.version is not None else -1, default=None)
+        latest_version = latest.version if latest is not None else None
+        # 더 늦은 시점의 아이템 응답에 첨부가 있으면 그것을 쓰고, 없으면 첨부 목록을 묻는다.
+        raw = latest.raw_reference if latest is not None else None
+
+        def operation() -> Any:
+            if kind is ItemActivityKind.FIELD_CHANGE:
+                return self.context_service.load_history(settings, item_id, latest_version, force=force)
+            if kind is ItemActivityKind.COMMENT:
+                return self.comment_service.load_comments(settings, item_id, latest_version, force=force)
+            return self.content_service.load_attachments(settings, item_id, raw_payload=raw)
+
         panel = self.baseline_comparison_panel
         self._host.submit(
-            "baseline_item_history",
-            lambda: self.context_service.load_history(settings, item_id, max(versions, default=None)),
-            lambda snapshot: panel.set_history(item_id, snapshot),
-            lambda exc: panel.set_history_error(item_id, str(exc)),
+            f"baseline_item_activity:{kind.value}",
+            operation,
+            lambda data: panel.set_activity(item_id, kind, data),
+            lambda exc: panel.set_activity_error(item_id, kind, str(exc)),
+        )
+
+    def _export_comparison_activity(self, request: ItemActivityExportRequest) -> None:
+        tracker = self._host.current_tracker()
+        project = self._host.current_project()
+        if tracker is not None:
+            request = replace(request, tracker_name=f"{tracker.name} (ID {tracker.tracker_id})")
+        run_activity_export(
+            self,
+            self.baseline_comparison_panel.activity_panel,
+            request,
+            submit=self._host.submit,
+            record_activity=self._host.record_activity,
+            show_error=self._host.show_error,
+            source="tracker_workspace",
+            project_id=project.project_id if project else (tracker.project_id if tracker else None),
+            project_name=project.name if project else (tracker.project_name if tracker else ""),
+            tracker_id=tracker.tracker_id if tracker else None,
+            tracker_name=tracker.name if tracker else "",
         )
 
     def reset_state(self, message: str) -> None:

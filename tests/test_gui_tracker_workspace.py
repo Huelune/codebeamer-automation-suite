@@ -25,6 +25,8 @@ from PySide6.QtWidgets import QDialog
 from PySide6.QtWidgets import QMessageBox
 from shiboken6 import isValid
 
+from src.gui.item_activity import ItemActivityKind
+from src.gui.item_activity_export import ItemActivityExportSummary
 from src.gui.settings_store import GuiSettings
 from src.gui.styles import build_gui_stylesheet
 from src.gui.tracker_baseline_compare import BaselineComparisonKind
@@ -811,16 +813,8 @@ class TrackerWorkspacePageTest(unittest.TestCase):
                 return
         self.fail(f"#{item_id}이 비교 결과에 없습니다.")
 
-    def test_comparison_history_shows_field_changes_between_the_two_points(self) -> None:
-        """비교 결과에서 고른 아이템의 두 시점 사이 버전별 필드 변경을 이력 탭을 열 때만 조회해 보인다."""
-        load_history = self.page.context_service.load_history
-        requested: list[tuple[int, int | None]] = []
-
-        def recording_load_history(settings, item_id, item_version, **kwargs):
-            requested.append((item_id, item_version))
-            return load_history(settings, item_id, item_version, **kwargs)
-
-        self.page.context_service.load_history = recording_load_history  # type: ignore[method-assign]
+    def _open_comparison_history(self, item_id: int = 9001001):
+        """현재 상태와 샘플 Baseline을 전체 비교하고 아이템을 골라 변경 이력 탭을 연다."""
         self.page.activate()
         self.page.workspace_mode_tabs.setCurrentIndex(self.page.baseline_mode_index)
         self._app.processEvents()
@@ -828,43 +822,124 @@ class TrackerWorkspacePageTest(unittest.TestCase):
         panel.after_combo.setCurrentIndex(panel.after_combo.findData(24681001))
         panel.run_button.click()
         self._app.processEvents()
-        self._select_comparison_row(9001001)
+        self._select_comparison_row(item_id)
+        return panel
+
+    def test_comparison_history_lists_changes_comments_and_attachments_between_the_two_points(self) -> None:
+        """비교 결과에서 고른 아이템의 두 시점 사이 이력을 탭을 열 때만 유형별로 조회해 시간순으로 보인다."""
+        requested: list[tuple[str, int, int | None]] = []
+        load_history = self.page.context_service.load_history
+        load_comments = self.page.comment_service.load_comments
+        load_attachments = self.page.content_service.load_attachments
+
+        def recording_history(settings, item_id, item_version, **kwargs):
+            requested.append(("history", item_id, item_version))
+            return load_history(settings, item_id, item_version, **kwargs)
+
+        def recording_comments(settings, item_id, item_version, **kwargs):
+            requested.append(("comments", item_id, item_version))
+            return load_comments(settings, item_id, item_version, **kwargs)
+
+        def recording_attachments(settings, item_id, **kwargs):
+            requested.append(("attachments", item_id, None))
+            return load_attachments(settings, item_id, **kwargs)
+
+        self.page.context_service.load_history = recording_history  # type: ignore[method-assign]
+        self.page.comment_service.load_comments = recording_comments  # type: ignore[method-assign]
+        self.page.content_service.load_attachments = recording_attachments  # type: ignore[method-assign]
+        panel = self._open_comparison_history()
+        activity = panel.activity_panel
 
         # 필드 비교만 볼 때는 이력을 묻지 않는다.
         self.assertEqual(requested, [])
-        self.assertIn("탭을 열면", panel.history_status.text())
+        self.assertEqual(activity.status_label.text(), "#9001001 · 탭을 열면 변경 이력을 조회합니다.")
+        self.assertEqual(activity.baseline_combo.currentText(), "비교 시점 사이")
 
         panel.detail_tabs.setCurrentWidget(panel.history_tab)
         self._app.processEvents()
 
-        self.assertEqual(requested, [(9001001, 3)])
-        self.assertEqual(panel.history_status.text(), "#9001001 · 버전 1 → 3 사이 변경 2건")
-        view = panel.history_view
+        self.assertEqual(
+            requested,
+            [("history", 9001001, 3), ("comments", 9001001, 3), ("attachments", 9001001, None)],
+        )
+        # 필드 변경은 버전 1 → 3 사이, 댓글·첨부는 Baseline 생성 시각(07-15) 뒤만 남는다.
+        self.assertEqual(
+            activity.status_label.text(),
+            "#9001001 · 비교 시점 사이 · 버전 2건 · 필드 변경 3건 · 바뀐 필드 3개 · 댓글 2건 · 첨부 1건",
+        )
+        view = activity.history_view
         self.assertEqual(
             [view.topLevelItem(index).text(0) for index in range(view.topLevelItemCount())],
             [
+                "댓글 · 2026-07-20 10:00 · Sample User B",
+                "댓글 · 2026-07-20 09:10 · Sample User A",
                 "버전 3 · 2026-07-20 09:00 · Sample User A · 필드 1개",
                 "버전 2 · 2026-07-19 08:00 · Sample User B · 필드 2개",
+                "첨부 · 2026-07-18 11:00 · anonymous-spec.txt · 2,048 bytes · text/plain",
             ],
         )
-        risk = view.topLevelItem(0).child(0)
+        risk = view.topLevelItem(2).child(0)
         self.assertEqual([risk.text(column) for column in range(3)], ["Risk Level", "-", "Medium"])
-        summary = view.topLevelItem(1).child(0)
+        table = activity.summary_table
         self.assertEqual(
-            [summary.text(column) for column in range(3)],
-            ["Summary", "Vehicle requirements baseline", "Vehicle requirements"],
+            {table.item(row, 0).text() for row in range(table.rowCount())},
+            {"Risk Level", "Summary", "Description"},
         )
 
-        # 탭을 연 채 다른 아이템을 고르면 그 아이템 이력을 묻는다.
+        # 탭을 연 채 다른 아이템을 고르면 그 아이템을 묻는다.
         self._select_comparison_row(9001003)
 
-        self.assertEqual(requested[-1], (9001003, 4))
-        self.assertEqual(panel.history_status.text(), "#9001003 · 버전 1 → 4 사이 변경 3건")
+        self.assertEqual(
+            requested[-3:],
+            [("history", 9001003, 4), ("comments", 9001003, 4), ("attachments", 9001003, None)],
+        )
+        self.assertTrue(activity.status_label.text().startswith("#9001003 · 비교 시점 사이 · 버전 3건"))
+        self.assertTrue(activity.status_label.text().endswith("댓글 0건 · 첨부 0건"))
 
         # 앞 아이템의 늦은 응답은 지금 고른 아이템 이력을 덮지 않는다.
-        panel.set_history(9001001, load_history(self.settings, 9001001, 3))
-        self.assertIn("#9001003", panel.history_status.text())
-        self.assertEqual(view.topLevelItemCount(), 3)
+        panel.set_activity(9001001, ItemActivityKind.FIELD_CHANGE, load_history(self.settings, 9001001, 3))
+        self.assertTrue(activity.status_label.text().startswith("#9001003"))
+
+        # 구간을 전체로 바꾸면 다시 묻지 않고 거르기만 한다.
+        request_count = len(requested)
+        activity.select_scope("")
+        self.assertEqual(len(requested), request_count)
+        self.assertTrue(activity.status_label.text().startswith("#9001003 · 전체"))
+
+    def test_comparison_history_export_saves_the_visible_range_in_background(self) -> None:
+        panel = self._open_comparison_history()
+        panel.detail_tabs.setCurrentWidget(panel.history_tab)
+        self._app.processEvents()
+        activity = panel.activity_panel
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(_DeferredTask(operation)) or tasks[-1]
+        summary = ItemActivityExportSummary(entry_count=5, row_count=6, long_value_count=0)
+
+        with (
+            patch(
+                "src.gui.item_activity_panel.QFileDialog.getSaveFileName",
+                return_value=("history.xlsx", "Excel 통합 문서 (*.xlsx)"),
+            ),
+            patch("src.gui.item_activity_panel.export_item_activity_xlsx", return_value=summary) as export_mock,
+        ):
+            activity.export_button.click()
+
+            self.assertEqual(len(tasks), 1)
+            export_mock.assert_not_called()
+            self.assertFalse(activity.export_button.isEnabled())
+            self.assertIn("Excel 파일을 만드는 중입니다.", activity.status_label.text())
+
+            tasks[0].finish()
+
+        request = export_mock.call_args.args[0]
+        tracker = self.page._current_tracker
+        self.assertEqual(request.tracker_name, f"{tracker.name} (ID {tracker.tracker_id})")
+        self.assertEqual(request.scope_label, "비교 시점 사이")
+        self.assertEqual(request.kind_labels, ("필드 변경", "댓글", "첨부"))
+        self.assertEqual(len(request.entries), 5)
+        self.assertTrue(activity.export_button.isEnabled())
+        self.assertTrue(activity.status_label.text().endswith("Excel 내보내기 완료 · 항목 5건 · 행 6개"))
 
     def test_baseline_confirmation_cancel_does_not_call_full_compare(self) -> None:
         self.page.activate()

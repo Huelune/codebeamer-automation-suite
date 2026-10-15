@@ -30,6 +30,7 @@ from src.diagnostics import DiagnosticSource
 from .activity_history import ActivityOperation
 from .activity_history import ActivityRecord
 from .activity_history import ActivityResult
+from .item_activity_export import ItemActivityExportError
 from .settings_store import MAX_RECENT_TRACKERS
 from .settings_store import GuiSettings
 from .tracker_baseline_compare import BaselineComparisonSource
@@ -484,6 +485,8 @@ class TrackerWorkspacePage(QWidget):
             settings_provider=self.settings_provider,
             service=self.service,
             context_service=self.context_service,
+            comment_service=self.comment_service,
+            content_service=self.content_service,
         )
 
     def _reset_baseline_state(self, message: str) -> None:
@@ -822,6 +825,7 @@ class TrackerWorkspacePage(QWidget):
                 TrackerQueryServiceError,
                 TrackerItemWriteError,
                 BaselineExportError,
+                ItemActivityExportError,
                 TrackerHierarchyExportError,
                 ValueError,
             ),

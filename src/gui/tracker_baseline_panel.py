@@ -6,6 +6,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC
+from datetime import datetime
+from typing import Any
 
 
 try:
@@ -25,15 +28,16 @@ try:
 except ImportError as exc:  # pragma: no cover - GUI dependency guard
     raise RuntimeError("GUI 실행에는 PySide6 패키지가 필요합니다.") from exc
 
-from .item_activity import history_entries
-from .item_activity import merge_entries
-from .item_change_history_view import ItemChangeHistoryView
+from .item_activity import ActivityScope
+from .item_activity import ItemActivityKind
+from .item_activity import parse_server_time
+from .item_activity_export import ItemActivityExportRequest
+from .item_activity_panel import ItemActivityPanel
 from .tracker_baseline_compare import BaselineComparisonKind
 from .tracker_baseline_compare import BaselineComparisonResult
 from .tracker_baseline_compare import BaselineComparisonSource
 from .tracker_baseline_compare import TrackerBaseline
 from .tracker_baseline_compare import TrackerItemComparison
-from .tracker_item_context_models import ItemHistorySnapshot
 from .tracker_workspace_support import SortableTableItem
 from .tracker_workspace_support import blend_colors
 
@@ -63,17 +67,17 @@ class BaselineComparisonPanel(QWidget):
         export_comparison: Callable[[], None],
         parent=None,
         *,
-        request_history: Callable[[TrackerItemComparison], None] | None = None,
+        request_activity: Callable[[TrackerItemComparison, ItemActivityKind, bool], None] | None = None,
+        export_activity: Callable[[ItemActivityExportRequest], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._run_comparison = run_comparison
         self._sources_changed = sources_changed
         self._export_comparison = export_comparison
-        # 고른 아이템의 전체 이력을 받는다. 두 시점 사이 버전은 이 패널이 고른다.
-        self._request_history = request_history
+        # 고른 아이템의 이력·댓글·첨부를 유형마다 받는다. 두 시점 사이 구간은 활동 패널이 거른다.
+        self._request_activity = request_activity
+        self._baselines: dict[int, TrackerBaseline] = {}
         self._selected_comparison: TrackerItemComparison | None = None
-        # 이력을 받았거나 받는 중인 아이템. 같은 아이템을 다시 골라도 다시 묻지 않는다.
-        self._history_item_id: int | None = None
         self._result: BaselineComparisonResult | None = None
         self._comparison_busy = False
         self._export_busy = False
@@ -137,14 +141,16 @@ class BaselineComparisonPanel(QWidget):
         self.history_tab = QWidget(self.detail_tabs)
         history_layout = QVBoxLayout(self.history_tab)
         history_layout.setContentsMargins(0, 0, 0, 0)
-        self.history_status = QLabel(self.history_tab)
-        self.history_status.setObjectName("tracker_panel_status")
-        self.history_status.setWordWrap(True)
-        history_layout.addWidget(self.history_status)
-        self.history_view = ItemChangeHistoryView(self.history_tab)
-        history_layout.addWidget(self.history_view, 1)
+        self.activity_panel = ItemActivityPanel(
+            self.history_tab,
+            request_kind=self._request_activity_kind,
+            between_points=True,
+        )
+        if export_activity is not None:
+            self.activity_panel.export_requested.connect(export_activity)
+        history_layout.addWidget(self.activity_panel, 1)
         self.detail_tabs.addTab(self.history_tab, "변경 이력")
-        self.detail_tabs.currentChanged.connect(self._refresh_history)
+        self.detail_tabs.currentChanged.connect(self._on_detail_tab_changed)
         layout.addWidget(self.detail_tabs, 1)
         self._select_comparison(None)
 
@@ -184,6 +190,8 @@ class BaselineComparisonPanel(QWidget):
             self.after_combo.addItem(label, baseline.baseline_id)
         self.before_combo.blockSignals(False)
         self.after_combo.blockSignals(False)
+        self._baselines = {baseline.baseline_id: baseline for baseline in baselines}
+        self.activity_panel.set_baselines(baselines)
         self.status_label.setText(
             f"현재 트래커에서 비교 가능한 baseline {len(baselines)}개를 불러왔습니다."
         )
@@ -226,8 +234,6 @@ class BaselineComparisonPanel(QWidget):
         )
         if selected_item_id is None and len(result.items) == 1:
             selected_item_id = result.items[0].item_id
-        # 비교를 다시 받았으면 같은 아이템이라도 이력 범위가 달라질 수 있다.
-        self._history_item_id = None
         if selected_item_id is None:
             self.detail.setRowCount(0)
             self._select_comparison(None)
@@ -265,27 +271,28 @@ class BaselineComparisonPanel(QWidget):
         self._select_comparison(comparison)
 
     def _select_comparison(self, comparison: TrackerItemComparison | None) -> None:
+        # 같은 비교 결과에서 같은 아이템을 다시 고르면 받아 둔 이력을 그대로 둔다.
+        if comparison is not None and comparison is self._selected_comparison:
+            return
         self._selected_comparison = comparison
         if comparison is None:
-            self._history_item_id = None
-            self.history_view.clear()
-            self.history_status.setText("아이템을 고르면 두 시점 사이 변경 이력을 볼 수 있습니다.")
-            return
-        self._refresh_history()
-
-    def _refresh_history(self, *_args) -> None:
-        comparison = self._selected_comparison
-        if comparison is None or comparison.item_id == self._history_item_id:
-            return
-        self.history_view.clear()
-        if self._request_history is None or self.detail_tabs.currentWidget() is not self.history_tab:
-            self.history_status.setText(
-                f"#{comparison.item_id} · 탭을 열면 두 시점 사이 변경 이력을 조회합니다."
+            self.activity_panel.set_item(
+                None, waiting_message="아이템을 고르면 두 시점 사이 변경 이력을 볼 수 있습니다."
             )
             return
-        self._history_item_id = comparison.item_id
-        self.history_status.setText(f"#{comparison.item_id} 변경 이력을 불러오는 중입니다.")
-        self._request_history(comparison)
+        self.activity_panel.set_item(
+            comparison.item_id,
+            item_name=comparison.name,
+            between_scope=self._between_points_scope(comparison),
+        )
+
+    def _on_detail_tab_changed(self, _index: int) -> None:
+        self.activity_panel.set_active(self.detail_tabs.currentWidget() is self.history_tab)
+
+    def _request_activity_kind(self, kind: ItemActivityKind, force: bool) -> None:
+        comparison = self._selected_comparison
+        if comparison is not None and self._request_activity is not None:
+            self._request_activity(comparison, kind, force)
 
     @staticmethod
     def history_range(comparison: TrackerItemComparison) -> tuple[int, int] | None:
@@ -301,37 +308,50 @@ class BaselineComparisonPanel(QWidget):
             return 0, versions[0]
         return min(versions), max(versions)
 
-    def set_history(self, item_id: int, snapshot: ItemHistorySnapshot) -> None:
-        """받은 전체 이력에서 두 시점 사이 버전만 보인다. 그사이 다른 아이템을 골랐으면 버린다."""
-        comparison = self._selected_comparison
-        if comparison is None or comparison.item_id != int(item_id):
-            return
+    def _between_points_scope(self, comparison: TrackerItemComparison) -> ActivityScope | None:
+        """두 시점 사이 구간. 필드 변경은 버전 범위, 댓글·첨부는 두 시점의 생성 시각 사이로 거른다."""
         version_range = self.history_range(comparison)
-        if version_range is None:
-            self.history_view.clear()
-            self.history_status.setText("두 시점의 버전 정보가 없어 사이 이력을 고를 수 없습니다.")
-            return
-        low, high = version_range
-        entries = [
-            entry for entry in snapshot.entries if entry.version is not None and low < entry.version <= high
+        result = self._result
+        if version_range is None or result is None:
+            return None
+        present = [
+            source
+            for summary, source in (
+                (comparison.reference, result.reference_source),
+                (comparison.comparison, result.comparison_source),
+            )
+            if summary is not None
         ]
-        self.history_view.show_entries(merge_entries(history_entries(ItemHistorySnapshot(tuple(entries)))))
-        if low == high:
-            text = f"두 시점의 버전이 같아(버전 {high}) 사이 변경이 없습니다."
-        elif low == 0:
-            text = f"처음부터 버전 {high}까지 변경 {len(entries)}건"
+        times: list[datetime | None] = []
+        unknown = False
+        for source in present:
+            if source.is_head:
+                # 현재 상태는 상한이 없다.
+                times.append(None)
+                continue
+            baseline = self._baselines.get(int(source.baseline_id or 0))
+            created_at = parse_server_time(baseline.created_at if baseline is not None else "")
+            unknown = unknown or created_at is None
+            times.append(created_at)
+        if len(times) == 1:
+            # 한쪽에만 있는 아이템은 처음부터 그 시점까지다.
+            start, end = None, times[0]
         else:
-            text = f"버전 {low} → {high} 사이 변경 {len(entries)}건"
-        self.history_status.setText(f"#{comparison.item_id} · {text}")
+            earliest = datetime.min.replace(tzinfo=UTC)
+            start, end = sorted(times, key=lambda value: (value is None, value or earliest))
+        return ActivityScope(
+            "비교 시점 사이",
+            after=start,
+            until=end,
+            versions=version_range,
+            time_undetermined=unknown,
+        )
 
-    def set_history_error(self, item_id: int, message: str) -> None:
-        comparison = self._selected_comparison
-        if comparison is None or comparison.item_id != int(item_id):
-            return
-        # 탭을 다시 열거나 아이템을 다시 고르면 다시 묻는다.
-        self._history_item_id = None
-        self.history_view.clear()
-        self.history_status.setText(f"#{comparison.item_id} 변경 이력을 불러오지 못했습니다. {message}")
+    def set_activity(self, item_id: int, kind: ItemActivityKind, data: Any) -> None:
+        self.activity_panel.set_source(int(item_id), kind, data)
+
+    def set_activity_error(self, item_id: int, kind: ItemActivityKind, message: str) -> None:
+        self.activity_panel.set_source_error(int(item_id), kind, message)
 
     def _render_comparison(self, comparison) -> None:
         header = self.detail.horizontalHeader()
@@ -457,4 +477,6 @@ class BaselineComparisonPanel(QWidget):
         self.after_combo.addItem("현재 상태", None)
         self.before_combo.blockSignals(False)
         self.after_combo.blockSignals(False)
+        self._baselines = {}
+        self.activity_panel.set_baselines(())
         self.clear_result(message)
