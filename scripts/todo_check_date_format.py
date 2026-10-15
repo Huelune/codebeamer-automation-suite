@@ -53,12 +53,14 @@ def main():
     if not settings.base_url or not settings.password:
         print("실패: 저장된 연결 정보 없음 -> GUI에서 연결 테스트를 통과시킨 뒤 다시 실행")
         return
-    if not str(settings.default_tracker_id or "").strip():
-        print("실패: 기본 트래커 없음 -> GUI 설정에서 트래커를 고르고 저장한 뒤 다시 실행")
+    # 트래커 ID는 명령 뒤에 적는다. 작업 공간의 트래커 목록에 "(ID 숫자)"로 보인다.
+    tracker_text = sys.argv[1].strip() if len(sys.argv) > 1 else str(settings.default_tracker_id or "").strip()
+    if not tracker_text.isdigit():
+        print("실패: 트래커 ID 없음 -> 명령 뒤에 트래커 ID 숫자를 붙여 다시 실행")
         return
     client = CodebeamerClient(settings.base_url, settings.username, settings.password, None)
     try:
-        date_field_count, item_count, builtin, custom = collect(client, int(settings.default_tracker_id))
+        date_field_count, item_count, builtin, custom = collect(client, int(tracker_text))
     except Exception as exc:  # 원문에는 주소가 들어 있을 수 있어 종류만 찍는다.
         print(f"실패: 서버 조회 실패({type(exc).__name__}) -> 사내망/VPN과 GUI 연결 테스트 확인")
         return
