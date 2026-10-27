@@ -16,6 +16,7 @@ try:
     from PySide6.QtGui import QPalette
     from PySide6.QtGui import QTextCursor
     from PySide6.QtGui import QTextDocument
+    from PySide6.QtGui import QTextFormat
     from PySide6.QtWidgets import QDialog
     from PySide6.QtWidgets import QDialogButtonBox
     from PySide6.QtWidgets import QLabel
@@ -30,6 +31,8 @@ from .wiki_renderer import wiki_link_from_url
 
 
 ATTACHMENT_SCHEME = "cb-attachment"
+# HTML이 정한 그림 폭. 칸 폭에 맞추느라 서식의 폭을 바꾸므로 처음 값을 따로 둔다.
+_REQUESTED_WIDTH = QTextFormat.Property.UserProperty.value + 1
 
 
 class WikiContentView(QTextBrowser):
@@ -134,9 +137,10 @@ class WikiContentView(QTextBrowser):
         self.viewport().update()
 
     def _fit_images(self) -> None:
-        """칸보다 넓은 그림은 칸 폭에 맞춰 그린다. 원본 크기는 크게 보기 창에서 본다."""
-        if not self._images:
-            return
+        """그림을 HTML이 정한 폭(없으면 원본 폭)으로 그리되 칸보다 넓으면 칸 폭에 맞춘다.
+
+        원본 크기는 크게 보기 창에서 본다.
+        """
         limit = self._image_width_limit()
         pending = []
         block = self.document().begin()
@@ -149,13 +153,25 @@ class WikiContentView(QTextBrowser):
                 if not char_format.isImageFormat():
                     continue
                 image_format = char_format.toImageFormat()
+                changed = False
+                if not image_format.hasProperty(_REQUESTED_WIDTH):
+                    image_format.setProperty(_REQUESTED_WIDTH, image_format.width())
+                    changed = True
                 image = self._images.get(QUrl(image_format.name()).toString())
                 if image is None or image.width() <= 0:
-                    continue
-                width = min(image.width(), limit)
-                if abs(image_format.width() - width) >= 0.5:
-                    image_format.setWidth(width)
-                    image_format.setHeight(image.height() * width / image.width())
+                    # 받기 전 자리 표시를 정한 폭으로 늘리면 글자가 커지므로 원래 크기로 그린다.
+                    if image_format.hasProperty(QTextFormat.Property.ImageWidth):
+                        image_format.clearProperty(QTextFormat.Property.ImageWidth)
+                        image_format.clearProperty(QTextFormat.Property.ImageHeight)
+                        changed = True
+                else:
+                    requested = image_format.doubleProperty(_REQUESTED_WIDTH)
+                    width = min(requested or image.width(), limit)
+                    if abs(image_format.width() - width) >= 0.5:
+                        image_format.setWidth(width)
+                        image_format.setHeight(image.height() * width / image.width())
+                        changed = True
+                if changed:
                     pending.append((fragment.position(), fragment.length(), image_format))
             block = block.next()
         # 순회 중에 서식을 바꾸면 조각이 쪼개지므로 모아 두었다가 한 번에 바꾼다.
