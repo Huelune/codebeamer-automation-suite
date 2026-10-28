@@ -7,9 +7,12 @@
 작업공간과는 두 방향으로만 이어진다.
 
 - 작업공간 -> panel: `load_roots`, `reset_source`, `set_baselines`,
-  `selected_baseline_id`, `show_created_item`, `tree_item`, `placeholder_item`,
-  `replace_tree_children`, `refresh_item`, `remove_item`
+  `selected_baseline_id`, `select_source`, `show_created_item`, `tree_item`,
+  `placeholder_item`, `replace_tree_children`, `refresh_item`, `remove_item`
 - panel -> 작업공간: `HierarchyPanelHost` 의 콜백
+
+조회 기준 콤보는 검색 탭과 함께 쓰는 작업공간의 시점이다. 기준이나 Baseline 목록이
+바뀔 때마다 검색 탭에 알린다.
 """
 
 from __future__ import annotations
@@ -221,6 +224,7 @@ class TrackerHierarchyPanel(QWidget):
         self.hierarchy_source_combo.setCurrentIndex(0)
         self.hierarchy_source_combo.blockSignals(False)
         self.reload_roots_button.setText("현재 계층 다시 불러오기")
+        self._show_source_in_search()
 
     def show_current_source(self) -> None:
         """Baseline 목록은 두고 조회 기준만 현재 상태로 돌린다. 트리는 부른 쪽이 그린다."""
@@ -228,6 +232,19 @@ class TrackerHierarchyPanel(QWidget):
         self.hierarchy_source_combo.setCurrentIndex(0)
         self.hierarchy_source_combo.blockSignals(False)
         self.reload_roots_button.setText("현재 계층 다시 불러오기")
+        self._show_source_in_search()
+
+    def select_source(self, baseline_id: int | None) -> None:
+        """검색 탭에서 고른 조회 기준으로 바꾼다. 바뀌면 콤보 신호로 계층도 그 시점이 된다."""
+        index = 0 if baseline_id is None else self.hierarchy_source_combo.findData(baseline_id)
+        if index >= 0 and index != self.hierarchy_source_combo.currentIndex():
+            self.hierarchy_source_combo.setCurrentIndex(index)
+
+    def _show_source_in_search(self) -> None:
+        """조회 기준은 검색 탭과 하나라 콤보 항목과 선택을 그대로 넘긴다."""
+        combo = self.hierarchy_source_combo
+        options = [(combo.itemText(index), combo.itemData(index)) for index in range(combo.count())]
+        self._host.search_panel().show_source(options, self.selected_baseline_id())
 
     def set_baselines(
         self,
@@ -251,6 +268,8 @@ class TrackerHierarchyPanel(QWidget):
         self.hierarchy_source_combo.blockSignals(False)
         if selected is not None and selected_index < 0:
             self._on_hierarchy_source_changed()
+        else:
+            self._show_source_in_search()
 
     def load_roots(self, *, force: bool = False) -> None:
         tracker = self._host.current_tracker()
@@ -305,6 +324,7 @@ class TrackerHierarchyPanel(QWidget):
         )
 
     def _on_hierarchy_source_changed(self, *_args) -> None:
+        self._show_source_in_search()
         self._host.next_token("detail")
         self._host.detail_panel().reset_detail()
         baseline_id = self.selected_baseline_id()
