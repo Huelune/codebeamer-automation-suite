@@ -6,8 +6,11 @@
 
 - 작업공간 -> panel: `update_scope`, `load_schema`, `clear_selection`,
   `reset_condition_search`, `selected_count`, `refresh_item`, `remove_item`,
-  `open_bulk_retry`
+  `open_bulk_retry`, `show_source`
 - panel -> 작업공간: `SearchPanelHost` 의 콜백
+
+조회 기준(현재 상태 또는 Baseline)은 계층 탭과 하나다. 계층 탭 콤보가 기준을 들고
+`show_source`로 알려 주고, 이 탭에서 고르면 `select_source`로 계층 탭 콤보를 바꾼다.
 """
 
 from __future__ import annotations
@@ -66,6 +69,7 @@ class SearchPanelHost:
     set_workspace_status: Callable[..., None]
     open_baseline_comparison: Callable[[], None]
     selected_hierarchy_baseline_id: Callable[[], int | None]
+    select_source: Callable[[int | None], None]
     current_tracker: Callable[[], TrackerSummary | None]
     current_project: Callable[[], ProjectSummary | None]
     detail_panel: Callable[[], Any]
@@ -102,6 +106,10 @@ class TrackerSearchPanel(QWidget):
         self._search_page = 1
         self._last_search_query: Any = None
         self._last_search_result: Any = None
+        # 표에 있는 결과를 검색한 시점. 결과를 누르면 이 시점의 상세를 연다.
+        self._result_baseline_id: int | None = None
+        # 콤보에 보이는 조회 기준. 바뀌면 다른 시점 결과라 표를 비운다.
+        self._shown_source_baseline_id: int | None = None
         self._search_schema: Any = None
         self._selected_search_ids: set[int] = set()
         self._excluded_search_ids: set[int] = set()
@@ -113,6 +121,21 @@ class TrackerSearchPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 8, 6, 6)
         layout.setSpacing(6)
+
+        # 계층 탭과 같이 조회 기준을 맨 위 한 줄에 둔다. 검색 방식 줄에 넣으면 좁은 창에서 버튼이 잘린다.
+        source_row = QHBoxLayout()
+        source_row.addWidget(QLabel("조회 기준", self))
+        self.search_source_combo = QComboBox(self)
+        self.search_source_combo.setObjectName("tracker_search_source_combo")
+        # 계층 탭 콤보와 같이 Baseline 이름 길이가 최소 폭을 정하지 않게 한다.
+        self.search_source_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.search_source_combo.setMinimumContentsLength(6)
+        self.search_source_combo.addItem("현재 상태", None)
+        self.search_source_combo.currentIndexChanged.connect(self._on_search_source_changed)
+        source_row.addWidget(self.search_source_combo, 1)
+        layout.addLayout(source_row)
 
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("검색 방식", self))
@@ -179,7 +202,10 @@ class TrackerSearchPanel(QWidget):
         self.search_scope_label.setWordWrap(True)
         layout.addWidget(self.search_scope_label)
 
-        selection_row = QHBoxLayout()
+        # Baseline 결과는 읽기 전용이라 선택과 일괄 수정 줄을 통째로 숨긴다.
+        self.selection_host = QWidget(self)
+        selection_row = QHBoxLayout(self.selection_host)
+        selection_row.setContentsMargins(0, 0, 0, 0)
         self.search_selection_label = QLabel("선택 0개", self)
         self.search_selection_label.setObjectName("tracker_panel_status")
         selection_row.addWidget(self.search_selection_label)
@@ -197,7 +223,7 @@ class TrackerSearchPanel(QWidget):
         self.bulk_update_button.setObjectName("primary_button")
         self.bulk_update_button.clicked.connect(self._start_bulk_update)
         selection_row.addWidget(self.bulk_update_button)
-        layout.addLayout(selection_row)
+        layout.addWidget(self.selection_host)
 
         self.search_table = QTableWidget(0, 5, self)
         self.search_table.setObjectName("tracker_search_results")
@@ -242,12 +268,44 @@ class TrackerSearchPanel(QWidget):
 
     def reset_results(self, message: str) -> None:
         """트래커 선택이 바뀌어 검색 결과가 더 이상 맞지 않을 때 비운다."""
+        self._clear_results()
+        self.reset_condition_search(message)
+
+    def _clear_results(self) -> None:
         self.search_table.setRowCount(0)
         self._last_search_query = None
         self._last_search_result = None
+        self._result_baseline_id = None
         self._search_page = 1
-        self.reset_condition_search(message)
+        self.search_page_label.setText("1 페이지")
+        self.search_previous_button.setEnabled(False)
+        self.search_next_button.setEnabled(False)
         self.clear_selection()
+
+    def show_source(
+        self,
+        options: list[tuple[str, int | None]],
+        baseline_id: int | None,
+    ) -> None:
+        """계층 탭의 조회 기준을 그대로 보인다. 기준이 바뀌면 다른 시점 결과라 표를 비운다."""
+        self.search_source_combo.blockSignals(True)
+        self.search_source_combo.clear()
+        for text, data in options:
+            self.search_source_combo.addItem(text, data)
+        index = 0 if baseline_id is None else self.search_source_combo.findData(baseline_id)
+        self.search_source_combo.setCurrentIndex(max(index, 0))
+        self.search_source_combo.blockSignals(False)
+        if baseline_id != self._shown_source_baseline_id:
+            self._shown_source_baseline_id = baseline_id
+            if self._last_search_query is not None or self.search_table.rowCount():
+                self._clear_results()
+        historical = baseline_id is not None
+        self.selection_host.setVisible(not historical)
+        self.search_table.setColumnHidden(0, historical)
+        self.update_scope()
+
+    def _on_search_source_changed(self, *_args) -> None:
+        self._host.select_source(self.search_source_combo.currentData())
 
     def reset_scope(self) -> None:
         self.search_scope_label.setText("프로젝트와 트래커를 먼저 선택하세요.")
@@ -269,6 +327,7 @@ class TrackerSearchPanel(QWidget):
         self.search_assignee_input.setEnabled(ready)
         self.search_button.setEnabled(ready)
         self.search_mode_combo.setEnabled(ready)
+        self.search_source_combo.setEnabled(ready)
         self.condition_open_button.setEnabled(ready)
         self.baseline_compare_button.setEnabled(ready and self._last_search_query is not None)
         self.bulk_update_button.setEnabled(
@@ -316,10 +375,22 @@ class TrackerSearchPanel(QWidget):
         if tracker is None:
             self.search_scope_label.setText("프로젝트와 트래커를 먼저 선택하세요.")
             return
+        if self._host.selected_hierarchy_baseline_id() is not None:
+            self.search_scope_label.setText(
+                f"검색 범위: {tracker.name} ({tracker.tracker_id}){self._source_text()} · "
+                "Baseline 결과는 읽기 전용이라 일괄 수정할 수 없습니다."
+            )
+            return
         self.search_scope_label.setText(
             f"검색 범위: {tracker.name} ({tracker.tracker_id}) · "
             "ID 바로 열기와 달리 이 트래커 밖의 아이템은 검색하지 않습니다."
         )
+
+    def _source_text(self) -> str:
+        """Baseline 시점이면 범위 문구 뒤에 붙일 시점 이름. 현재 상태면 빈 값."""
+        if self._host.selected_hierarchy_baseline_id() is None:
+            return ""
+        return f" · 시점: {self.search_source_combo.currentText()}"
 
     def _on_search_selection_changed(self) -> None:
         selected = self.search_table.selectedItems()
@@ -330,7 +401,10 @@ class TrackerSearchPanel(QWidget):
             return
         summary = summary_cell.data(ITEM_SUMMARY_ROLE)
         if isinstance(summary, TrackerItemSummary):
-            self._host.detail_panel().load_detail(summary.item_id)
+            self._host.detail_panel().load_detail(
+                summary.item_id,
+                baseline_id=self._result_baseline_id,
+            )
 
     def _on_search_check_changed(self, item: QTableWidgetItem) -> None:
         if item.column() != 0:
@@ -356,6 +430,7 @@ class TrackerSearchPanel(QWidget):
         if tracker is None:
             self._host.set_workspace_status("검색할 트래커를 먼저 선택하세요.", tone="warning")
             return
+        baseline_id = self._host.selected_hierarchy_baseline_id()
         if reuse and self._last_search_query is not None:
             query = replace(self._last_search_query, page=max(int(page), 1))
         elif self.search_mode_combo.currentData() == TrackerSearchMode.CONDITIONS.value:
@@ -371,6 +446,7 @@ class TrackerSearchPanel(QWidget):
                     page=max(int(page), 1),
                     page_size=DEFAULT_SEARCH_PAGE_SIZE,
                     sort="item.id ASC",
+                    baseline_id=baseline_id,
                 )
                 query.build_cbql()
             except Exception as exc:
@@ -395,6 +471,7 @@ class TrackerSearchPanel(QWidget):
                 page=max(int(page), 1),
                 page_size=DEFAULT_SEARCH_PAGE_SIZE,
                 sort="item.id ASC",
+                baseline_id=baseline_id,
             )
         if not reuse:
             self.clear_selection()
@@ -403,18 +480,23 @@ class TrackerSearchPanel(QWidget):
         settings = self.settings_provider()
         self.search_button.setEnabled(False)
         self.search_scope_label.setText(
-            f"{tracker.name} ({tracker_id}) 안에서 검색하는 중입니다."
+            f"{tracker.name} ({tracker_id}){self._source_text()} 안에서 검색하는 중입니다."
         )
 
         def loaded(result: PageResult[TrackerItemSummary]) -> None:
             still_selected = self._host.current_tracker()
             if still_selected is None or still_selected.tracker_id != tracker_id:
                 return
+            if self._host.selected_hierarchy_baseline_id() != query.baseline_id:
+                # 검색하는 동안 조회 기준이 바뀌었다. 다른 시점 결과를 보이지 않는다.
+                return
             self.search_button.setEnabled(True)
             self.baseline_compare_button.setEnabled(True)
+            self._result_baseline_id = query.baseline_id
             self._render_search_results(result)
+            where = "현재 트래커" if query.baseline_id is None else "Baseline 시점"
             self._host.set_workspace_status(
-                f"현재 트래커에서 검색 결과를 {self._total_text(result)} 찾았습니다."
+                f"{where}에서 검색 결과를 {self._total_text(result)} 찾았습니다."
             )
 
         def failed(exc: Exception) -> None:
@@ -472,7 +554,8 @@ class TrackerSearchPanel(QWidget):
             else f"{scope_tracker.name} ({scope_tracker.tracker_id})"
         )
         self.search_scope_label.setText(
-            f"검색 범위: {tracker_text} · {self._total_text(result)} 중 {visible_start}–{visible_end}개"
+            f"검색 범위: {tracker_text}{self._source_text()} · "
+            f"{self._total_text(result)} 중 {visible_start}–{visible_end}개"
         )
         self.search_page_label.setText(f"{result.page} 페이지")
         pagination_available = result.server_honored_pagination
@@ -492,10 +575,7 @@ class TrackerSearchPanel(QWidget):
         )
         if not condition_mode:
             self.condition_dialog.close()
-        self._last_search_query = None
-        self._last_search_result = None
-        self.search_table.setRowCount(0)
-        self.clear_selection()
+        self._clear_results()
         if condition_mode and self._host.current_tracker() is not None:
             self.load_schema()
 
@@ -593,6 +673,7 @@ class TrackerSearchPanel(QWidget):
             count > 0
             and self._host.current_tracker() is not None
             and not bool(settings.offline_mode)
+            and self._host.selected_hierarchy_baseline_id() is None
         )
 
     def _select_current_search_page(self) -> None:

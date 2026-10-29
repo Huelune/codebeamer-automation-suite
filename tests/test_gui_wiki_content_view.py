@@ -93,6 +93,45 @@ class WikiContentViewTest(unittest.TestCase):
             self.view.viewport().width() + 1,
         )
 
+    def _image_sizes(self) -> list[tuple[int, int]]:
+        sizes = []
+        block = self.view.document().begin()
+        while block.isValid():
+            iterator = block.begin()
+            while not iterator.atEnd():
+                char_format = iterator.fragment().charFormat()
+                if char_format.isImageFormat():
+                    image_format = char_format.toImageFormat()
+                    sizes.append((round(image_format.width()), round(image_format.height())))
+                iterator += 1
+            block = block.next()
+        return sizes
+
+    def test_resized_image_keeps_its_width_until_the_view_is_narrower(self) -> None:
+        """편집기에서 줄인 그림은 그 폭으로 그리고, 칸이 더 좁을 때만 칸에 맞춘다."""
+        self.view.setHtml(
+            codebeamer_wiki_to_html(
+                f"[{{Image wiki='[!{IMAGE_NAME}#{IMAGE_HASH}!]' style='width: 150px;'}}]"
+            )
+        )
+        # 받기 전 자리 표시를 정한 폭으로 늘리면 글자가 커지므로 원래 크기로 그린다.
+        self.assertEqual(self._image_sizes(), [(0, 0)])
+
+        self.view.add_attachment_resource(
+            AttachmentResource(self.key, "image/png", png_bytes(300, 200))
+        )
+        self.assertEqual(self._image_sizes(), [(150, 100)])
+
+        self.view.resize(110, 420)
+        self._app.processEvents()
+        limit = self.view._image_width_limit()
+        self.assertLess(limit, 150)
+        self.assertEqual(self._image_sizes()[0][0], limit)
+
+        self.view.resize(520, 420)
+        self._app.processEvents()
+        self.assertEqual(self._image_sizes(), [(150, 100)])
+
     def test_image_survives_rerendering_the_same_html(self) -> None:
         """원문 보기에서 렌더링 보기로 돌아와도 받은 그림을 다시 받지 않는다."""
         self.view.add_attachment_resource(

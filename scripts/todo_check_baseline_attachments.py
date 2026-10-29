@@ -1,4 +1,4 @@
-"""todo.md 1절: 첨부 API가 Baseline 시점을 받는지 서버 Swagger 명세로 확인한다.
+"""todo.md 2절: 첨부 API가 Baseline 시점을 받는지 서버 Swagger 명세로 확인한다.
 
 결과를 받으면 이 파일, 테스트, 절을 함께 지운다.
 """
@@ -138,7 +138,7 @@ def schema_lines(spec: dict[str, Any]) -> list[str]:
 def main() -> None:
     # 고정 문자열이라 입력이 섞이지 않는다. 결과를 한 화면에 담으려고 먼저 지운다.
     os.system("cls" if os.name == "nt" else "clear")
-    print("todo 1절: 첨부 API의 Baseline 시점 지원 확인 (읽기 전용)")
+    print("todo 2절: 첨부 API의 Baseline 시점 지원 확인 (읽기 전용)")
     from src.codebeamer_client import CodebeamerClient
     from src.gui.settings_store import GuiSettingsStore
 

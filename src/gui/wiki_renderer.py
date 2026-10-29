@@ -69,6 +69,9 @@ _LINE_BREAK_RE = re.compile(r"\\\\[ \t]*\n?")
 # 너비 같은 다른 매개변수가 붙은 모양은 확인되지 않아 원문 그대로 둔다.
 _WIKI_IMAGE_RE = re.compile(r"(?<!~)\[!([^!\[\]|#\n]+?)(?:#([0-9A-Fa-f]{8,64}))?!\]")
 _IMAGE_SLOT_RE = re.compile("\x00(\\d+)\x00")
+# 편집기에서 크기를 바꾼 그림은 `[{Image wiki='[!이름#해시!]' style='width: 325px;'}]`로 저장된다.
+_IMAGE_PLUGIN_RE = re.compile(r"""(?<!~)\[\{Image\s((?:'[^']*'|"[^"]*"|[^'"}])*)\}\]""")
+_PX_WIDTH_RE = re.compile(r"(?:^|;)\s*width\s*:\s*(\d+)(?:\.\d+)?px\s*(?:;|$)", re.IGNORECASE)
 # `[표시|대상]`, `[대상]`. `[!` 이미지, `[{` plugin, `[[` 이스케이프는 링크가 아니다.
 _WIKI_LINK_RE = re.compile(r"(?<![~\[])\[(?![!{\[])([^\[\]\n]+?)\]")
 _ITEM_LINK_RE = re.compile(r"(?:CB|ISSUE):(\d+)", re.IGNORECASE)
@@ -247,14 +250,31 @@ def resolve_wiki_images(
     return tuple(resolved)
 
 
-def _render_image(match: re.Match[str]) -> str:
+def _render_image(match: re.Match[str], width: str = "") -> str:
     reference = _image_reference(match)
     if reference is None:
         return escape(match.group(0), quote=False)
+    width_attr = f' width="{width}"' if width else ""
     return (
         f'<img src="cb-attachment://{escape(reference.resource_key, quote=True)}" '
-        f'alt="{escape(reference.name, quote=True)}">'
+        f'alt="{escape(reference.name, quote=True)}"{width_attr}>'
     )
+
+
+def _render_image_plugin(match: re.Match[str]) -> str:
+    """`wiki`에 첨부 그림 하나만 든 Image plugin을 그 그림으로 바꾼다. px 폭만 따른다.
+
+    다른 모양은 원문 그대로 둔다.
+    """
+    params = _plugin_params(match.group(1))
+    image = _WIKI_IMAGE_RE.fullmatch(params.get("wiki", "").strip())
+    if image is None or _image_reference(image) is None:
+        return escape(match.group(0), quote=False)
+    width = params.get("width", "").removesuffix("px")
+    if not width.isdigit():
+        style_width = _PX_WIDTH_RE.search(params.get("style", ""))
+        width = style_width.group(1) if style_width else ""
+    return _render_image(image, width)
 
 
 def _link_href(target: str) -> str | None:
@@ -324,6 +344,7 @@ def _render_basic_markup(text: str) -> str:
         images.append(html)
         return f"\x00{len(images) - 1}\x00"
 
+    source = _IMAGE_PLUGIN_RE.sub(lambda match: keep(_render_image_plugin(match)), source)
     source = _WIKI_IMAGE_RE.sub(lambda match: keep(_render_image(match)), source)
     source = _WIKI_LINK_RE.sub(lambda match: keep(_render_link(match)), source)
     rendered = escape(source, quote=False)
