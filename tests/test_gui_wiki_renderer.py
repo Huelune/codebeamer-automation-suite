@@ -276,6 +276,38 @@ class WikiRendererTest(unittest.TestCase):
             (),
         )
 
+    def test_resized_image_plugin_becomes_an_image_with_its_width(self) -> None:
+        """편집기에서 크기를 바꾼 그림은 `[{Image wiki='[!...!]' style='width: ...'}]`로 저장된다."""
+        markup = "앞 [{Image wiki='[!pasted.png#0123456789ABCDEF!]' style='width: 325px;' }] 뒤"
+
+        self.assertEqual(
+            codebeamer_wiki_to_html(markup),
+            '앞 <img src="cb-attachment://wiki-image/pasted.png/0123456789abcdef" '
+            'alt="pasted.png" width="325"> 뒤',
+        )
+        self.assertEqual(
+            [reference.name for reference in wiki_image_references(markup)],
+            ["pasted.png"],
+        )
+        self.assertEqual(
+            codebeamer_wiki_to_html("[{Image wiki='[!a.png!]' width='120'}]"),
+            '<img src="cb-attachment://wiki-image/a.png/" alt="a.png" width="120">',
+        )
+        self.assertEqual(
+            codebeamer_wiki_to_html("[{Image wiki='[!a.png!]' style='width: 50%'}]"),
+            '<img src="cb-attachment://wiki-image/a.png/" alt="a.png">',
+        )
+
+    def test_image_plugin_without_an_attachment_image_stays_as_source(self) -> None:
+        for markup in (
+            "[{Image src='https://outside.test/a.png'}]",
+            "[{Image wiki='[!https://outside.test/a.png!]'}]",
+            "[{Image wiki='본문 [!a.png!]'}]",
+        ):
+            with self.subTest(markup=markup):
+                self.assertNotIn("<img", codebeamer_wiki_to_html(markup))
+                self.assertIn("Image", codebeamer_wiki_to_html(markup))
+
     def test_wiki_images_pick_the_attachment_whose_md5_matches(self) -> None:
         """붙여넣은 그림은 이름이 겹치므로 해시로 고르고, 해시가 없으면 첫 번째를 쓴다."""
         attachments = (
