@@ -523,6 +523,45 @@ class TrackerQueryServiceTest(unittest.TestCase):
                 [("item", 1001, None), ("item", 1002, 11), ("item", 1001, 12)],
             )
 
+    def test_baseline_search_page_serves_details_without_evicting_lists(self) -> None:
+        """Baseline 검색 결과를 눌러도 상세를 다시 묻지 않고, 계층 목록 색인도 밀어내지 않는다."""
+        BaselineDetailFakeClient.reset()
+
+        def item_calls() -> list[tuple]:
+            return [call for call in BaselineDetailFakeClient.calls if call[0] == "item"]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = TrackerQueryService(
+                client_factory=BaselineDetailFakeClient,
+                baseline_cache=BaselineItemCache(Path(tmp_dir)),
+            )
+            for baseline_id in range(1, MAX_INDEXED_BASELINE_LISTS + 1):
+                service.load_baseline_hierarchy_snapshot(self.settings, 20, baseline_id)
+            for page in (1, 2):
+                result = service.search(
+                    self.settings,
+                    TrackerQuery(tracker_id=20, text="Steering", baseline_id=99, page=page),
+                )
+            self.assertEqual(
+                [call[2] for call in BaselineDetailFakeClient.calls if call[0] == "search"][-2:],
+                [99, 99],
+            )
+            self.assertEqual([item.item_id for item in result.items], [1001])
+
+            searched = service.load_detail(self.settings, 1001, baseline_id=99)
+            listed = service.load_detail(self.settings, 1001, baseline_id=1)
+
+            self.assertEqual(item_calls(), [])
+            self.assertTrue(searched.baseline_list_received_at)
+            self.assertTrue(listed.baseline_list_received_at)
+
+            # 현재 상태 검색은 Baseline 상세에 쓰지 않는다.
+            service.search(self.settings, TrackerQuery(tracker_id=20, text="Steering"))
+            service.load_detail(self.settings, 1001, baseline_id=99)
+            service.load_detail(self.settings, 1001, baseline_id=99, refresh=True)
+
+            self.assertEqual(item_calls(), [("item", 1001, 99)])
+
     def test_only_recent_baseline_lists_are_kept_for_details(self) -> None:
         BaselineDetailFakeClient.reset()
         with tempfile.TemporaryDirectory() as tmp_dir:

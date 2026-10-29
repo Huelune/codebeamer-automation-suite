@@ -504,6 +504,7 @@ class TrackerWorkspacePage(QWidget):
             set_workspace_status=self._set_workspace_status,
             open_baseline_comparison=self._open_baseline_comparison,
             selected_hierarchy_baseline_id=self.hierarchy_panel.selected_baseline_id,
+            select_source=self.hierarchy_panel.select_source,
             current_tracker=lambda: self._current_tracker,
             current_project=lambda: self._current_project,
             detail_panel=lambda: self.detail_panel,

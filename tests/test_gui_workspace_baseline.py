@@ -832,6 +832,96 @@ class TrackerWorkspaceBaselineTest(TrackerWorkspaceTestCase):
         # Baseline 목록은 남겨 다시 고를 수 있다.
         self.assertGreater(panel.hierarchy_source_combo.findData(24681001), 0)
 
+    def _search_result_ids(self) -> set[int]:
+        table = self.page.search_panel.search_table
+        return {int(table.item(row, 1).text()) for row in range(table.rowCount())}
+
+    def test_search_in_baseline_finds_past_values_and_opens_read_only_detail(self) -> None:
+        """검색 탭에서 Baseline을 고르면 계층과 같은 시점에서 찾고, 결과는 그 시점 상세로 연다."""
+        self.page.activate()
+        search = self.page.search_panel
+        baseline_id = 24681001
+        self.assertEqual(search.search_source_combo.count(), 2)
+
+        search.search_source_combo.setCurrentIndex(search.search_source_combo.findData(baseline_id))
+        self._app.processEvents()
+
+        self.assertEqual(self.page.hierarchy_panel.selected_baseline_id(), baseline_id)
+        self.assertTrue(search.selection_host.isHidden())
+        self.assertTrue(search.search_table.isColumnHidden(0))
+        self.assertFalse(search.bulk_update_button.isEnabled())
+
+        # 현재 이름으로는 두 개지만 Baseline 시점에는 하나만 이 이름을 가졌다.
+        search.search_text_input.setText("Steering")
+        search._run_search()
+
+        self.assertEqual(self._search_result_ids(), {9001003})
+        self.assertEqual(search.search_table.item(0, 2).text(), "Steering system baseline")
+        self.assertIn("시점: Offline Requirements Baseline", search.search_scope_label.text())
+        self.assertIn("Baseline 시점", self.page.workspace_status_label.text())
+        self.assertEqual(search._last_search_query.baseline_id, baseline_id)
+
+        search.search_table.selectRow(0)
+        self._app.processEvents()
+
+        self.assertEqual(self.page.detail_panel.baseline_id, baseline_id)
+        self.assertIn("읽기 전용", self.page.detail_panel.detail_warning.text())
+        self.assertFalse(
+            self.page.detail_panel.detail_tabs.isTabEnabled(self.page.detail_panel.editor_tab_index)
+        )
+
+    def test_changing_point_in_time_clears_search_results(self) -> None:
+        """조회 기준을 어느 탭에서 바꾸든 다른 시점 결과는 표에 남지 않는다."""
+        self.page.activate()
+        search = self.page.search_panel
+        hierarchy = self.page.hierarchy_panel
+        search.search_text_input.setText("Steering")
+        search._run_search()
+        self.assertEqual(self._search_result_ids(), {9001003, 9001004})
+
+        hierarchy.hierarchy_source_combo.setCurrentIndex(
+            hierarchy.hierarchy_source_combo.findData(24681001)
+        )
+        self._app.processEvents()
+
+        self.assertEqual(search.search_source_combo.currentData(), 24681001)
+        self.assertEqual(search.search_table.rowCount(), 0)
+        self.assertIsNone(search._last_search_query)
+
+        search._run_search()
+        self.assertEqual(self._search_result_ids(), {9001003})
+        # Baseline 목록을 다시 받아도 같은 시점이면 결과를 지우지 않는다.
+        self.page._refresh_baseline_comparison()
+        self._app.processEvents()
+        self.assertEqual(self._search_result_ids(), {9001003})
+
+        search.search_source_combo.setCurrentIndex(0)
+        self._app.processEvents()
+
+        self.assertIsNone(hierarchy.selected_baseline_id())
+        self.assertEqual(search.search_table.rowCount(), 0)
+        self.assertFalse(search.selection_host.isHidden())
+        self.assertFalse(search.search_table.isColumnHidden(0))
+
+    def test_late_search_from_other_point_in_time_is_not_shown(self) -> None:
+        self.page.activate()
+        search = self.page.search_panel
+        tasks: list[_DeferredTask] = []
+        self.page.synchronous = False
+        self.page.task_factory = lambda operation: tasks.append(
+            _DeferredTask(operation)
+        ) or tasks[-1]
+        search.search_text_input.setText("Steering")
+        search._run_search()
+
+        search.search_source_combo.setCurrentIndex(search.search_source_combo.findData(24681001))
+        for task in tasks:
+            task.finish()
+        self._app.processEvents()
+
+        self.assertEqual(search.search_table.rowCount(), 0)
+        self.assertIsNone(search._result_baseline_id)
+
 
 if __name__ == "__main__":
     unittest.main()

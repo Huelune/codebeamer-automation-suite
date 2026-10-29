@@ -121,6 +121,11 @@ class TrackerQueryService:
         # 받은 Baseline 전체 아이템(아이템 ID -> 원본)과 받은 시각. 그 Baseline 상세는 여기서 꺼낸다.
         # 여러 작업 스레드가 함께 쓰므로 락 안에서만 바꾸고 읽는다.
         self._baseline_item_index: dict[BaselineCacheKey, tuple[dict[int, dict[str, Any]], str]] = {}
+        # 마지막 Baseline 검색 페이지((서버, 사용자), Baseline ID, 아이템, 받은 시각).
+        # 검색마다 위 목록 색인을 밀어내지 않게 한 장만 따로 둔다.
+        self._baseline_search_page: (
+            tuple[tuple[str, str], int, dict[int, dict[str, Any]], str] | None
+        ) = None
         self._baseline_index_lock = threading.Lock()
 
     @staticmethod
@@ -603,10 +608,34 @@ class TrackerQueryService:
             return None
         with self._baseline_index_lock:
             indexed = list(self._baseline_item_index.items())
+            search_page = self._baseline_search_page
         for key, (items, received_at) in reversed(indexed):
             if (key.base_url, key.username) == server and key.baseline_id == baseline_id and item_id in items:
                 return items[item_id], received_at
+        if search_page is not None:
+            page_server, page_baseline_id, items, received_at = search_page
+            if page_server == server and page_baseline_id == baseline_id and item_id in items:
+                return items[item_id], received_at
         return None
+
+    def _remember_baseline_search_page(
+        self,
+        settings,
+        baseline_id: int,
+        items: list[TrackerItemSummary],
+    ) -> None:
+        """Baseline 검색 결과 한 페이지를 그 결과의 상세용으로 기억한다."""
+        server = self._baseline_server(settings)
+        if server is None:
+            return
+        entry = (
+            server,
+            baseline_id,
+            {item.item_id: item.raw_reference for item in items},
+            datetime.now(UTC).isoformat(timespec="seconds"),
+        )
+        with self._baseline_index_lock:
+            self._baseline_search_page = entry
 
     def _saved_baseline_items(
         self,
@@ -754,6 +783,9 @@ class TrackerQueryService:
                     operation="search_items",
                 )
             normalized_items.append(normalized)
+        # `itemRefs`만 오면 상세에 쓸 필드가 없다.
+        if query.baseline_id is not None and isinstance(payload, dict) and isinstance(payload.get("items"), list):
+            self._remember_baseline_search_page(settings, query.baseline_id, normalized_items)
         result = PageResult.create(
             normalized_items,
             raw_page=payload,

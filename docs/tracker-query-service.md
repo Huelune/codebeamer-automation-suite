@@ -23,6 +23,7 @@
 - 신규·삭제·변경·동일 전체 결과 캐시와 선택 아이템 상세 재사용
 - 트래커 전체 query와 최상위 목록을 결합한 계층 Excel snapshot
 - Baseline 전체 query만으로 재구성한 단일 시점 계층과 읽기 전용 상세
+- 선택한 Baseline 시점 안의 간편·상세 조건 검색과 그 결과의 읽기 전용 상세
 
 쓰기, 상태 전환, 관계·댓글·첨부·이력은 이 서비스의 범위가 아닙니다. Wiki 렌더링, 첨부 목록과
 인증 바이너리 다운로드는 별도 `TrackerContentService`가 담당합니다. 현재 아이템의 관계·참조와 변경 이력은
@@ -42,6 +43,7 @@
 | Baseline 목록 | `GET /v3/trackers/{trackerId}/baselines` | `CodebeamerClient.get_tracker_baselines()` |
 | Baseline 전체 비교 | `GET /v3/items/query?baselineId={baselineId}` | `TrackerQueryService.compare_tracker_at_sources()` |
 | Baseline 단일 계층 | `GET /v3/items/query?baselineId={baselineId}` | `TrackerQueryService.load_baseline_hierarchy_snapshot()` |
+| Baseline 시점 검색 | `GET /v3/items/query?baselineId={baselineId}` | `TrackerQueryService.search()` (`TrackerQuery.baseline_id`) |
 | 상세 | `GET /v3/items/{itemId}` | `CodebeamerClient.get_item()` |
 | 관계·참조 | `GET /v3/items/{itemId}/relations` | `TrackerItemContextService.load_relations()` |
 | 변경 이력 | `GET /v3/items/{itemId}/history` | `TrackerItemContextService.load_history()` |
@@ -103,6 +105,8 @@ Baseline 내용은 만든 뒤 바뀌지 않으므로, Baseline 시점 전체 `it
   `GET /v3/items/{id}?baselineId=` 단건 조회 대신 이 목록에서 만듭니다. 목록은 같은 아이템 모델의
   `/v3/items/query` 전체 필드 응답입니다. 상세 영역에는 목록을 받은 시각을 알리고, `상세 새로고침`(`refresh=True`)만
   단건으로 서버에서 받습니다. 목록에 없는 아이템이나 다른 Baseline은 지금처럼 단건으로 조회합니다.
+- Baseline 시점 검색은 마지막으로 받은 한 페이지만 따로 기억해 그 결과의 상세에 씁니다. 검색할 때마다 위 목록
+  색인을 밀어내지 않도록 목록 개수에 넣지 않고, 디스크에도 저장하지 않습니다.
 - 전체가 500MB를 넘으면 가장 오래 쓰지 않은 저장본부터 지우고, 설정 > 데이터 관리에서 사용량을 보고 비울 수 있습니다.
 - 저장은 부가 기능이라 폴더를 만들 수 없거나 쓰기에 실패해도 조회를 끊지 않습니다.
 - 응답에 담긴 사용자·선택지·참조 아이템 이름이 조회 시점 값이라면, 저장본에는 받은 시점의 이름이 남습니다.
@@ -182,6 +186,12 @@ Qt widget은 서버 원본 dict를 직접 탐색하지 않고 위 모델만 사�
 - Baseline 트리의 상세는 동일한 `baselineId`를 유지하며 읽기 전용으로 표시합니다. 받아 둔 Baseline 목록에 있는 아이템은 서버에 다시 묻지 않고, `상세 새로고침`만 단건으로 받습니다. 관계 충돌, 순환, 누락 참조 또는 tracker 외부 참조가 있으면 현재 계층으로 대체하지 않고 조회를 중단합니다.
 - Baseline 단일 계층 Excel은 먼저 조회해 캐시한 `TrackerHierarchySnapshot`과 tracker schema를 기존 계층 workbook 생성기에 전달합니다. 필드 선택과 TableField 행 구조, TrackerItemChoiceField 이름 표시 규칙을 그대로 유지하며 내보내기 때문에 전체 query나 아이템별 상세를 다시 호출하지 않습니다. 내보내기 정보 시트에는 Baseline 이름과 ID를 기록합니다.
 - tracker 검색은 선택 tracker ID로 `TrackerQuery`를 만들며 빈 검색 조건은 화면에서 차단합니다.
+- 검색 탭의 `조회 기준`은 계층 탭 콤보와 같은 값입니다. 계층 탭이 기준과 Baseline 목록을 검색 탭에 알리고, 검색 탭에서
+  고르면 계층 탭 콤보를 바꿉니다. Baseline을 고르면 `TrackerQuery.baseline_id`로 검색하고, 결과는 검색한 시점의
+  `baselineId`로 읽기 전용 상세를 엽니다. 기준이 바뀌면 결과를 비우고, 검색 중에 기준이 바뀌면 늦게 온 결과를 버립니다.
+  Baseline 결과에서는 선택 열과 일괄 수정 줄을 숨깁니다. 상세 조건의 필드 목록은 현재 tracker schema를 쓰므로
+  Baseline 이후 생긴 필드로 거르면 서버 오류나 빈 결과가 될 수 있습니다. 서버가 조건을 Baseline 시점 값으로
+  평가하는지는 공식 문서에 없어 실제 서버에서 확인합니다.
 - ID 바로 열기는 `resolve_item_context()` 후 `load_ancestor_path()`를 호출해 선택 컨텍스트와 경로를 함께 전환합니다.
 - 설정·선택이 바뀐 뒤 늦게 끝난 요청이 화면을 덮지 않도록 작업 종류별 request token과 현재 tracker/item을 비교합니다.
 - Wiki 캐시는 연결, project, item, version, Baseline과 원문 digest를 함께 사용합니다. 현재와 Baseline
