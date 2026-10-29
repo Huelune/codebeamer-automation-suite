@@ -127,6 +127,8 @@ Wiki 페이지 이름, `artifact_id`가 없는 `CB:/` 경로, `mailto:` 같은 �
 `/v3/attachments/{attachmentId}/content`를 사용합니다. 실서버 Swagger에서 확인한 결과, 첨부 목록 API는
 `baselineId`·`version`을 받지 않고 첨부 단건·내용 API(`/v3/attachments/{attachmentId}`, `.../content`)만
 `version`을 받습니다. 첨부 버전 목록은 `/v3/attachments/{attachmentId}/history`로 조회합니다.
+실서버에서 첨부 목록 항목에는 `md5` 대신 `sha512`가 있고, 이력 항목(`revisions`)에는 `version`, `modifiedAt`만 있어
+해시가 없습니다. Baseline 목록 항목에도 만든 시각이 없습니다.
 목록만으로는 Baseline 시점 첨부를 고를 수 없으므로 Baseline 상세는 최신 첨부와 섞이지 않도록
 첨부 목록과 인라인 이미지 자동 다운로드를 차단합니다.
 
