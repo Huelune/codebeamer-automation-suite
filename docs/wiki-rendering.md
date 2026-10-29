@@ -124,8 +124,10 @@ Wiki 페이지 이름, `artifact_id`가 없는 `CB:/` 경로, `mailto:` 같은 �
 - 첨부 저장은 대상 폴더의 임시 파일을 완성한 뒤 교체하므로 실패한 다운로드가 정상 파일로 남지 않습니다.
 
 아이템 첨부 목록은 `/v3/items/{itemId}/attachments`, 바이너리는
-`/v3/attachments/{attachmentId}/content`를 사용합니다. 대상 서버에서 이 endpoint들의 제공 여부와 과거
-첨부 revision 해석은 Swagger 및 실데이터로 확인해야 합니다. Baseline 상세는 최신 첨부와 섞이지 않도록
+`/v3/attachments/{attachmentId}/content`를 사용합니다. 실서버 Swagger에서 확인한 결과, 첨부 목록 API는
+`baselineId`·`version`을 받지 않고 첨부 단건·내용 API(`/v3/attachments/{attachmentId}`, `.../content`)만
+`version`을 받습니다. 첨부 버전 목록은 `/v3/attachments/{attachmentId}/history`로 조회합니다.
+목록만으로는 Baseline 시점 첨부를 고를 수 없으므로 Baseline 상세는 최신 첨부와 섞이지 않도록
 첨부 목록과 인라인 이미지 자동 다운로드를 차단합니다.
 
 허용하는 CSS 속성은 `color`, `background-color`, `font-size`, `font-style`, `font-weight`,
