@@ -90,6 +90,10 @@ Baseline 목록은 응답의 `page`, `pageSize`, `total`, `references`를 해석
 `baselineId`를 전달합니다. 이 경로는 필드 비교에 필요한 상세 `items` 응답만 허용하며 `itemRefs`로
 조용히 대체하지 않습니다. 모든 페이지가 성공한 뒤에만 화면 캐시를 교체합니다.
 
+`baselineId`를 붙인 검색은 조건을 Baseline 시점 값으로 평가합니다. 실서버에서 Baseline 이후 요약이 바뀐
+아이템을 Baseline 시점 요약으로는 찾고 현재 요약으로는 찾지 못하는 것을 확인했습니다. 상태 조건은 Baseline 이후
+상태가 바뀐 아이템이 없어 직접 확인하지 못했습니다.
+
 ### Baseline 저장본
 
 Baseline 내용은 만든 뒤 바뀌지 않으므로, Baseline 시점 전체 `items` 응답을 PC에 저장해 다시 씁니다
