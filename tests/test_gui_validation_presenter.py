@@ -55,6 +55,58 @@ class ValidationPresenterTest(unittest.TestCase):
         self.assertIn("선택한 트래커", message)
         self.assertIn("다른 트래커", action)
 
+    def test_parent_item_error_points_to_parent_column(self) -> None:
+        row = pd.Series(
+            {
+                "payload_error": (
+                    "[PARENT_ITEM_TRACKER_MISMATCH] field='parent' df_column='parent' _row_id=0 "
+                    "item_id=600 tracker_id=99 selected_tracker_id=2"
+                )
+            }
+        )
+
+        column, field, message, _action = ValidationPresenter.message_from_payload_error(row)
+
+        self.assertEqual((column, field), ("parent", "parent"))
+        self.assertIn("목적지", message)
+
+    def test_ignored_parent_value_is_reported_as_notice_only(self) -> None:
+        payload_df = pd.DataFrame(
+            [
+                {
+                    "_row_id": 0,
+                    "upload_name": "Existing",
+                    "_operation": "update",
+                    "_parent_ignored": True,
+                    "payload_status": PayloadStatus.READY.value,
+                    "payload_error": None,
+                },
+                {
+                    "_row_id": 1,
+                    "upload_name": "Child",
+                    "_operation": "create",
+                    "_parent_ignored": True,
+                    "payload_status": PayloadStatus.READY.value,
+                    "payload_error": None,
+                },
+                {
+                    "_row_id": 2,
+                    "upload_name": "New",
+                    "_operation": "create",
+                    "_parent_ignored": False,
+                    "payload_status": PayloadStatus.READY.value,
+                    "payload_error": None,
+                },
+            ]
+        )
+
+        issue_df = self.presenter.build_user_issue_df(pd.DataFrame(), pd.DataFrame(), payload_df)
+
+        self.assertEqual(issue_df["severity"].tolist(), ["안내", "안내"])
+        self.assertEqual(issue_df["column"].tolist(), ["parent", "parent"])
+        self.assertIn("기존 위치", issue_df.iloc[0]["message"])
+        self.assertIn("상위 행", issue_df.iloc[1]["message"])
+
     def test_partial_table_update_error_points_to_table_column(self) -> None:
         row = pd.Series(
             {

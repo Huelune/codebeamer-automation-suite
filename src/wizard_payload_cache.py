@@ -7,6 +7,7 @@ import pandas as pd
 
 from .models import PayloadStatus
 from .upload_policy import normalize_upload_mode
+from .upload_policy import upload_mode_supports_create
 from .upload_policy import upload_mode_supports_update
 
 
@@ -25,6 +26,8 @@ class WizardPayloadCacheService:
         build_row_payload: Callable[..., dict[str, Any]],
         resolve_update_target_item_id: Callable[..., int | None],
         apply_upsert_hierarchy_validation: Callable[[pd.DataFrame, pd.DataFrame], None],
+        create_parent_column_name: Callable[[pd.DataFrame], str | None],
+        resolve_create_parent_item_id: Callable[..., int | None],
     ) -> None:
         self.state = state
         self._payload_source_df = payload_source_df
@@ -35,6 +38,16 @@ class WizardPayloadCacheService:
         self._build_row_payload = build_row_payload
         self._resolve_update_target_item_id = resolve_update_target_item_id
         self._apply_upsert_hierarchy_validation = apply_upsert_hierarchy_validation
+        self._create_parent_column_name = create_parent_column_name
+        self._resolve_create_parent_item_id = resolve_create_parent_item_id
+
+    @staticmethod
+    def _is_blank_cell(value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, (list, dict)):
+            return not value
+        return bool(pd.isna(value)) or not str(value).strip()
 
     def build_payloads(
         self,
@@ -72,10 +85,20 @@ class WizardPayloadCacheService:
                     if item_count > 1
                 }
 
+        # `parent` 열은 새로 만드는 최상위 행의 목적지다. 수정 행과 하위 행의 값은 쓰지 않고 안내만 한다.
+        parent_column_name = (
+            self._create_parent_column_name(source_df)
+            if upload_mode_supports_create(upload_mode)
+            else None
+        )
+        checked_parent_items: dict[int, tuple[str, str] | None] = {}
+
         for _, row in source_df.iterrows():
             row_id = int(row["_row_id"])
             operation = "create"
             target_item_id: int | None = None
+            parent_item_id: int | None = None
+            parent_ignored = False
             try:
                 payload_json = None
                 if upload_mode == "update":
@@ -120,11 +143,23 @@ class WizardPayloadCacheService:
                             )
                 else:
                     payload_json = self._build_row_payload(row, row_id)
+                if parent_column_name is not None:
+                    if operation == "create" and self._is_blank_cell(row.get("parent_row_id")):
+                        parent_item_id = self._resolve_create_parent_item_id(
+                            row,
+                            row_id,
+                            parent_column_name=parent_column_name,
+                            checked_parent_items=checked_parent_items,
+                        )
+                    else:
+                        parent_ignored = not self._is_blank_cell(row.get(parent_column_name))
                 payload_rows.append({
                     "_row_id": row_id,
                     "parent_row_id": row.get("parent_row_id"),
                     "upload_name": row.get("upload_name"),
                     "_target_item_id": target_item_id,
+                    "_parent_item_id": parent_item_id,
+                    "_parent_ignored": parent_ignored,
                     "_operation": operation,
                     "payload_json": payload_json,
                     "payload_status": PayloadStatus.READY.value,
@@ -136,6 +171,8 @@ class WizardPayloadCacheService:
                     "parent_row_id": row.get("parent_row_id"),
                     "upload_name": row.get("upload_name"),
                     "_target_item_id": target_item_id,
+                    "_parent_item_id": None,
+                    "_parent_ignored": False,
                     "_operation": operation,
                     "payload_json": None,
                     "payload_status": PayloadStatus.FAILED.value,

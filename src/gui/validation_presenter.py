@@ -389,11 +389,26 @@ class ValidationPresenter:
                 "기존 수정 행의 상위 계층에 신규 생성 행이 섞여 있습니다.",
                 "상위 계층에도 기존 id를 넣거나, 해당 하위 행을 신규 생성으로 분리한 뒤 다시 검증하세요.",
             ),
+            "PARENT_ITEM_ID_INVALID": (
+                "새 아이템을 넣을 목적지 item id를 숫자로 해석할 수 없습니다.",
+                "해당 행의 parent 값을 양의 정수로 고치거나 비운 뒤 다시 검증하세요.",
+            ),
+            "PARENT_ITEM_FETCH_FAILED": (
+                "새 아이템을 넣을 목적지 item을 조회하지 못했습니다.",
+                "parent 값과 서버 연결 상태를 확인한 뒤 다시 검증하세요.",
+            ),
+            "PARENT_ITEM_TRACKER_MISMATCH": (
+                "새 아이템을 넣을 목적지 item이 선택한 트래커의 아이템이 아닙니다.",
+                "parent 값을 선택한 트래커의 아이템 id로 고친 뒤 다시 검증하세요.",
+            ),
         }
         if code in messages:
             message, action = messages[code]
             if code == "ITEM_NAME_MISSING":
                 column = "요약"
+            if code.startswith("PARENT_ITEM_"):
+                column = column or "parent"
+                field = parsed["field"] or "parent"
             if code in {
                 "UPDATE_ITEM_ID_COLUMN_MISSING",
                 "UPDATE_ITEM_ID_MISSING",
@@ -598,6 +613,43 @@ class ValidationPresenter:
                         "action": action,
                     }
                 )
+
+            # 수정 행과 하위 행은 Excel `parent` 값을 쓰지 않는다. 막지는 않고 알리기만 한다.
+            if "_parent_ignored" in payload_df.columns:
+                ignored_df = payload_df[
+                    payload_df["payload_status"].eq(PayloadStatus.READY.value)
+                    & payload_df["_parent_ignored"].fillna(False).astype(bool)
+                ]
+                for _, row in ignored_df.iterrows():
+                    row_key = cls.scoped_row_key(row.get("_row_id"), row.get("source_file_path"))
+                    row_context = cls.row_context(
+                        row_key,
+                        row_context_map,
+                        fallback_item_name=cls.display_text(row.get("upload_name")),
+                    )
+                    is_update = str(row.get("_operation") or "").strip().lower() == "update"
+                    issues.append(
+                        {
+                            "severity": "안내",
+                            "category": "목적지",
+                            "row_id": row_context["row_id"],
+                            "row_label": row_context["row_label"],
+                            "item_name": row_context["item_name"],
+                            "source_file": row_context["source_file"]
+                            or cls.display_text(row.get("source_file")),
+                            "source_file_path": row_context["source_file_path"]
+                            or cls.display_text(row.get("source_file_path")),
+                            "column": "parent",
+                            "field": "parent",
+                            "raw_value": cls.raw_value_from_row_context(row_key, "parent", row_context_map),
+                            "message": (
+                                "수정하는 행의 parent 값은 쓰지 않습니다. 기존 위치를 그대로 둡니다."
+                                if is_update
+                                else "하위 행의 parent 값은 쓰지 않습니다. Excel의 상위 행 아래에 만듭니다."
+                            ),
+                            "action": "의도한 동작이면 그대로 진행하고, 아니면 parent 값을 비우세요.",
+                        }
+                    )
 
         return cls.finalize_issue_df(pd.DataFrame(issues, columns=issue_columns))
 

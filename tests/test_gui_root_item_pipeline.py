@@ -523,6 +523,74 @@ class GuiRootItemPipelineServiceTest(unittest.TestCase):
                 [("EMS", [0])],
             )
 
+    def test_parent_column_rows_are_left_out_of_new_group_folders(self) -> None:
+        """Excel `parent` 열로 목적지를 정한 행은 새 그룹 폴더에 넣지 않는다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "ABC_REQ-001.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Main"
+            sheet.append(["id", "parent", "Summary", "Folder"])
+            sheet.append([None, None, "REQ-001", "EMS"])
+            sheet.append([None, 500, "REQ-002", "EMS"])
+            sheet.append([None, 500, "REQ-003", "VCU"])
+            workbook.save(path)
+            workbook.close()
+
+            service = GuiUploadPipelineService(
+                client_factory=UpsertModeFakeClient,
+                excel_service=GuiExcelService(reader_cls=FakeExcelReader),
+                reader_cls=FakeExcelReader,
+            )
+            settings = GuiSettings(
+                base_url="https://example.com/cb",
+                username="user",
+                password="secret",
+                default_project_id="10",
+                default_tracker_id="1000",
+                excel_header_row=1,
+                summary_column="Summary",
+                excel_sheet_name="Main",
+                upload_mode="upsert",
+            )
+            file_state = {
+                "file_path": str(path),
+                "file_paths": [str(path)],
+                "preview_file_path": str(path),
+                "sheet_name": "Main",
+                "header_row": 1,
+                "summary_column": "Summary",
+            }
+            mapping_context = service.prepare_mapping_context(settings, file_state)
+            mapping_context.root_item_config = {
+                "root_mode": ROOT_ITEM_MODE_GROUP_BY_COLUMN,
+                "group_by_column": "Folder",
+                "regex_pattern": "",
+                "regex_target": "file_stem",
+                "field_assignments": {
+                    "Summary": {
+                        "enabled": True,
+                        "mode": "file_source",
+                        "value": ROOT_SOURCE_GROUP_VALUE,
+                    },
+                },
+            }
+
+            wizard = service._prepare_wizard_for_file(
+                settings,
+                mapping_context,
+                file_path=str(path),
+                sheet_name="Main",
+                header_row=1,
+                summary_col="Summary",
+            )
+            root_item_specs = service.build_root_item_payload_specs(mapping_context, wizard, str(path))
+
+            self.assertEqual(
+                [(spec.name, spec.row_ids) for spec in root_item_specs],
+                [("EMS", [0])],
+            )
+
     def test_build_root_item_payload_specs_can_create_file_root_and_group_folders_together(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "ABC_REQ-001.xlsx"

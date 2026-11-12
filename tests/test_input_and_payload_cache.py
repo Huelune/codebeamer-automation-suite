@@ -636,6 +636,126 @@ class PayloadCacheWizardTest(unittest.TestCase):
         )
         self.assertEqual(len(upload_result["success_df"]), 2)
 
+    def _build_parent_column_wizard(
+        self,
+        client: UpsertSchemaClient,
+        rows: list[dict[str, Any]],
+        *,
+        upload_mode: str,
+    ) -> CountingWizard:
+        wizard = CountingWizard(
+            client=client,
+            processor=HierarchyProcessor(summary_col="요약"),
+            mapper=self.mapper,
+        )
+        wizard.select_project(1)
+        wizard.select_tracker(2)
+        wizard.state.upload_mode = upload_mode
+        wizard.load_raw_dataframe(pd.DataFrame(rows, dtype=object), list_cols=[])
+        wizard.load_schema_and_compare({"요약": "Summary"})
+        wizard.process_option_mapping({"요약": "Summary"})
+        return wizard
+
+    def test_upsert_creates_new_top_level_row_under_parent_column_item(self) -> None:
+        """`parent` 열은 새 최상위 행의 목적지다. 수정 행과 하위 행의 값은 쓰지 않는다."""
+        client = UpsertSchemaClient(self.schema)
+        wizard = self._build_parent_column_wizard(
+            client,
+            [
+                {"id": 101, "parent": 900, "요약": "Existing", "_excel_row": 2, "_summary_indent": 0},
+                {"id": None, "parent": 500.0, "요약": "New in folder", "_excel_row": 3, "_summary_indent": 0},
+                {"id": None, "parent": 700, "요약": "Child", "_excel_row": 4, "_summary_indent": 1},
+                {"id": None, "parent": 500, "요약": "Second in folder", "_excel_row": 5, "_summary_indent": 0},
+                {"id": None, "parent": None, "요약": "New at top", "_excel_row": 6, "_summary_indent": 0},
+            ],
+            upload_mode="upsert",
+        )
+
+        payload_df = wizard.build_payloads(fetch_existing_items=False)
+
+        self.assertEqual(set(payload_df["payload_status"]), {PayloadStatus.READY.value})
+        self.assertEqual(
+            [None if pd.isna(value) else int(value) for value in payload_df["_parent_item_id"]],
+            [None, 500, None, 500, None],
+        )
+        self.assertEqual(payload_df["_parent_ignored"].tolist(), [True, False, True, False, False])
+        # 같은 목적지는 한 번만 조회하고, 쓰지 않는 값(900, 700)은 조회하지 않는다.
+        self.assertEqual(client.get_item_calls, [500])
+
+        upload_result = wizard.upsert_items(dry_run=False)
+
+        self.assertEqual(
+            [(call["payload"]["name"], call["parent_item_id"]) for call in client.create_item_calls],
+            [
+                ("New in folder", 500),
+                ("Child", 1001),
+                ("Second in folder", 500),
+                ("New at top", None),
+            ],
+        )
+        self.assertEqual([item_id for item_id, _ in client.update_item_calls], [101])
+        self.assertEqual(len(upload_result["success_df"]), 5)
+
+    def test_parent_column_row_skips_new_top_level_folder(self) -> None:
+        client = UpsertSchemaClient(self.schema)
+        wizard = self._build_parent_column_wizard(
+            client,
+            [
+                {"parent": 500, "요약": "In existing folder", "_excel_row": 2, "_summary_indent": 0},
+                {"parent": None, "요약": "In new folder", "_excel_row": 3, "_summary_indent": 0},
+            ],
+            upload_mode="create",
+        )
+
+        wizard.upload(
+            dry_run=False,
+            top_level_parent_specs=[{"key": "root", "name": "New folder", "row_ids": [1]}],
+        )
+
+        self.assertEqual(
+            [(call["payload"]["name"], call["parent_item_id"]) for call in client.create_item_calls],
+            [("New folder", None), ("In existing folder", 500), ("In new folder", 1001)],
+        )
+
+    def test_parent_column_blocks_invalid_or_other_tracker_item(self) -> None:
+        client = UpsertSchemaClient(self.schema)
+        client.item_tracker_ids[600] = 99
+        wizard = self._build_parent_column_wizard(
+            client,
+            [
+                {"parent": "folder", "요약": "Bad format", "_excel_row": 2, "_summary_indent": 0},
+                {"parent": 600, "요약": "Other tracker", "_excel_row": 3, "_summary_indent": 0},
+                {"parent": 600, "요약": "Other tracker again", "_excel_row": 4, "_summary_indent": 0},
+            ],
+            upload_mode="create",
+        )
+
+        payload_df = wizard.build_payloads()
+
+        self.assertEqual(set(payload_df["payload_status"]), {PayloadStatus.FAILED.value})
+        self.assertIn("[PARENT_ITEM_ID_INVALID]", payload_df.iloc[0]["payload_error"])
+        self.assertIn("[PARENT_ITEM_TRACKER_MISMATCH]", payload_df.iloc[1]["payload_error"])
+        self.assertIn("[PARENT_ITEM_TRACKER_MISMATCH]", payload_df.iloc[2]["payload_error"])
+        self.assertEqual(client.get_item_calls, [600])
+
+        wizard.upload(dry_run=False)
+
+        self.assertEqual(client.create_item_calls, [])
+
+    def test_update_mode_does_not_read_parent_column(self) -> None:
+        client = UpsertSchemaClient(self.schema)
+        wizard = self._build_parent_column_wizard(
+            client,
+            [{"id": 101, "parent": "folder", "요약": "Existing", "_excel_row": 2, "_summary_indent": 0}],
+            upload_mode="update",
+        )
+
+        payload_df = wizard.build_payloads()
+
+        self.assertEqual(payload_df["payload_status"].tolist(), [PayloadStatus.READY.value])
+        self.assertEqual(payload_df["_parent_ignored"].tolist(), [False])
+        self.assertEqual(client.get_item_calls, [101])
+
     def test_failure_reason_hides_server_address(self) -> None:
         """결과 표·로그·실패 보고서에 남는 실패 사유에 서버 주소가 들어가지 않는다."""
         wizard = CountingWizard(

@@ -30,18 +30,91 @@ class WizardUpdatePayloadService:
         self._raise_payload_error = raise_payload_error
 
     @staticmethod
-    def _update_item_id_column_name(source_df: pd.DataFrame) -> str | None:
-        """업데이트 모드에서 사용할 Excel ID 열 이름을 찾는다."""
-        exact_match = None
+    def _fixed_name_column(source_df: pd.DataFrame, fixed_name: str) -> str | None:
+        """이름이 정해진 Excel 열을 찾는다. 같은 이름이 우선이고, 없으면 대소문자만 다른 첫 열이다."""
+        case_insensitive_match = None
         for column_name in source_df.columns:
             normalized = str(column_name or "").strip()
             if not normalized or normalized.startswith("_"):
                 continue
-            if normalized == "id":
+            if normalized == fixed_name:
                 return normalized
-            if normalized.casefold() == "id" and exact_match is None:
-                exact_match = normalized
-        return exact_match
+            if normalized.casefold() == fixed_name and case_insensitive_match is None:
+                case_insensitive_match = normalized
+        return case_insensitive_match
+
+    @classmethod
+    def _update_item_id_column_name(cls, source_df: pd.DataFrame) -> str | None:
+        """업데이트 모드에서 사용할 Excel ID 열 이름을 찾는다."""
+        return cls._fixed_name_column(source_df, "id")
+
+    @classmethod
+    def _create_parent_column_name(cls, source_df: pd.DataFrame) -> str | None:
+        """새로 만드는 최상위 행의 목적지(기존 item id)를 적는 Excel `parent` 열 이름을 찾는다."""
+        return cls._fixed_name_column(source_df, "parent")
+
+    def _create_parent_item_problem(self, parent_item_id: int) -> tuple[str, str] | None:
+        """목적지 item 을 조회해 쓸 수 없는 이유(오류 코드, 상세)를 돌려준다. 쓸 수 있으면 None.
+
+        수정 대상 캐시(`existing_item_cache`)에는 넣지 않는다. 같은 item 이 수정 행이기도 하면
+        생성 단계 전에 읽은 내용으로 수정 payload 를 만들게 된다.
+        """
+        try:
+            parent_item = self.client.get_item(int(parent_item_id))
+        except Exception as exc:
+            return "PARENT_ITEM_FETCH_FAILED", f"item_id={int(parent_item_id)} error={exc}"
+        parent_tracker_id = self._item_tracker_id(parent_item) if isinstance(parent_item, dict) else None
+        selected_tracker_id = self.state.tracker_id
+        if (
+            parent_tracker_id is None
+            or selected_tracker_id is None
+            or parent_tracker_id != int(selected_tracker_id)
+        ):
+            return (
+                "PARENT_ITEM_TRACKER_MISMATCH",
+                f"item_id={int(parent_item_id)} tracker_id={parent_tracker_id} "
+                f"selected_tracker_id={selected_tracker_id}",
+            )
+        return None
+
+    def _resolve_create_parent_item_id(
+        self,
+        row: pd.Series,
+        row_id: int,
+        *,
+        parent_column_name: str,
+        checked_parent_items: dict[int, tuple[str, str] | None],
+    ) -> int | None:
+        """행의 `parent` 칸을 새 item 을 만들 목적지 item id 로 해석한다. 비어 있으면 None.
+
+        `checked_parent_items` 는 한 번의 payload 계산 동안 같은 목적지를 다시 조회하지 않게 한다.
+        """
+        raw_parent = row.get(parent_column_name)
+        try:
+            parent_item_id = self._parse_update_item_id(raw_parent)
+        except ValueError as exc:
+            if str(exc) == "missing":
+                return None
+            self._raise_payload_error(
+                "PARENT_ITEM_ID_INVALID",
+                schema_field="parent",
+                df_col=parent_column_name,
+                row_id=row_id,
+                detail=f"value={raw_parent!r}",
+            )
+
+        if parent_item_id not in checked_parent_items:
+            checked_parent_items[parent_item_id] = self._create_parent_item_problem(parent_item_id)
+        problem = checked_parent_items[parent_item_id]
+        if problem is not None:
+            self._raise_payload_error(
+                problem[0],
+                schema_field="parent",
+                df_col=parent_column_name,
+                row_id=row_id,
+                detail=problem[1],
+            )
+        return parent_item_id
 
     @staticmethod
     def _parse_update_item_id(raw_value: Any) -> int:
