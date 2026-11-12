@@ -432,8 +432,12 @@ class WizardOperationMixin(_WizardOperationMixinSiblings):
                     break
 
                 parent_row_id = row["parent_row_id"]
+                target_parent_item_id = row.get("_parent_item_id")
                 if parent_row_id is None or pd.isna(parent_row_id):
-                    if normalized_parent_specs:
+                    # Excel `parent` 열에 목적지를 적은 행은 새 상단 폴더가 아니라 그 item 아래에 만든다.
+                    if target_parent_item_id is not None and not pd.isna(target_parent_item_id):
+                        parent_item_id = int(target_parent_item_id)
+                    elif normalized_parent_specs:
                         if row_id in top_level_parent_item_ids:
                             parent_item_id = top_level_parent_item_ids[row_id]
                         elif row_id in top_level_parent_name_by_row_id:

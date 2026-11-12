@@ -8,6 +8,7 @@ Excel 기반 계층형 데이터를 Codebeamer Tracker Item으로 변환하고 �
 ## 주요 기능
 
 - Excel 계층 데이터를 tracker schema에 맞춰 매핑하고 parent-first 순서로 업로드합니다. create/update/upsert 모드를 지원합니다.
+  Excel에 `id` 열이 있으면 값이 있는 행은 수정, 없는 행은 생성하고(upsert), `parent` 열에 기존 아이템 id를 적으면 새 최상위 행을 그 아이템 아래에 만듭니다.
 - `UserChoiceField`, `MemberField`, `TrackerItemChoiceField`, `TableField` 등 reference 계열 필드를 이름·정규식·payload 구조를 유지한 채 변환합니다.
 - 트래커 작업공간에서 계층 조회, tracker 범위 검색, 단건 생성·수정·삭제, 페이지를 넘는 일괄 수정을 수행합니다.
 - 현재 상태와 Baseline을 비교하고 계층·비교 결과를 Excel로 내보냅니다.

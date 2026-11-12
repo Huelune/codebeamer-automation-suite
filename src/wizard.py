@@ -77,6 +77,8 @@ class CodebeamerUploadWizard(
             build_row_payload=self._build_row_payload,
             resolve_update_target_item_id=self._resolve_update_target_item_id,
             apply_upsert_hierarchy_validation=self._apply_upsert_hierarchy_validation,
+            create_parent_column_name=self.update_payloads._create_parent_column_name,
+            resolve_create_parent_item_id=self.update_payloads._resolve_create_parent_item_id,
         )
 
 

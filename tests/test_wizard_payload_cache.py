@@ -35,6 +35,8 @@ class WizardPayloadCacheServiceTest(unittest.TestCase):
             build_row_payload=build_row_payload,
             resolve_update_target_item_id=Mock(),
             apply_upsert_hierarchy_validation=Mock(),
+            create_parent_column_name=Mock(return_value=None),
+            resolve_create_parent_item_id=Mock(),
         )
 
         first = service.build_payloads()

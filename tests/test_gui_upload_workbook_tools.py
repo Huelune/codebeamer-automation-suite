@@ -133,7 +133,7 @@ class UploadWorkbookServiceTest(unittest.TestCase):
             output = Path(temp_dir) / "template.xlsx"
             result = self.service.export_tracker_template(schema_df, output, upload_mode="upsert")
 
-            self.assertEqual(result.column_count, 7)
+            self.assertEqual(result.column_count, 8)
             workbook = load_workbook(output, data_only=False)
             try:
                 self.assertEqual(workbook.sheetnames, ["업로드", "사용 안내", "선택값"])
@@ -143,6 +143,7 @@ class UploadWorkbookServiceTest(unittest.TestCase):
                     headers,
                     [
                         "id",
+                        "parent",
                         "Summary",
                         "Status",
                         "Description",
@@ -160,8 +161,11 @@ class UploadWorkbookServiceTest(unittest.TestCase):
                 guide_rows = {
                     str(row[0].value): tuple(cell.value for cell in row[1:])
                     for row in guide.iter_rows(min_row=2)
-                    if row[0].value in {"Description", "Steps.Action", "Steps.Expected"}
+                    if row[0].value in {"parent", "Description", "Steps.Action", "Steps.Expected"}
                 }
+                # 새 최상위 행의 목적지 열은 필수가 아니고, 무엇을 적는지 안내한다.
+                self.assertIn("폴더", guide_rows["parent"][2])
+                self.assertFalse(workbook["업로드"]["B1"].fill.fgColor.rgb.endswith("C65911"))
                 self.assertEqual(
                     guide_rows["Description"][:2],
                     ("상태별 필수", "In Progress"),
