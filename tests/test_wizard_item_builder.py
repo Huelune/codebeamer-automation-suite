@@ -65,7 +65,6 @@ class WizardItemBuilderServiceTest(unittest.TestCase):
 
         fields = self.service._build_table_custom_fields(
             pd.Series({"Steps": ["Open", "Close"]}),
-            row_id=0,
             operation="create",
         )
 
@@ -95,16 +94,22 @@ class WizardItemBuilderServiceTest(unittest.TestCase):
     def test_create_may_send_only_some_table_columns(self) -> None:
         row = self._two_column_table()
 
-        fields = self.service._build_table_custom_fields(row, row_id=0, operation="create")
+        fields = self.service._build_table_custom_fields(row, operation="create")
 
         self.assertEqual(len(fields), 1)
 
-    def test_update_with_only_some_table_columns_raises_payload_error(self) -> None:
+    def test_update_with_only_some_table_columns_sends_only_those_columns(self) -> None:
+        """수정은 기존 표를 통째로 바꾼다. 매핑하지 않은 열은 보내지 않아 빈칸이 된다."""
         row = self._two_column_table()
         self.state.upload_mode = "update"
 
-        with self.assertRaisesRegex(ValueError, r"\[TABLE_FIELD_PARTIAL_UPDATE\].*Expected"):
-            self.service._build_table_custom_fields(row, row_id=0, operation="update")
+        fields = self.service._build_table_custom_fields(row, operation="update")
+
+        self.assertEqual(len(fields), 1)
+        self.assertEqual(
+            [[cell.field_name for cell in table_row] for table_row in fields[0].values],
+            [["Action"]],
+        )
 
     def test_table_column_outside_operation_scope_is_skipped(self) -> None:
         row = self._two_column_table()
@@ -112,7 +117,7 @@ class WizardItemBuilderServiceTest(unittest.TestCase):
         self.state.selected_mapping_modes = {"Steps.Action": {"create": True, "update": False}}
 
         self.assertEqual(
-            self.service._build_table_custom_fields(row, row_id=0, operation="update"),
+            self.service._build_table_custom_fields(row, operation="update"),
             [],
         )
 

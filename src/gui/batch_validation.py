@@ -629,6 +629,78 @@ class BatchValidationService:
             })
         return pd.DataFrame(issues, columns=issue_columns)
 
+    @staticmethod
+    def _build_partial_table_update_issue_df(
+        schema_df: pd.DataFrame,
+        selected_mapping: dict[str, str],
+        mapping_modes: dict[str, OperationScope],
+        *,
+        upload_mode: str,
+    ) -> pd.DataFrame:
+        """수정 범위에 표의 일부 열만 매핑하면, 표마다 안내 한 줄을 만든다.
+
+        수정은 기존 표를 Excel 값으로 통째로 바꾸므로 매핑하지 않은 열은 빈칸이 된다. 막지는 않는다.
+        """
+        issue_columns = [
+            "severity",
+            "category",
+            "row_id",
+            "row_label",
+            "item_name",
+            "source_file",
+            "source_file_path",
+            "column",
+            "field",
+            "raw_value",
+            "message",
+            "action",
+        ]
+        if not gui_upload_mode_supports_update(upload_mode) or schema_df is None or schema_df.empty:
+            return pd.DataFrame(columns=issue_columns)
+        table_flags = schema_df.get("is_table_field")
+        if table_flags is None:
+            return pd.DataFrame(columns=issue_columns)
+
+        issues: list[dict[str, str]] = []
+        for _, table_row in schema_df.loc[table_flags.fillna(False).astype(bool)].iterrows():
+            table_name = str(table_row.get("field_name") or "").strip()
+            raw_columns = table_row.get("table_columns")
+            table_columns = [
+                str(column.get("name") or "").strip()
+                for column in (raw_columns if isinstance(raw_columns, list) else [])
+                if isinstance(column, dict) and str(column.get("name") or "").strip()
+            ]
+            mapped_df_columns = [
+                str(df_column)
+                for df_column, schema_field in selected_mapping.items()
+                if str(schema_field or "").strip() == table_name
+                and str(df_column).startswith(f"{table_name}.")
+                and str(df_column).split(".", 1)[1].strip() in table_columns
+                and scope_applies_to_operation(mapping_modes.get(df_column), "update", upload_mode=upload_mode)
+            ]
+            mapped_columns = {df_column.split(".", 1)[1].strip() for df_column in mapped_df_columns}
+            missing_columns = [column for column in table_columns if column not in mapped_columns]
+            if not mapped_df_columns or not missing_columns:
+                continue
+            issues.append({
+                "severity": "안내",
+                "category": "매핑",
+                "row_id": "",
+                "row_label": "",
+                "item_name": "",
+                "source_file": "",
+                "source_file_path": "",
+                "column": ", ".join(mapped_df_columns),
+                "field": table_name,
+                "raw_value": "",
+                "message": (
+                    f"수정하는 행의 {table_name} 표는 기존 표를 Excel 값으로 통째로 바꿉니다. "
+                    f"매핑하지 않은 열({', '.join(missing_columns)})은 빈칸이 됩니다."
+                ),
+                "action": "의도한 동작이면 그대로 진행하세요. 기존 값을 남기려면 그 열도 Excel에 넣어 매핑하세요.",
+            })
+        return pd.DataFrame(issues, columns=issue_columns)
+
     def _build_upsert_root_item_issue_df(
         self,
         mapping_context: MappingContext,
@@ -839,6 +911,14 @@ class BatchValidationService:
         )
         if not duplicate_field_issue_df.empty:
             issue_df = self._finalize_issue_df(pd.concat([issue_df, duplicate_field_issue_df], ignore_index=True))
+        partial_table_issue_df = self._build_partial_table_update_issue_df(
+            mapping_context.schema_df,
+            selected_mapping,
+            normalized_mapping_modes,
+            upload_mode=mapping_context.upload_mode,
+        )
+        if not partial_table_issue_df.empty:
+            issue_df = self._finalize_issue_df(pd.concat([issue_df, partial_table_issue_df], ignore_index=True))
         mapping_context.batch_duplicate_update_item_ids = set()
         if gui_upload_mode_supports_update(mapping_context.upload_mode):
             file_upload_dfs = {

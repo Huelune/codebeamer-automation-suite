@@ -213,10 +213,9 @@ class WizardPayloadMixin:
         self,
         row: pd.Series,
         *,
-        row_id: int,
         operation: str,
     ) -> list[TableFieldValue]:
-        return self.item_builder._build_table_custom_fields(row, row_id=row_id, operation=operation)
+        return self.item_builder._build_table_custom_fields(row, operation=operation)
 
     def _build_row_item(
         self,

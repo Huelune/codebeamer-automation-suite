@@ -107,22 +107,6 @@ class ValidationPresenterTest(unittest.TestCase):
         self.assertIn("기존 위치", issue_df.iloc[0]["message"])
         self.assertIn("상위 행", issue_df.iloc[1]["message"])
 
-    def test_partial_table_update_error_points_to_table_column(self) -> None:
-        row = pd.Series(
-            {
-                "payload_error": (
-                    "[TABLE_FIELD_PARTIAL_UPDATE] field='Steps' df_column='Steps.Action' _row_id=0 "
-                    "missing_columns=['Expected']"
-                )
-            }
-        )
-
-        column, field, message, action = ValidationPresenter.message_from_payload_error(row)
-
-        self.assertEqual((column, field), ("Steps.Action", "Steps"))
-        self.assertIn("일부 열", message)
-        self.assertIn("모든 열", action)
-
     def test_missing_name_error_asks_to_fill_summary_or_id(self) -> None:
         row = pd.Series(
             {
