@@ -162,6 +162,29 @@ class ExcelReaderTest(unittest.TestCase):
             self.assertIsInstance(raw_df.iloc[0]["번호"], int)
             self.assertIsInstance(raw_df.iloc[1]["실수"], int)
 
+    def test_excel_escaped_carriage_return_becomes_plain_line_break(self) -> None:
+        """Excel은 셀 안의 CR을 `_x000D_`로 적고 openpyxl은 그대로 돌려준다. 읽을 때 줄바꿈으로 되돌린다."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "sample.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Main"
+            sheet.append(["Summary", "Description"])
+            sheet.append(["REQ-001", "line1_x000D_\nline2_x000D_\nline3"])
+            sheet.append(["REQ-002", "keep _x005F_x000D_ text"])
+            workbook.save(path)
+            workbook.close()
+
+            reader = ExcelReader(header_row=1, summary_col="Summary")
+            raw_df = reader.read_excel(str(path), sheet_name=0)
+            _headers, preview_rows = reader.read_preview_rows(str(path), sheet_name=0, max_rows=5)
+
+            self.assertEqual(
+                raw_df["Description"].tolist(),
+                ["line1\nline2\nline3", "keep _x000D_ text"],
+            )
+            self.assertEqual(preview_rows[0][1], "line1\nline2\nline3")
+
     def test_xls_header_preview_and_full_load_use_absolute_worksheet_rows(self) -> None:
         values = [
             ["metadata", None],

@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
+from openpyxl.utils.escape import unescape
 
 
 OPENPYXL_PREVIEW_SCAN_ROW_LIMIT = 10_000
@@ -96,7 +97,12 @@ class ExcelReader:
 
     @staticmethod
     def _normalize_row(values: list[Any], width: int) -> list[Any]:
-        normalized = list(values)
+        # Excel은 셀 안의 CR 같은 문자를 `_x000D_`로 적어 두고 openpyxl은 그 글자를 그대로 돌려준다.
+        # 되돌린 뒤 CRLF·CR을 Excel에서 Alt+Enter로 넣는 줄바꿈(LF)으로 맞춘다.
+        normalized = [
+            unescape(value).replace("\r\n", "\n").replace("\r", "\n") if isinstance(value, str) else value
+            for value in values
+        ]
         if len(normalized) < width:
             normalized += [None] * (width - len(normalized))
         elif len(normalized) > width:
