@@ -316,6 +316,19 @@ class UploadWorkbookService:
                     ),
                 }
             )
+        if mode in {"create", "upsert"}:
+            headers.append("parent")
+            header_meta.append(
+                {
+                    "mandatory": False,
+                    "mandatory_mode": "never",
+                    "mandatory_status_names": (),
+                    "description": (
+                        "새로 만드는 최상위 행을 넣을 기존 아이템(폴더) ID. "
+                        "비우면 기존처럼 생성하고, 수정 행과 하위 행에서는 쓰지 않음"
+                    ),
+                }
+            )
         headers.append(summary_column)
         header_meta.append(
             {
