@@ -1,25 +1,35 @@
 from __future__ import annotations
 
+import re
+from html import escape
 from typing import Any
 from urllib.parse import unquote
 
 
 try:
+    from PySide6.QtCore import QMarginsF
     from PySide6.QtCore import QRect
+    from PySide6.QtCore import QSizeF
     from PySide6.QtCore import Qt
     from PySide6.QtCore import QUrl
     from PySide6.QtCore import Signal
     from PySide6.QtGui import QDesktopServices
     from PySide6.QtGui import QFontMetrics
     from PySide6.QtGui import QImage
+    from PySide6.QtGui import QPageLayout
+    from PySide6.QtGui import QPageSize
     from PySide6.QtGui import QPainter
     from PySide6.QtGui import QPalette
+    from PySide6.QtGui import QPdfWriter
+    from PySide6.QtGui import QTextBlockFormat
     from PySide6.QtGui import QTextCursor
     from PySide6.QtGui import QTextDocument
     from PySide6.QtGui import QTextFormat
     from PySide6.QtWidgets import QDialog
     from PySide6.QtWidgets import QDialogButtonBox
+    from PySide6.QtWidgets import QFileDialog
     from PySide6.QtWidgets import QLabel
+    from PySide6.QtWidgets import QMessageBox
     from PySide6.QtWidgets import QTextBrowser
     from PySide6.QtWidgets import QVBoxLayout
 except ImportError as exc:  # pragma: no cover
@@ -136,14 +146,56 @@ class WikiContentView(QTextBrowser):
         document.markContentsDirty(0, document.characterCount())
         self.viewport().update()
 
-    def _fit_images(self) -> None:
+    def export_pdf(self, path: str, heading: str) -> None:
+        """지금 보이는 문서를 A4 PDF로 저장한다. 줄바꿈과 그림 폭은 용지 폭에 맞춰 다시 잡는다."""
+        writer = QPdfWriter(path)
+        writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        writer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout.Unit.Millimeter)
+        # 부모가 이 칸이어야 받지 못한 그림의 자리 표시를 loadResource에서 얻는다.
+        document = self.document().clone(self)
+        try:
+            scale = self.logicalDpiX() / writer.logicalDpiX()
+            document.setPageSize(QSizeF(writer.width() * scale, writer.height() * scale))
+            cursor = QTextCursor(document)
+            cursor.insertBlock()
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            # 본문 첫 줄이 목록이면 머리말까지 목록 항목이 되므로 서식을 비운다.
+            cursor.setBlockFormat(QTextBlockFormat())
+            cursor.insertHtml(f"<h3>{escape(heading)}</h3>")
+            margin = int(document.documentMargin())
+            self._fit_images(document, max(int(document.pageSize().width()) - margin * 2 - 8, 64))
+            document.print_(writer)
+        finally:
+            document.deleteLater()
+
+    def save_pdf_with_dialog(self, item_id: int, name: str) -> None:
+        """저장 위치를 물어 설명을 PDF로 저장한다."""
+        default_name = re.sub(r'[\\/:*?"<>|\s]+', "_", f"{item_id}_{name}").strip("_") + ".pdf"
+        path, _selected_filter = QFileDialog.getSaveFileName(self, "설명 PDF로 저장", default_name, "PDF (*.pdf)")
+        if not path:
+            return
+        try:
+            # QPdfWriter는 파일을 열지 못해도 조용히 넘어가므로 먼저 쓸 수 있는지 본다.
+            with open(path, "wb"):
+                pass
+        except OSError:
+            QMessageBox.warning(
+                self,
+                "설명 PDF 저장 실패",
+                "파일에 쓸 수 없습니다. 같은 파일이 열려 있으면 닫고 다시 저장하세요.",
+            )
+            return
+        self.export_pdf(path, f"#{item_id} {name}")
+
+    def _fit_images(self, document: QTextDocument | None = None, limit: int | None = None) -> None:
         """그림을 HTML이 정한 폭(없으면 원본 폭)으로 그리되 칸보다 넓으면 칸 폭에 맞춘다.
 
-        원본 크기는 크게 보기 창에서 본다.
+        원본 크기는 크게 보기 창에서 본다. PDF로 저장할 때는 복사한 문서를 용지 폭에 맞춘다.
         """
-        limit = self._image_width_limit()
+        document = document or self.document()
+        limit = limit or self._image_width_limit()
         pending = []
-        block = self.document().begin()
+        block = document.begin()
         while block.isValid():
             iterator = block.begin()
             while not iterator.atEnd():
@@ -175,7 +227,7 @@ class WikiContentView(QTextBrowser):
                     pending.append((fragment.position(), fragment.length(), image_format))
             block = block.next()
         # 순회 중에 서식을 바꾸면 조각이 쪼개지므로 모아 두었다가 한 번에 바꾼다.
-        cursor = QTextCursor(self.document())
+        cursor = QTextCursor(document)
         for position, length, image_format in pending:
             cursor.setPosition(position)
             cursor.setPosition(position + length, QTextCursor.MoveMode.KeepAnchor)

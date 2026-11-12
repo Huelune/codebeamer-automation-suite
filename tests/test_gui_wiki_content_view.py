@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -92,6 +94,25 @@ class WikiContentViewTest(unittest.TestCase):
             self.view.document().size().width(),
             self.view.viewport().width() + 1,
         )
+
+    def test_export_pdf_writes_a_file_and_leaves_the_view_untouched(self) -> None:
+        self.view.add_attachment_resource(
+            AttachmentResource(self.key, "image/png", png_bytes(1600, 400))
+        )
+        self._app.processEvents()
+        text_before = self.view.toPlainText()
+        sizes_before = self._image_sizes()
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "description.pdf")
+
+        self.view.export_pdf(path, "#1 <제목>")
+
+        with open(path, "rb") as handle:
+            self.assertEqual(handle.read(5), b"%PDF-")
+        # 머리말과 용지 폭 맞춤은 복사한 문서에만 들어간다.
+        self.assertEqual(self.view.toPlainText(), text_before)
+        self.assertEqual(self._image_sizes(), sizes_before)
 
     def _image_sizes(self) -> list[tuple[int, int]]:
         sizes = []

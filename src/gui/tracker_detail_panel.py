@@ -377,6 +377,11 @@ class TrackerDetailPanel(QFrame):
         self.description_source_toggle.setVisible(False)
         self.description_source_toggle.toggled.connect(self._render_description)
         description_header.addWidget(self.description_source_toggle)
+        self.description_pdf_button = QPushButton("PDF로 저장", tab)
+        self.description_pdf_button.setObjectName("tracker_description_pdf")
+        self.description_pdf_button.setEnabled(False)
+        self.description_pdf_button.clicked.connect(self._save_description_pdf)
+        description_header.addWidget(self.description_pdf_button)
         top_layout.addLayout(description_header)
         self.detail_description = WikiContentView(tab)
         self.detail_description.codebeamer_link_activated.connect(self.open_codebeamer_link)
@@ -1036,6 +1041,11 @@ class TrackerDetailPanel(QFrame):
         dialog.exec()
         dialog.deleteLater()
 
+    def _save_description_pdf(self) -> None:
+        detail = self._current_detail
+        if detail is not None:
+            self.detail_description.save_pdf_with_dialog(detail.item_id, detail.summary.name)
+
     def open_codebeamer_link(self, kind: str, target_id: int, name: str) -> None:
         """설명 속 링크를 앱 안에서 연다. 아이템은 작업공간에서 열고, 첨부는 저장한다."""
         if kind == "item":
@@ -1085,6 +1095,7 @@ class TrackerDetailPanel(QFrame):
         write_locked = historical or self._host.selected_hierarchy_baseline_id() is not None
         previous_editor_detail = self.editor_panel.detail
         self._current_detail = detail
+        self.description_pdf_button.setEnabled(True)
         self._selected_item_id = detail.item_id
         self._detail_baseline_id = baseline_id
         self._update_detached_editor_title(detail)
@@ -1253,6 +1264,7 @@ class TrackerDetailPanel(QFrame):
 
     def reset_detail(self) -> None:
         self._current_detail = None
+        self.description_pdf_button.setEnabled(False)
         self._selected_item_id = None
         self._detail_baseline_id = None
         self._description_text = ""

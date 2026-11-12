@@ -568,6 +568,11 @@ class TrackerItemDetailDialog(QDialog):
         tab = QWidget(self)
         layout = QVBoxLayout(tab)
         description = WikiContentView(tab)
+        self.description_pdf_button = QPushButton("PDF로 저장", tab)
+        self.description_pdf_button.clicked.connect(
+            lambda: description.save_pdf_with_dialog(self.detail.item_id, self.detail.summary.name)
+        )
+        layout.addWidget(self.description_pdf_button, 0, Qt.AlignmentFlag.AlignRight)
         description.codebeamer_link_activated.connect(self._open_codebeamer_link)
         self.description_view = description
         description.setObjectName("tracker_detail_dialog_description")
