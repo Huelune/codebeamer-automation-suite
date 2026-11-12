@@ -90,6 +90,51 @@ class BatchValidationServiceTest(unittest.TestCase):
 
         self.assertTrue(issue_df.empty)
 
+    @staticmethod
+    def _three_column_table_schema() -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "field_name": "Steps",
+                    "is_table_field": True,
+                    "table_columns": [{"name": "Action"}, {"name": "Expected"}, {"name": "Note"}],
+                },
+            ]
+        )
+
+    def test_partial_table_update_is_one_notice_per_table(self) -> None:
+        """수정 범위에 일부 열만 있으면 막지 않고 표마다 안내 한 줄로 빠지는 열을 알린다."""
+        issue_df = BatchValidationService._build_partial_table_update_issue_df(
+            self._three_column_table_schema(),
+            {"Steps.Action": "Steps", "Steps.Note": "Steps"},
+            {"Steps.Note": {"create": True, "update": False}},
+            upload_mode=UPLOAD_MODE_UPSERT,
+        )
+
+        self.assertEqual(len(issue_df), 1)
+        self.assertEqual(issue_df.iloc[0]["severity"], "안내")
+        self.assertEqual(issue_df.iloc[0]["row_id"], "")
+        self.assertEqual(issue_df.iloc[0]["column"], "Steps.Action")
+        self.assertIn("Expected, Note", issue_df.iloc[0]["message"])
+
+    def test_partial_table_notice_skips_full_unmapped_and_create_only(self) -> None:
+        schema_df = self._three_column_table_schema()
+        all_columns = {"Steps.Action": "Steps", "Steps.Expected": "Steps", "Steps.Note": "Steps"}
+        cases = [
+            (all_columns, UPLOAD_MODE_UPDATE),
+            ({}, UPLOAD_MODE_UPDATE),
+            ({"Steps.Action": "Steps"}, UPLOAD_MODE_CREATE),
+        ]
+        for selected_mapping, upload_mode in cases:
+            with self.subTest(upload_mode=upload_mode, columns=sorted(selected_mapping)):
+                issue_df = BatchValidationService._build_partial_table_update_issue_df(
+                    schema_df,
+                    selected_mapping,
+                    {},
+                    upload_mode=upload_mode,
+                )
+                self.assertTrue(issue_df.empty)
+
 
 if __name__ == "__main__":
     unittest.main()

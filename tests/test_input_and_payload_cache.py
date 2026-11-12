@@ -986,16 +986,19 @@ class PayloadCacheWizardTest(unittest.TestCase):
 
         self.assertEqual(self._sent_table(client), [])
 
-    def test_update_with_only_some_table_columns_is_blocked(self) -> None:
-        """수정은 표 전체를 바꾸므로 일부 열만 보내면 나머지 열이 비워질 수 있다."""
+    def test_update_with_only_some_table_columns_replaces_the_table(self) -> None:
+        """수정은 기존 표를 통째로 바꾼다. 매핑한 열만 보내고 나머지 열은 빈칸이 된다."""
         client = UpsertSchemaClient(self.TABLE_SCHEMA)
         wizard = self._table_wizard(client, {"요약": "Summary", "Steps.Action": "Steps"})
 
-        payload_df = wizard.build_payloads(fetch_existing_items=False)
+        wizard.update_items(dry_run=False)
 
-        self.assertEqual(payload_df["payload_status"].tolist(), [PayloadStatus.FAILED.value])
-        self.assertIn("TABLE_FIELD_PARTIAL_UPDATE", str(payload_df.iloc[0]["payload_error"]))
-        self.assertIn("Expected", str(payload_df.iloc[0]["payload_error"]))
+        table = self._sent_table(client)
+        self.assertEqual(len(table), 1)
+        self.assertEqual(
+            [[cell["name"] for cell in row] for row in table[0]["values"]],
+            [["Action"]],
+        )
 
     def test_update_with_all_table_columns_replaces_the_table(self) -> None:
         client = UpsertSchemaClient(self.TABLE_SCHEMA)
