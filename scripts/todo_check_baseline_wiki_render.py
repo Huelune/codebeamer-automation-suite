@@ -109,9 +109,15 @@ class Checker:
         return hashlib.md5(data).hexdigest()
 
 
-def items(client: Any, tracker_id: int, baseline_id: int | None = None) -> dict[int, dict[str, Any]]:
+def items(
+    client: Any,
+    tracker_id: int,
+    baseline_id: int | None = None,
+    item_id: int | None = None,
+) -> dict[int, dict[str, Any]]:
+    only = f" AND item.id IN ({item_id})" if item_id is not None else ""
     payload = client.search_items(
-        query_string=f"tracker.id = {tracker_id} ORDER BY item.id DESC",
+        query_string=f"tracker.id = {tracker_id}{only} ORDER BY item.id DESC",
         baseline_id=baseline_id,
         page=1,
         page_size=PAGE_SIZE,
@@ -130,12 +136,14 @@ def check(
     checker: Checker,
     current: dict[int, dict[str, Any]],
     baseline: dict[int, dict[str, Any]],
+    check_all: bool = False,
 ) -> collections.Counter[str]:
     counts = collections.Counter[str]()
+    # 아이템을 지정했으면 해시가 같아도 본다. 사용자가 웹에서 그림이 다른 것을 이미 봤다.
     changed = [
         item_id
         for item_id, item in baseline.items()
-        if item_id in current and image_hashes(item) - image_hashes(current[item_id])
+        if item_id in current and (check_all or image_hashes(item) - image_hashes(current[item_id]))
     ]
     counts["changed"] = len(changed)
     for item_id in changed[:MAX_ITEMS]:
@@ -182,11 +190,12 @@ def main() -> None:
     if not settings.base_url or not settings.password:
         print("실패: 저장된 연결 정보 없음 -> GUI에서 연결 테스트를 통과시킨 뒤 다시 실행")
         return
-    arguments = [value.strip() for value in sys.argv[1:3]]
+    arguments = [value.strip() for value in sys.argv[1:4]]
     if not arguments or not all(value.isdigit() for value in arguments):
         print("실패: 트래커 ID 없음 -> 명령 뒤에 트래커 ID 숫자를 붙여 다시 실행")
         return
     tracker_id = int(arguments[0])
+    item_id = int(arguments[2]) if len(arguments) > 2 else None
     client = CodebeamerClient(settings.base_url, settings.username, settings.password, None)
 
     try:
@@ -196,19 +205,23 @@ def main() -> None:
         if baseline_id is None:
             print("판단 불가: Baseline 없음 -> Baseline이 있는 트래커로 다시 실행")
             return
-        current = items(client, tracker_id)
-        baseline = items(client, tracker_id, baseline_id)
+        current = items(client, tracker_id, None, item_id)
+        baseline = items(client, tracker_id, baseline_id, item_id)
     except Exception as exc:
         print(f"실패: 트래커·Baseline 조회 실패({failure(exc)}) -> 사내망/VPN과 트래커·Baseline ID 확인")
         return
 
     checker = Checker(client, project_id)
-    counts = check(checker, current, baseline)
+    counts = check(checker, current, baseline, check_all=item_id is not None)
+    target = "지정한 아이템" if item_id is not None else "본문 그림 해시가 현재와 다른 아이템"
     print(
         f"[대상] {'지정한' if len(arguments) > 1 else '가장 최근'} Baseline, "
-        f"본문 그림 해시가 현재와 다른 아이템 {counts['changed']}개 중 {counts['items']}개 확인"
+        f"{target} {counts['changed']}개 중 {counts['items']}개 확인"
         + (f" (버전 없음 {counts['no_version']}개)" if counts["no_version"] else "")
     )
+    if not counts["changed"] and item_id is not None:
+        print("판단 불가: 지정한 아이템이 현재나 Baseline에 없음 -> 트래커·Baseline·아이템 ID 순서와 값 확인")
+        return
     if not counts["changed"]:
         print("판단 불가: 그림이 바뀐 아이템 없음 -> 그림을 바꾼 Baseline ID를 트래커 ID 뒤에 붙여 다시 실행")
         return

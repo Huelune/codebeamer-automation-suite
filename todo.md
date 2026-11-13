@@ -26,6 +26,13 @@ Baseline을 지정하려면 트래커 ID 뒤에 Baseline ID를 하나 더 붙입
 .venv\Scripts\python.exe scripts\todo_check_baseline_wiki_render.py 트래커ID
 ```
 
+웹에서 이전 그림을 본 아이템을 알고 있으면 Baseline ID 뒤에 아이템 ID까지 붙입니다. 그 아이템 하나만 보므로 가장 빠르고,
+`판단 불가:`가 나올 일이 줄어듭니다. ID는 명령에만 쓰이고 화면에는 찍히지 않습니다.
+
+```
+.venv\Scripts\python.exe scripts\todo_check_baseline_wiki_render.py 트래커ID BaselineID 아이템ID
+```
+
 다른 폴더에서 실행할 때는 두 경로 앞에 저장소 폴더 경로를 붙입니다. 스크립트는 자기 위치에서 저장소를 찾습니다.
 현재·Baseline 아이템을 한 번씩(최대 500개) 받고, 그림이 바뀐 아이템은 최대 5개까지만 봅니다.
 `wiki2html`은 최대 15회, 그림 받기는 최대 30회입니다. 첫 아이템에서 `wiki2html`이 모두 실패하면 거기서 멈춥니다.

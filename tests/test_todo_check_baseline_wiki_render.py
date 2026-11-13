@@ -82,6 +82,8 @@ class FakeClient:
         return [{"id": 777001, "name": "secret baseline"}, {"id": 777002, "name": "secret newer"}]
 
     def search_items(self, *, baseline_id: int | None = None, **kwargs: Any) -> dict[str, Any]:
+        if "item.id IN (900009)" in kwargs["query_string"]:
+            return {"items": []}
         if baseline_id is None:
             return {"items": [
                 {"id": 900001, "version": 5, "description": f"secret [!secret-diagram.png#{NEW_HASH}!]"},
@@ -150,6 +152,21 @@ class TodoCheckBaselineWikiRenderTest(unittest.TestCase):
         )
         self.assertEqual("data URI", script.source_shape(client, data))
         self.assertEqual(hashlib.md5(OLD).hexdigest(), script.Checker(client, 1).md5_of(data))
+
+    def test_given_item_is_checked_without_hash_filter(self) -> None:
+        output = run_script("123456", "777001", "900002")
+
+        assert_no_internal_values(self, output)
+        self.assertNotIn("900002", output)
+        # 해시가 같은 아이템도 지정하면 그려 본다. 가짜 서버는 아이템을 거르지 않아 2개가 온다.
+        self.assertIn("지정한 Baseline, 지정한 아이템 2개 중 2개 확인", output)
+        self.assertIn("[wiki2html] 성공 6회", output)
+
+    def test_given_item_not_found_is_explained(self) -> None:
+        output = run_script("123456", "777001", "900009")
+
+        assert_no_internal_values(self, output)
+        self.assertIn("판단 불가: 지정한 아이템이 현재나 Baseline에 없음", output)
 
     def test_missing_tracker_id_is_explained(self) -> None:
         self.assertIn("실패: 트래커 ID 없음", run_script())
