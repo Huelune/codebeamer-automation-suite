@@ -493,8 +493,10 @@ class TrackerSearchPanel(QWidget):
             self.search_button.setEnabled(True)
             self.baseline_compare_button.setEnabled(True)
             self._result_baseline_id = query.baseline_id
+            # 앞 결과의 행 선택이 남으면 새 결과의 같은 줄을 눌러도 선택 변경이 오지 않는다.
+            self.search_table.clearSelection()
             self._render_search_results(result)
-            where = "현재 트래커" if query.baseline_id is None else "Baseline 시점"
+            where ="현재 트래커" if query.baseline_id is None else "Baseline 시점"
             self._host.set_workspace_status(
                 f"{where}에서 검색 결과를 {self._total_text(result)} 찾았습니다."
             )
