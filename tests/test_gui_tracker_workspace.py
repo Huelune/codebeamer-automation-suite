@@ -177,6 +177,20 @@ class TrackerWorkspacePageTest(TrackerWorkspaceTestCase):
         self.assertNotIn(9001003, test_case_ids)
         self.assertIn("Offline Test Cases", self.page.search_panel.search_scope_label.text())
 
+    def test_same_row_of_new_search_result_loads_its_detail(self) -> None:
+        self.page.activate()
+        panel = self.page.search_panel
+        panel.search_text_input.setText("Steering")
+        panel._run_search()
+        panel.search_table.selectRow(0)
+        self.assertEqual(self.page.detail_panel._selected_item_id, 9001003)
+
+        panel.search_text_input.setText("Brake")
+        panel._run_search()
+        panel.search_table.selectRow(0)
+
+        self.assertEqual(self.page.detail_panel._selected_item_id, 9001002)
+
     def test_search_result_selection_supports_page_and_all_query_modes(self) -> None:
         from PySide6.QtCore import Qt
 
